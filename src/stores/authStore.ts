@@ -28,30 +28,55 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { user } = get()
     if (!user) return
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single()
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
 
-    if (profile) {
-      set({ profile })
-
-      if (profile.partner_id) {
-        const { data: partner } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', profile.partner_id)
-          .single()
-
-        if (partner) set({ partnerProfile: partner })
+      if (error) {
+        console.error('[authStore] fetchProfile error:', error.message)
+        return
       }
+
+      if (profile) {
+        set({ profile })
+
+        if (profile.partner_id) {
+          try {
+            const { data: partner, error: partnerError } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', profile.partner_id)
+              .single()
+
+            if (partnerError) {
+              console.error('[authStore] fetchPartner error:', partnerError.message)
+            } else if (partner) {
+              set({ partnerProfile: partner })
+            }
+          } catch (err) {
+            console.error('[authStore] fetchPartner unexpected error:', err)
+          }
+        } else {
+          // Ensure partnerProfile is cleared if no partner_id
+          set({ partnerProfile: null })
+        }
+      }
+    } catch (err) {
+      console.error('[authStore] fetchProfile unexpected error:', err)
     }
   },
 
   signIn: async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
+    // Set user immediately and fetch profile for faster UX
+    if (data.user) {
+      set({ user: data.user })
+      await get().fetchProfile()
+    }
   },
 
   signUp: async (email, password, displayName) => {
@@ -59,21 +84,33 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (error) throw error
 
     if (data.user) {
-      await supabase.from('profiles').insert({
+      const { error: insertError } = await supabase.from('profiles').insert({
         id: data.user.id,
         display_name: displayName,
       })
+      if (insertError) {
+        console.error('[authStore] profile insert error:', insertError.message)
+        throw new Error('Compte créé mais erreur lors de la création du profil. Reconnecte-toi.')
+      }
     }
   },
 
   signOut: async () => {
-    await supabase.auth.signOut()
-    set({ user: null, profile: null, partnerProfile: null })
+    try {
+      await supabase.auth.signOut()
+    } catch (err) {
+      console.error('[authStore] signOut error:', err)
+    } finally {
+      set({ user: null, profile: null, partnerProfile: null })
+    }
   },
 
   linkPartner: async (code: string) => {
+    const trimmed = code.trim().toUpperCase()
+    if (!trimmed) throw new Error('Le code partenaire ne peut pas être vide.')
+
     const { error } = await supabase.rpc('link_partner_by_code', {
-      invite_code: code.trim().toUpperCase(),
+      invite_code: trimmed,
     })
     if (error) throw new Error(error.message)
     await get().fetchProfile()

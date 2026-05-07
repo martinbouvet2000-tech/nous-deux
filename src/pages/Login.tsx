@@ -73,33 +73,39 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {isSignUp && (
               <div className="animate-slide-up">
-                <label className="block text-sm text-text-muted mb-1.5">Prénom</label>
+                <label htmlFor="login-name" className="block text-sm text-text-muted mb-1.5">Prénom</label>
                 <input
+                  id="login-name"
                   type="text"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   className="input"
                   placeholder="Ton prénom"
                   required
+                  autoComplete="given-name"
                 />
               </div>
             )}
 
             <div>
-              <label className="block text-sm text-text-muted mb-1.5">Email</label>
+              <label htmlFor="login-email" className="block text-sm text-text-muted mb-1.5">Email</label>
               <input
+                id="login-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="input"
                 placeholder="ton@email.com"
                 required
+                autoFocus
+                autoComplete="email"
               />
             </div>
 
             <div>
-              <label className="block text-sm text-text-muted mb-1.5">Mot de passe</label>
+              <label htmlFor="login-password" className="block text-sm text-text-muted mb-1.5">Mot de passe</label>
               <input
+                id="login-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -107,16 +113,19 @@ export default function Login() {
                 placeholder="••••••••"
                 required
                 minLength={6}
+                autoComplete={isSignUp ? 'new-password' : 'current-password'}
               />
             </div>
 
-            {error && (
-              <div className="bg-danger/10 border border-danger/20 rounded-xl px-4 py-3 animate-bounce-in">
-                <p className="text-danger text-sm">{error}</p>
-              </div>
-            )}
+            <div aria-live="polite" aria-atomic="true">
+              {error && (
+                <div role="alert" className="bg-danger/10 border border-danger/20 rounded-xl px-4 py-3 animate-bounce-in">
+                  <p className="text-danger text-sm">{error}</p>
+                </div>
+              )}
+            </div>
 
-            <button type="submit" disabled={loading} className="btn btn-primary w-full py-3 text-base">
+            <button type="submit" disabled={loading} aria-label={isSignUp ? "S'inscrire" : 'Se connecter'} className="btn btn-primary w-full py-3 text-base">
               {loading ? (
                 <div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
               ) : isSignUp ? (

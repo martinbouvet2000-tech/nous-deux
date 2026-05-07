@@ -13,40 +13,68 @@ const Todos = lazy(() => import('@/pages/Todos'))
 const Activities = lazy(() => import('@/pages/Activities'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 
+const LoadingSpinner = () => (
+  <div className="min-h-dvh flex items-center justify-center">
+    <div className="text-center">
+      <div className="w-12 h-12 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto mb-3" />
+      <p className="text-text-muted text-sm">Chargement...</p>
+    </div>
+  </div>
+)
+
 export default function App() {
   const { user, setUser, fetchProfile } = useAuthStore()
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      if (session?.user) fetchProfile()
-      setLoading(false)
-    })
+    let cancelled = false
+
+    const initAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        if (error) {
+          console.error('[App] getSession error:', error.message)
+        }
+        if (!cancelled) {
+          setUser(session?.user ?? null)
+          if (session?.user) {
+            await fetchProfile()
+          }
+          setLoading(false)
+        }
+      } catch (err) {
+        console.error('[App] initAuth unexpected error:', err)
+        if (!cancelled) {
+          setLoading(false)
+        }
+      }
+    }
+
+    initAuth()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-      if (session?.user) fetchProfile()
+      if (!cancelled) {
+        setUser(session?.user ?? null)
+        if (session?.user) {
+          fetchProfile()
+        }
+      }
     })
 
-    return () => subscription.unsubscribe()
-  }, [])
+    return () => {
+      cancelled = true
+      subscription.unsubscribe()
+    }
+  }, [setUser, fetchProfile])
 
   if (loading) {
-    return (
-      <div className="min-h-dvh flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto mb-3" />
-          <p className="text-text-muted text-sm">Chargement...</p>
-        </div>
-      </div>
-    )
+    return <LoadingSpinner />
   }
 
   if (!user) {
     return (
       <BrowserRouter>
-        <Suspense fallback={<div className="min-h-dvh flex items-center justify-center">Chargement...</div>}>
+        <Suspense fallback={<LoadingSpinner />}>
           <Login />
         </Suspense>
       </BrowserRouter>
@@ -55,15 +83,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Suspense
-        fallback={
-          <div className="min-h-dvh flex items-center justify-center">
-            <div className="text-center">
-              <div className="w-12 h-12 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto mb-3" />
-            </div>
-          </div>
-        }
-      >
+      <Suspense fallback={<LoadingSpinner />}>
         <Routes>
           <Route element={<AppLayout />}>
             <Route path="/" element={<Dashboard />} />
