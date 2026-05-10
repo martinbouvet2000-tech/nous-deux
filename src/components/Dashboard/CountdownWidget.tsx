@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Timer, Plus, X } from 'lucide-react'
-import { differenceInDays, differenceInHours, differenceInMinutes, isPast } from 'date-fns'
+import { Timer, Plus, X, Sparkles, Trash2 } from 'lucide-react'
+import { differenceInDays, differenceInHours, differenceInMinutes, isPast, format } from 'date-fns'
+import { fr } from 'date-fns/locale'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import type { Countdown } from '@/types/database'
@@ -15,6 +16,12 @@ function getTimeRemaining(targetDate: string) {
   const minutes = differenceInMinutes(target, now) % 60
 
   return { days, hours, minutes, passed: false }
+}
+
+function getUrgencyColor(days: number): string {
+  if (days <= 3) return 'text-secondary'
+  if (days <= 7) return 'text-accent'
+  return 'gradient-text'
 }
 
 export default function CountdownWidget() {
@@ -56,29 +63,36 @@ export default function CountdownWidget() {
     loadCountdowns()
   }
 
+  const deleteCountdown = async (id: string) => {
+    await supabase.from('countdowns').update({ is_active: false }).eq('id', id)
+    loadCountdowns()
+  }
+
   const mainCountdown = countdowns[0]
   const remaining = mainCountdown ? getTimeRemaining(mainCountdown.target_date) : null
 
   return (
     <div className="card">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <Timer size={16} className="text-secondary" />
+          <div className="w-7 h-7 rounded-lg bg-secondary/15 flex items-center justify-center">
+            <Timer size={15} className="text-secondary" />
+          </div>
           <h3 className="text-sm font-semibold">Prochaines retrouvailles</h3>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="text-text-muted hover:text-primary transition-colors">
-          {showForm ? <X size={16} /> : <Plus size={16} />}
+        <button onClick={() => setShowForm(!showForm)} className="w-7 h-7 flex items-center justify-center rounded-lg text-text-muted hover:text-primary hover:bg-primary/10 transition-all">
+          {showForm ? <X size={15} /> : <Plus size={15} />}
         </button>
       </div>
 
       {showForm && (
-        <form onSubmit={addCountdown} className="mb-4 space-y-2">
+        <form onSubmit={addCountdown} className="mb-4 space-y-2.5 p-3 rounded-xl bg-surface-lighter/30 animate-slide-up">
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Titre (ex: Week-end Paris)"
-            className="w-full bg-surface-lighter rounded-lg px-3 py-2 text-sm text-text focus:outline-none focus:ring-1 focus:ring-primary"
+            className="input text-sm"
             required
           />
           <div className="flex gap-2">
@@ -86,52 +100,72 @@ export default function CountdownWidget() {
               type="datetime-local"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="flex-1 bg-surface-lighter rounded-lg px-3 py-2 text-sm text-text focus:outline-none focus:ring-1 focus:ring-primary"
+              className="input flex-1 text-sm"
               required
             />
-            <button type="submit" className="btn btn-primary text-xs px-3">Ajouter</button>
+            <button type="submit" className="btn btn-primary text-xs px-4">Ajouter</button>
           </div>
         </form>
       )}
 
       {mainCountdown && remaining ? (
         <div className="text-center py-2">
-          <p className="text-lg mb-3">{mainCountdown.emoji} {mainCountdown.title}</p>
+          <p className="text-base mb-4 font-medium">
+            {mainCountdown.emoji} {mainCountdown.title}
+          </p>
           {remaining.passed ? (
-            <p className="text-success text-lg font-bold">C'est aujourd'hui !</p>
-          ) : (
-            <div className="flex justify-center gap-4">
-              <div className="text-center">
-                <p className="text-3xl font-bold gradient-text">{remaining.days}</p>
-                <p className="text-xs text-text-muted">jours</p>
-              </div>
-              <div className="text-center">
-                <p className="text-3xl font-bold gradient-text">{remaining.hours}</p>
-                <p className="text-xs text-text-muted">heures</p>
-              </div>
-              <div className="text-center">
-                <p className="text-3xl font-bold gradient-text">{remaining.minutes}</p>
-                <p className="text-xs text-text-muted">min</p>
-              </div>
+            <div className="animate-bounce-in">
+              <Sparkles className="inline text-accent mb-2" size={24} />
+              <p className="text-success text-xl font-bold">C'est aujourd'hui ! 🎉</p>
             </div>
+          ) : (
+            <>
+              <div className="flex justify-center gap-3">
+                {[
+                  { value: remaining.days, label: 'jours' },
+                  { value: remaining.hours, label: 'heures' },
+                  { value: remaining.minutes, label: 'min' },
+                ].map(({ value, label }) => (
+                  <div key={label} className="min-w-[4.5rem] p-3 rounded-xl bg-gradient-to-b from-surface-lighter/60 to-surface-lighter/30 border border-surface-lighter/50">
+                    <p className={`text-3xl font-extrabold tabular-nums ${getUrgencyColor(remaining.days)}`}>
+                      {value}
+                    </p>
+                    <p className="text-[10px] text-text-muted mt-0.5 uppercase tracking-wider font-medium">{label}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-text-dim mt-3">
+                {format(new Date(mainCountdown.target_date), "EEEE d MMMM yyyy 'à' HH'h'mm", { locale: fr })}
+              </p>
+            </>
           )}
         </div>
       ) : (
-        <p className="text-center text-text-muted text-sm py-4">
-          Aucun compte à rebours. Ajoutes-en un !
-        </p>
+        <div className="text-center py-6">
+          <Timer size={28} className="mx-auto text-text-dim mb-2 opacity-40" />
+          <p className="text-text-muted text-sm">Aucun compte à rebours</p>
+          <p className="text-text-dim text-xs mt-1">Ajoutes-en un avec le + ci-dessus</p>
+        </div>
       )}
 
       {countdowns.length > 1 && (
-        <div className="mt-3 pt-3 border-t border-surface-lighter space-y-2">
+        <div className="mt-3 pt-3 border-t border-surface-lighter/50 space-y-2">
           {countdowns.slice(1).map((c) => {
             const r = getTimeRemaining(c.target_date)
             return (
-              <div key={c.id} className="flex justify-between items-center text-sm">
-                <span>{c.emoji} {c.title}</span>
-                <span className="text-text-muted">
-                  {r.passed ? 'Passé' : `${r.days}j ${r.hours}h`}
-                </span>
+              <div key={c.id} className="flex justify-between items-center text-sm group">
+                <span className="text-text/80">{c.emoji} {c.title}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-text-muted text-xs">
+                    {r.passed ? '✨ Passé' : `${r.days}j ${r.hours}h`}
+                  </span>
+                  <button
+                    onClick={() => deleteCountdown(c.id)}
+                    className="opacity-0 group-hover:opacity-100 text-text-dim hover:text-danger transition-all p-0.5"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
               </div>
             )
           })}

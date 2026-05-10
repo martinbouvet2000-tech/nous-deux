@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { HelpCircle, Send, Lock } from 'lucide-react'
+import { MessageCircle, Send, Lock, Sparkles } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 
@@ -79,30 +79,40 @@ export default function QuestionWidget() {
   if (!question) return null
 
   return (
-    <div className="card">
-      <div className="flex items-center gap-2 mb-3">
-        <HelpCircle size={16} className="text-primary" />
+    <div className="card-glow">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-7 h-7 rounded-lg bg-primary/15 flex items-center justify-center">
+          <MessageCircle size={15} className="text-primary" />
+        </div>
         <h3 className="text-sm font-semibold">Question du jour</h3>
+        <Sparkles size={12} className="text-accent ml-auto" />
       </div>
 
-      <p className="text-center text-lg mb-4">{question.question}</p>
+      {/* Question text */}
+      <div className="text-center mb-5 px-4">
+        <p className="text-lg md:text-xl font-medium leading-relaxed">{question.question}</p>
+      </div>
 
       {savedMyAnswer ? (
-        <div className="space-y-3">
-          <div className="bg-primary/10 rounded-lg p-3">
-            <p className="text-xs text-text-muted mb-1">Ta réponse</p>
-            <p className="text-sm">{savedMyAnswer}</p>
+        <div className="space-y-3 animate-fade-in">
+          {/* My answer */}
+          <div className="rounded-xl p-4 bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/10">
+            <p className="text-[11px] text-primary-light mb-1.5 font-semibold uppercase tracking-wider">Ta réponse</p>
+            <p className="text-sm leading-relaxed">{savedMyAnswer}</p>
           </div>
 
+          {/* Partner answer */}
           {partnerAnswer ? (
-            <div className="bg-secondary/10 rounded-lg p-3">
-              <p className="text-xs text-text-muted mb-1">{partnerProfile?.display_name}</p>
-              <p className="text-sm">{partnerAnswer}</p>
+            <div className="rounded-xl p-4 bg-gradient-to-br from-secondary/10 to-secondary/5 border border-secondary/10 animate-slide-up">
+              <p className="text-[11px] text-secondary-light mb-1.5 font-semibold uppercase tracking-wider">
+                {partnerProfile?.display_name}
+              </p>
+              <p className="text-sm leading-relaxed">{partnerAnswer}</p>
             </div>
           ) : (
-            <div className="flex items-center justify-center gap-2 text-text-muted text-sm py-2">
+            <div className="flex items-center justify-center gap-2 text-text-muted text-sm py-4 rounded-xl bg-surface-lighter/20 border border-dashed border-surface-lighter">
               <Lock size={14} />
-              <span>En attente de la réponse de {partnerProfile?.display_name ?? 'ton/ta partenaire'}</span>
+              <span>En attente de {partnerProfile?.display_name ?? 'ton/ta partenaire'}</span>
             </div>
           )}
         </div>
@@ -112,11 +122,15 @@ export default function QuestionWidget() {
             type="text"
             value={myAnswer}
             onChange={(e) => setMyAnswer(e.target.value)}
-            placeholder="Ta réponse..."
-            className="flex-1 bg-surface-lighter rounded-lg px-3 py-2 text-sm text-text focus:outline-none focus:ring-1 focus:ring-primary"
+            placeholder="Écris ta réponse…"
+            className="input flex-1"
             onKeyDown={(e) => e.key === 'Enter' && submitAnswer()}
           />
-          <button onClick={submitAnswer} disabled={submitting || !myAnswer.trim()} className="btn btn-primary px-3">
+          <button
+            onClick={submitAnswer}
+            disabled={submitting || !myAnswer.trim()}
+            className="btn btn-primary px-4"
+          >
             <Send size={16} />
           </button>
         </div>
