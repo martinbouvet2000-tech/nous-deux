@@ -5,6 +5,7 @@ import MoodWidget from '@/components/Dashboard/MoodWidget'
 import TapButton from '@/components/Dashboard/TapButton'
 import StreakWidget from '@/components/Dashboard/StreakWidget'
 import QuestionWidget from '@/components/Dashboard/QuestionWidget'
+import LoveNoteWidget from '@/components/Dashboard/LoveNoteWidget'
 
 function getGreeting(): string {
   const hour = new Date().getHours()
@@ -39,6 +40,9 @@ export default function Dashboard() {
           </p>
         )}
       </div>
+
+      {/* Love note banner */}
+      <LoveNoteWidget />
 
       {/* Clocks + Countdown */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

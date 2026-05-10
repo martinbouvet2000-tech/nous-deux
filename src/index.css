@@ -381,4 +381,35 @@
   .animate-spin-slow {
     animation: spin-slow 8s linear infinite;
   }
+
+  .animate-flame-flicker {
+    animation: flameFlicker 0.8s ease-in-out infinite alternate;
+  }
+
+  .animate-flame-pulse {
+    animation: flamePulse 0.6s ease-out infinite alternate;
+  }
+
+  .animate-fire-particle {
+    animation: fireParticle 1s ease-out forwards;
+  }
+
+  @keyframes flameFlicker {
+    0% { transform: scale(1) rotate(-3deg); opacity: 0.9; }
+    25% { transform: scale(1.1) rotate(2deg); opacity: 1; }
+    50% { transform: scale(0.95) rotate(-1deg); opacity: 0.85; }
+    75% { transform: scale(1.08) rotate(3deg); opacity: 1; }
+    100% { transform: scale(1) rotate(-2deg); opacity: 0.9; }
+  }
+
+  @keyframes flamePulse {
+    0% { transform: scale(1); opacity: 0.7; }
+    100% { transform: scale(1.15); opacity: 0.3; }
+  }
+
+  @keyframes fireParticle {
+    0% { transform: translateY(0) scale(1); opacity: 1; }
+    50% { opacity: 0.8; }
+    100% { transform: translateY(-80px) scale(0.3); opacity: 0; }
+  }
 }

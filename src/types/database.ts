@@ -157,6 +157,15 @@ export interface TimelineEvent {
   created_at: string
 }
 
+export interface LoveNote {
+  id: string
+  sender_id: string
+  receiver_id: string
+  content: string
+  is_active: boolean
+  created_at: string
+}
+
 export interface Streak {
   id: string
   current_count: number
