@@ -173,3 +173,14 @@ export interface Streak {
   last_activity_date: string | null
   updated_at: string
 }
+
+export interface BucketItem {
+  id: string
+  title: string
+  emoji: string
+  category: 'travel' | 'experience' | 'milestone' | 'food' | 'creative' | 'other'
+  is_done: boolean
+  done_date: string | null
+  created_by: string
+  created_at: string
+}

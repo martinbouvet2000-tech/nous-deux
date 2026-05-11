@@ -6,6 +6,7 @@ import TapButton from '@/components/Dashboard/TapButton'
 import StreakWidget from '@/components/Dashboard/StreakWidget'
 import QuestionWidget from '@/components/Dashboard/QuestionWidget'
 import LoveNoteWidget from '@/components/Dashboard/LoveNoteWidget'
+import GratitudeWidget from '@/components/Dashboard/GratitudeWidget'
 
 function getGreeting(): string {
   const hour = new Date().getHours()
@@ -63,8 +64,11 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Question of the day */}
-      <QuestionWidget />
+      {/* Question of the day + Gratitude */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <QuestionWidget />
+        <GratitudeWidget />
+      </div>
     </div>
   )
 }
