@@ -303,7 +303,7 @@ export default function Dashboard() {
                   ? 'text-secondary fill-secondary drop-shadow-[0_0_20px_rgba(194,120,142,0.5)]'
                   : receivedTap
                     ? 'text-secondary/90 fill-secondary/90 drop-shadow-[0_0_15px_rgba(194,120,142,0.3)]'
-                    : 'text-primary/40 fill-primary/10 hover:text-primary/70 hover:fill-primary/20'
+                    : 'text-primary/50 fill-primary/20 hover:text-primary/80 hover:fill-primary/30 drop-shadow-[0_0_12px_rgba(212,165,116,0.15)]'
               }`}
             />
           </button>
@@ -350,7 +350,10 @@ export default function Dashboard() {
           <p className="text-sm text-text-muted mb-4">{countdown.emoji} {countdown.title}</p>
 
           {remaining.passed ? (
-            <p className="text-xl font-light text-accent">C'est aujourd'hui !</p>
+            <div>
+              <p className="text-2xl font-light gradient-text mb-1">C'est aujourd'hui !</p>
+              <p className="text-xs text-text-dim/60">✨</p>
+            </div>
           ) : (
             <div className="flex items-baseline justify-center gap-6">
               {[
