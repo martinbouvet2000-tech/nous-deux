@@ -86,14 +86,14 @@ export default function Thoughts() {
   return (
     <div className="flex flex-col h-[calc(100dvh-5rem)] md:h-dvh">
       {/* Header */}
-      <div className="px-5 py-4 border-b border-surface-lighter/50 bg-surface/50 backdrop-blur-xl">
-        <h2 className="text-lg font-bold flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-secondary/15 flex items-center justify-center">
-            <Heart size={16} className="text-secondary" />
+      <div className="px-5 md:px-8 py-4 border-b border-white/[0.04] bg-[#1A1714]/80 backdrop-blur-2xl">
+        <h2 className="text-lg font-light tracking-tight flex items-center gap-2.5 text-[#F0EAE0]">
+          <div className="w-8 h-8 rounded-xl bg-[rgba(194,120,142,0.12)] flex items-center justify-center">
+            <Heart size={16} className="text-[#C2788E]" />
           </div>
-          Pensées du jour
+          Pensees du jour
           {partnerProfile && (
-            <span className="text-xs text-text-dim font-normal ml-auto">
+            <span className="text-[11px] tracking-wide text-[#6B6359] font-normal ml-auto">
               avec {partnerProfile.display_name}
             </span>
           )}
@@ -101,12 +101,14 @@ export default function Thoughts() {
       </div>
 
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
+      <div className="flex-1 overflow-y-auto px-5 md:px-8 py-5 space-y-6 scrollbar-thin scrollbar-thumb-[rgba(212,165,116,0.08)]">
         {Object.keys(grouped).length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center opacity-60">
-            <Smile size={40} className="text-text-dim mb-3" />
-            <p className="text-text-muted text-sm">Aucune pensée encore…</p>
-            <p className="text-text-dim text-xs mt-1">Envoie la première ! 💌</p>
+          <div className="flex flex-col items-center justify-center h-full text-center">
+            <div className="w-16 h-16 rounded-2xl bg-[#1E1B17] flex items-center justify-center mb-4">
+              <Smile size={28} className="text-[#6B6359]" />
+            </div>
+            <p className="text-[#9B9287] text-sm leading-relaxed">Aucune pensee encore...</p>
+            <p className="text-[#6B6359] text-[11px] tracking-wide mt-1.5">Envoie la premiere</p>
           </div>
         )}
 
@@ -114,11 +116,11 @@ export default function Thoughts() {
           <div key={date}>
             {/* Date separator */}
             <div className="flex items-center gap-3 mb-4">
-              <div className="flex-1 divider" />
-              <p className="text-[11px] text-text-dim font-medium uppercase tracking-wider">
+              <div className="flex-1 h-px bg-white/[0.04]" />
+              <p className="text-[11px] text-[#6B6359] font-medium uppercase tracking-wider">
                 {format(new Date(date), 'EEEE d MMMM', { locale: fr })}
               </p>
-              <div className="flex-1 divider" />
+              <div className="flex-1 h-px bg-white/[0.04]" />
             </div>
 
             {/* Messages */}
@@ -128,13 +130,14 @@ export default function Thoughts() {
                 return (
                   <div
                     key={thought.id}
-                    className={`flex ${isMine ? 'justify-end' : 'justify-start'} animate-fade-in`}
+                    className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
+                    style={{ animation: 'fadeIn 400ms ease-out' }}
                   >
                     <div
-                      className={`max-w-[80%] rounded-2xl px-4 py-3 transition-all ${
+                      className={`max-w-[80%] rounded-2xl px-4 py-3 transition-all duration-300 ${
                         isMine
-                          ? 'bg-gradient-to-br from-primary to-primary-dark text-white rounded-br-lg shadow-lg shadow-primary/10'
-                          : 'bg-gradient-to-br from-surface-lighter to-surface-light text-text rounded-bl-lg border border-surface-lighter/50'
+                          ? 'bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E] rounded-br-lg shadow-[0_2px_20px_rgba(212,165,116,0.15)]'
+                          : 'bg-[#1E1B17] text-[#F0EAE0] rounded-bl-lg'
                       }`}
                     >
                       {thought.image_url && (
@@ -148,7 +151,7 @@ export default function Thoughts() {
                         <p className="text-sm leading-relaxed">{thought.content}</p>
                       )}
                       <p className={`text-[10px] mt-1.5 ${
-                        isMine ? 'text-white/50' : 'text-text-dim'
+                        isMine ? 'text-[#110F0E]/50' : 'text-[#6B6359]'
                       }`}>
                         {format(new Date(thought.created_at), 'HH:mm')}
                       </p>
@@ -163,20 +166,20 @@ export default function Thoughts() {
       </div>
 
       {/* Input bar */}
-      <div className="px-4 py-3 border-t border-surface-lighter/30 bg-surface/80 backdrop-blur-xl">
+      <div className="px-5 md:px-8 py-3 border-t border-white/[0.04] bg-[#1A1714]/90 backdrop-blur-2xl">
         <div className="flex gap-2.5 max-w-lg mx-auto">
           <input
             type="text"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && sendThought()}
-            placeholder="Une pensée pour l'autre…"
-            className="input flex-1 py-3"
+            placeholder="Une pensee pour l'autre..."
+            className="flex-1 bg-[rgba(255,255,255,0.03)] rounded-xl px-4 py-3 text-sm text-[#F0EAE0] placeholder-[#6B6359] outline-none transition-all duration-300 ease-out focus:bg-[rgba(255,255,255,0.05)] focus:shadow-[0_0_0_2px_rgba(212,165,116,0.15),0_0_0_1px_rgba(212,165,116,0.08)]"
           />
           <button
             onClick={sendThought}
             disabled={sending || !message.trim()}
-            className="btn btn-primary px-4 rounded-xl"
+            className="inline-flex items-center justify-center px-4 rounded-xl text-sm font-medium bg-gradient-to-r from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_2px_20px_rgba(212,165,116,0.2)] hover:shadow-[0_4px_28px_rgba(212,165,116,0.35)] hover:translate-y-[-1px] active:translate-y-0 active:scale-[0.98] transition-all duration-300 ease-out disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Send size={18} />
           </button>

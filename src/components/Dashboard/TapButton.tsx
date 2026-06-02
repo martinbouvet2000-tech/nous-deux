@@ -142,90 +142,151 @@ export default function TapButton() {
   const totalToday = todayCount + partnerTodayCount
 
   return (
-    <div className="card text-center py-6">
-      {/* Header */}
-      <p className="text-xs text-text-dim tracking-wide mb-5">Je pense à toi</p>
+    <div className="relative overflow-hidden rounded-2xl bg-[#1E1B17] p-5 md:p-6 transition-all duration-500 ease-out flex flex-col items-center text-center group">
+      {/* Top edge glow line */}
+      <div className="absolute top-0 left-[15%] right-[15%] h-px bg-gradient-to-r from-transparent via-[rgba(212,165,116,0.12)] to-transparent opacity-60 transition-opacity duration-500 group-hover:opacity-100 group-hover:via-[rgba(212,165,116,0.2)]" />
 
-      {/* Heart button */}
+      {/* Whisper label */}
+      <p className="text-[11px] tracking-wide text-[#6B6359] uppercase mb-6">
+        Je pense a toi
+      </p>
+
+      {/* Heart button area */}
       <div className="relative inline-flex items-center justify-center mb-5">
-        {/* Soft glow behind */}
-        <div className={`absolute w-24 h-24 rounded-full transition-all duration-700 ${
-          tapped
-            ? 'bg-secondary/20 scale-110'
-            : receivedTap
-              ? 'bg-pink-400/15 scale-105'
-              : 'bg-primary/10 scale-100'
-        }`} />
+        {/* Ambient glow — always present, breathing */}
+        <div
+          className={`absolute w-28 h-28 rounded-full transition-all duration-700 ease-out ${
+            tapped
+              ? 'bg-[rgba(194,120,142,0.2)] scale-125'
+              : receivedTap
+                ? 'bg-[rgba(194,120,142,0.15)] scale-110'
+                : 'bg-[rgba(212,165,116,0.08)] scale-100 animate-[breathe_4s_ease-in-out_infinite]'
+          }`}
+        />
 
+        {/* Outer ring — soft, barely visible */}
+        <div
+          className={`absolute w-[88px] h-[88px] rounded-full transition-all duration-500 ease-out ${
+            tapped
+              ? 'shadow-[0_0_40px_rgba(194,120,142,0.25),0_0_80px_rgba(194,120,142,0.1)]'
+              : receivedTap
+                ? 'shadow-[0_0_40px_rgba(194,120,142,0.2),0_0_60px_rgba(194,120,142,0.08)]'
+                : 'shadow-[0_0_30px_rgba(212,165,116,0.08),0_0_60px_rgba(212,165,116,0.04)]'
+          }`}
+        />
+
+        {/* The heart button */}
         <button
           onClick={sendTap}
           disabled={tapped}
-          className={`relative z-10 w-[72px] h-[72px] rounded-full flex items-center justify-center transition-all duration-300 ease-out ${
+          className={`relative z-10 w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 ease-out cursor-pointer ${
             tapped
-              ? 'scale-110 bg-white/[0.08]'
+              ? 'scale-110 bg-[rgba(194,120,142,0.12)]'
               : receivedTap
-                ? 'scale-105 bg-white/[0.06]'
-                : 'bg-white/[0.04] hover:bg-white/[0.07] hover:scale-105 active:scale-95'
-          }`}
+                ? 'scale-105 bg-[rgba(194,120,142,0.08)]'
+                : 'bg-[rgba(255,255,255,0.03)] hover:bg-[rgba(212,165,116,0.06)] hover:scale-105 active:scale-95'
+          } disabled:cursor-default`}
+          style={{
+            animation: !tapped && !receivedTap ? 'heartbeat 4s ease-in-out infinite' : 'none',
+          }}
         >
           <Heart
-            size={30}
-            className={`transition-all duration-300 ${
+            size={34}
+            strokeWidth={1.5}
+            className={`transition-all duration-300 ease-out ${
               tapped
-                ? 'text-secondary fill-current scale-110'
+                ? 'text-[#D99AAD] fill-[#C2788E] scale-110 drop-shadow-[0_0_12px_rgba(194,120,142,0.4)]'
                 : receivedTap
-                  ? 'text-pink-400 fill-current'
-                  : 'text-text-muted hover:text-primary'
+                  ? 'text-[#D99AAD] fill-[#C2788E] drop-shadow-[0_0_10px_rgba(194,120,142,0.3)]'
+                  : 'text-[#9B9287] hover:text-[#D4A574] drop-shadow-[0_0_6px_rgba(212,165,116,0.1)]'
             }`}
           />
         </button>
 
-        {/* Received indicator */}
+        {/* Tap ripple effect */}
+        {tapped && (
+          <div className="absolute z-0 w-20 h-20 rounded-full animate-[ripple_1s_ease-out_forwards] border border-[rgba(194,120,142,0.3)]" />
+        )}
+
+        {/* Partner thinking of you — soft pulse indicator */}
         {receivedTap && (
-          <span className="absolute -top-1 -right-1 z-20 w-5 h-5 rounded-full bg-secondary text-white text-[10px] flex items-center justify-center animate-bounce-in">
-            !
-          </span>
+          <div className="absolute -top-1.5 -right-1.5 z-20">
+            <span className="relative flex h-4 w-4">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#C2788E] opacity-40" />
+              <span className="relative inline-flex rounded-full h-4 w-4 bg-[#C2788E] shadow-[0_0_8px_rgba(194,120,142,0.4)]" />
+            </span>
+          </div>
         )}
       </div>
 
-      {/* Status */}
-      <p className="text-xs min-h-[1rem] mb-1 transition-all">
+      {/* Status text */}
+      <p className="text-sm min-h-[1.25rem] mb-1 transition-all duration-300">
         {tapped ? (
-          <span className="text-secondary animate-fade-in">Envoyé !</span>
+          <span className="text-[#D99AAD] animate-[fadeInUp_0.3s_ease-out]">
+            Envoye avec amour
+          </span>
         ) : receivedTap ? (
-          <span className="text-pink-400 animate-fade-in">
-            {partnerProfile?.display_name} pense à toi
+          <span className="text-[#D99AAD] animate-[fadeInUp_0.3s_ease-out]">
+            {partnerProfile?.display_name} pense a toi
           </span>
         ) : (
-          <span className="text-text-dim">Appuie pour envoyer</span>
+          <span className="text-[#6B6359]">Appuie pour envoyer</span>
         )}
       </p>
 
-      {/* Streak */}
+      {/* Streak badge */}
       {consecutiveDays > 0 && (
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] text-xs text-text-muted mt-2">
-          <span className="text-orange-400">🔥</span>
-          <span className="font-medium tabular-nums">{consecutiveDays}</span>
-          <span className="text-text-dim">jour{consecutiveDays > 1 ? 's' : ''}</span>
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[rgba(255,255,255,0.03)] text-[11px] tracking-wide mt-2">
+          <span className="text-[#E8B86D]">
+            {consecutiveDays >= 7 ? '\u{1F525}' : '\u{2728}'}
+          </span>
+          <span className="font-medium tabular-nums text-[#E8C9A0]">{consecutiveDays}</span>
+          <span className="text-[#6B6359]">jour{consecutiveDays > 1 ? 's' : ''}</span>
         </div>
       )}
 
-      {/* Stats */}
+      {/* Daily stats */}
       {totalToday > 0 && (
-        <div className="mt-4 pt-3 border-t border-white/[0.04]">
-          <div className="flex items-center justify-center gap-4 text-[11px] text-text-dim">
-            <span><span className="text-text-muted font-medium">{todayCount}</span> envoyé{todayCount > 1 ? 's' : ''}</span>
+        <div className="w-full mt-4 pt-3 border-t border-white/[0.04]">
+          <div className="flex items-center justify-center gap-4 text-[11px] tracking-wide text-[#6B6359]">
+            <span>
+              <span className="text-[#9B9287] font-medium tabular-nums">{todayCount}</span>{' '}
+              envoye{todayCount > 1 ? 's' : ''}
+            </span>
             {partnerTodayCount > 0 && (
-              <span><span className="text-text-muted font-medium">{partnerTodayCount}</span> reçu{partnerTodayCount > 1 ? 's' : ''}</span>
+              <span>
+                <span className="text-[#9B9287] font-medium tabular-nums">{partnerTodayCount}</span>{' '}
+                recu{partnerTodayCount > 1 ? 's' : ''}
+              </span>
             )}
           </div>
           {lastPartnerTap && (
-            <p className="text-[10px] text-text-dim mt-1.5">
-              Dernier reçu {formatDistanceToNow(new Date(lastPartnerTap), { addSuffix: true, locale: fr })}
+            <p className="text-[10px] text-[#6B6359] mt-1.5">
+              Dernier recu {formatDistanceToNow(new Date(lastPartnerTap), { addSuffix: true, locale: fr })}
             </p>
           )}
         </div>
       )}
+
+      {/* Keyframes injected via style tag */}
+      <style>{`
+        @keyframes breathe {
+          0%, 100% { transform: scale(1); opacity: 0.6; }
+          50% { transform: scale(1.06); opacity: 1; }
+        }
+        @keyframes heartbeat {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.03); }
+        }
+        @keyframes ripple {
+          0% { transform: scale(1); opacity: 0.5; }
+          100% { transform: scale(2.5); opacity: 0; }
+        }
+        @keyframes fadeInUp {
+          0% { opacity: 0; transform: translateY(4px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   )
 }

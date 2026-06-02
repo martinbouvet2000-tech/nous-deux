@@ -12,57 +12,64 @@ import AmbientMood from '@/components/AmbientMood'
 
 const NAV_ITEMS = [
   { to: '/', icon: Home, label: 'Accueil' },
-  { to: '/thoughts', icon: MessageCircleHeart, label: 'Pensées' },
+  { to: '/thoughts', icon: MessageCircleHeart, label: 'Pensees' },
   { to: '/calendar', icon: Calendar, label: 'Agenda' },
   { to: '/memories', icon: Camera, label: 'Souvenirs' },
   { to: '/todos', icon: ListTodo, label: 'Projets' },
-  { to: '/activities', icon: Heart, label: 'Activités' },
-  { to: '/settings', icon: Settings, label: 'Réglages' },
+  { to: '/activities', icon: Heart, label: 'Activites' },
+  { to: '/settings', icon: Settings, label: 'Reglages' },
 ]
 
 export default function AppLayout() {
   return (
-    <div className="flex min-h-dvh bg-bg">
-      {/* Desktop sidebar */}
-      <nav className="hidden md:flex flex-col w-[232px] bg-surface/80 backdrop-blur-2xl shrink-0 fixed h-dvh z-40">
-        {/* Subtle right edge separator */}
-        <div className="absolute right-0 top-0 bottom-0 w-px bg-white/[0.04]" />
+    <div className="flex min-h-dvh bg-[#110F0E]">
+      {/* ─── Desktop sidebar ─── */}
+      <nav className="hidden md:flex flex-col w-[232px] bg-[#161411]/90 backdrop-blur-2xl shrink-0 fixed h-dvh z-40">
+        {/* Single 1px right edge */}
+        <div className="absolute right-0 top-0 bottom-0 w-px bg-[rgba(212,165,116,0.04)]" />
 
-        {/* Brand header */}
-        <div className="px-6 pt-8 pb-6">
+        {/* Brand mark */}
+        <div className="px-6 pt-8 pb-8">
           <div className="flex items-center gap-3">
-            <Heart size={18} className="text-primary/80" fill="currentColor" />
-            <span className="text-[15px] font-semibold text-text tracking-tight">
+            <Heart
+              size={17}
+              className="text-[#D4A574]/50 transition-opacity duration-500"
+              fill="currentColor"
+            />
+            <span className="text-[15px] font-light text-[#F0EAE0]/90 tracking-tight">
               Nous Deux
             </span>
           </div>
         </div>
 
-        {/* Nav items */}
-        <div className="flex-1 px-3 space-y-0.5 overflow-y-auto">
+        {/* Nav items — text-only, no backgrounds */}
+        <div className="flex-1 px-3 space-y-0.5 overflow-y-auto scrollbar-thin scrollbar-thumb-[rgba(212,165,116,0.08)] scrollbar-track-transparent">
           {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
               to={to}
               end={to === '/'}
               className={({ isActive }) =>
-                `relative flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-all duration-200 ease-in-out ${
+                `group relative flex items-center gap-3 px-4 py-2.5 text-[13px] tracking-wide transition-all duration-300 ease-out ${
                   isActive
-                    ? 'text-text font-medium bg-white/[0.05]'
-                    : 'text-text-muted hover:text-text/80 hover:bg-white/[0.03]'
+                    ? 'text-[#F0EAE0] font-medium'
+                    : 'text-[#6B6359] hover:text-[#9B9287]'
                 }`
               }
             >
               {({ isActive }) => (
                 <>
-                  {/* Left accent bar for active state */}
-                  {isActive && (
-                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-full bg-primary/70" />
-                  )}
+                  {/* 2px left accent bar — animates from center outward */}
+                  <div
+                    className={`absolute left-0 top-1/2 -translate-y-1/2 w-[2px] rounded-full bg-[#D4A574] transition-all duration-300 ease-out ${
+                      isActive ? 'h-4 opacity-100' : 'h-0 opacity-0'
+                    }`}
+                  />
                   <Icon
                     size={16}
-                    className={`shrink-0 transition-colors duration-200 ${
-                      isActive ? 'text-primary/80' : ''
+                    strokeWidth={isActive ? 1.8 : 1.5}
+                    className={`shrink-0 transition-all duration-300 ease-out ${
+                      isActive ? 'text-[#D4A574]/80' : 'text-[#6B6359] group-hover:text-[#9B9287]'
                     }`}
                   />
                   <span>{label}</span>
@@ -72,37 +79,37 @@ export default function AppLayout() {
           ))}
         </div>
 
-        {/* Footer */}
+        {/* Footer — fades to near-invisible */}
         <div className="px-6 py-5">
-          <p className="text-[10px] text-text-dim/60 text-center tracking-wide">
-            Fait avec <span className="text-primary/50">&#9829;</span> pour vous deux
+          <p className="text-[10px] text-[#6B6359]/40 text-center tracking-widest">
+            Fait avec <span className="text-[#D4A574]/30">&#9829;</span> pour vous deux
           </p>
         </div>
       </nav>
 
-      {/* Main content */}
-      <main className="flex-1 md:ml-[232px] pb-20 md:pb-6 overflow-y-auto">
+      {/* ─── Main content ─── */}
+      <main className="flex-1 md:ml-[232px] pb-24 md:pb-6 overflow-y-auto">
         <AmbientMood>
           <Outlet />
         </AmbientMood>
       </main>
 
-      {/* Mobile bottom nav */}
+      {/* ─── Mobile bottom nav ─── */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40">
-        {/* Top edge line */}
-        <div className="h-px bg-white/[0.06]" />
-        <div className="bg-surface/95 backdrop-blur-2xl">
-          <div className="flex justify-around items-center px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        {/* Top edge — single 1px warm line */}
+        <div className="h-px bg-[rgba(212,165,116,0.04)]" />
+        <div className="bg-[#161411]/95 backdrop-blur-2xl">
+          <div className="flex justify-around items-center px-2 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))]">
             {NAV_ITEMS.slice(0, 5).map(({ to, icon: Icon, label }) => (
               <NavLink
                 key={to}
                 to={to}
                 end={to === '/'}
                 className={({ isActive }) =>
-                  `flex flex-col items-center gap-1 px-3 py-1 text-[10px] tracking-wide transition-all duration-200 ease-in-out ${
+                  `flex flex-col items-center gap-1 min-w-[48px] py-1 transition-all duration-300 ease-out ${
                     isActive
-                      ? 'text-text font-medium'
-                      : 'text-text-dim active:text-text-muted'
+                      ? 'text-[#D4A574]'
+                      : 'text-[#6B6359] active:text-[#9B9287]'
                   }`
                 }
               >
@@ -110,30 +117,33 @@ export default function AppLayout() {
                   <>
                     <Icon
                       size={20}
-                      strokeWidth={isActive ? 2 : 1.5}
-                      className={`transition-colors duration-200 ${
-                        isActive ? 'text-primary/90' : ''
+                      strokeWidth={isActive ? 1.8 : 1.5}
+                      className={`transition-all duration-300 ease-out ${
+                        isActive ? 'text-[#D4A574]' : ''
                       }`}
                     />
-                    <span>{label}</span>
-                    {/* Active dot indicator */}
+                    <span className="text-[10px] tracking-wide leading-none">{label}</span>
+                    {/* 3px active dot below label */}
                     <div
-                      className={`w-1 h-1 rounded-full transition-all duration-300 ease-in-out ${
-                        isActive ? 'bg-primary/70 scale-100' : 'bg-transparent scale-0'
+                      className={`w-[3px] h-[3px] rounded-full transition-all duration-300 ease-out ${
+                        isActive
+                          ? 'bg-[#D4A574] scale-100 opacity-100'
+                          : 'bg-transparent scale-0 opacity-0'
                       }`}
                     />
                   </>
                 )}
               </NavLink>
             ))}
+            {/* Overflow / Settings tab */}
             <NavLink
               to="/settings"
               end
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 px-3 py-1 text-[10px] tracking-wide transition-all duration-200 ease-in-out ${
+                `flex flex-col items-center gap-1 min-w-[48px] py-1 transition-all duration-300 ease-out ${
                   isActive
-                    ? 'text-text font-medium'
-                    : 'text-text-dim active:text-text-muted'
+                    ? 'text-[#D4A574]'
+                    : 'text-[#6B6359] active:text-[#9B9287]'
                 }`
               }
             >
@@ -141,15 +151,17 @@ export default function AppLayout() {
                 <>
                   <Settings
                     size={20}
-                    strokeWidth={isActive ? 2 : 1.5}
-                    className={`transition-colors duration-200 ${
-                      isActive ? 'text-primary/90' : ''
+                    strokeWidth={isActive ? 1.8 : 1.5}
+                    className={`transition-all duration-300 ease-out ${
+                      isActive ? 'text-[#D4A574]' : ''
                     }`}
                   />
-                  <span>Plus</span>
+                  <span className="text-[10px] tracking-wide leading-none">Plus</span>
                   <div
-                    className={`w-1 h-1 rounded-full transition-all duration-300 ease-in-out ${
-                      isActive ? 'bg-primary/70 scale-100' : 'bg-transparent scale-0'
+                    className={`w-[3px] h-[3px] rounded-full transition-all duration-300 ease-out ${
+                      isActive
+                        ? 'bg-[#D4A574] scale-100 opacity-100'
+                        : 'bg-transparent scale-0 opacity-0'
                     }`}
                   />
                 </>

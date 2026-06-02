@@ -18,7 +18,7 @@ import {
 } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
-const COLORS = ['#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#3B82F6', '#EF4444']
+const COLORS = ['#D4A574', '#C2788E', '#E8B86D', '#10B981', '#3B82F6', '#EF4444']
 
 export default function CalendarPage() {
   const { profile } = useAuthStore()
@@ -104,33 +104,48 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="px-4 py-6 max-w-2xl mx-auto space-y-4">
+    <div className="px-5 md:px-8 py-6 max-w-3xl mx-auto space-y-5">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <Calendar size={18} className="text-primary" />
-          Agenda partagé
+        <h2 className="text-lg font-light tracking-tight flex items-center gap-2.5 text-[#F0EAE0]">
+          <div className="w-8 h-8 rounded-xl bg-[rgba(212,165,116,0.12)] flex items-center justify-center">
+            <Calendar size={16} className="text-[#D4A574]" />
+          </div>
+          Agenda partage
         </h2>
-        <button onClick={() => openForm()} className="btn btn-primary text-xs px-3 py-1.5">
+        <button
+          onClick={() => openForm()}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-gradient-to-r from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_2px_20px_rgba(212,165,116,0.2)] hover:shadow-[0_4px_28px_rgba(212,165,116,0.35)] hover:translate-y-[-1px] active:translate-y-0 active:scale-[0.98] transition-all duration-300 ease-out"
+        >
           <Plus size={14} /> Ajouter
         </button>
       </div>
 
-      <div className="card">
+      {/* Calendar card */}
+      <div className="relative overflow-hidden rounded-2xl p-5 md:p-6 bg-[#1E1B17] transition-all duration-500 ease-out">
+        <div className="absolute top-0 left-[15%] right-[15%] h-px bg-gradient-to-r from-transparent via-[rgba(212,165,116,0.12)] to-transparent opacity-60" />
+
         <div className="flex items-center justify-between mb-4">
-          <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-1.5 rounded-lg hover:bg-surface-lighter">
+          <button
+            onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+            className="p-1.5 rounded-lg text-[#9B9287] hover:text-[#F0EAE0] hover:bg-[rgba(212,165,116,0.06)] transition-all duration-300"
+          >
             <ChevronLeft size={18} />
           </button>
-          <h3 className="font-semibold capitalize">
+          <h3 className="text-sm font-medium tracking-wide text-[#F0EAE0] capitalize">
             {format(currentMonth, 'MMMM yyyy', { locale: fr })}
           </h3>
-          <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-1.5 rounded-lg hover:bg-surface-lighter">
+          <button
+            onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+            className="p-1.5 rounded-lg text-[#9B9287] hover:text-[#F0EAE0] hover:bg-[rgba(212,165,116,0.06)] transition-all duration-300"
+          >
             <ChevronRight size={18} />
           </button>
         </div>
 
         <div className="grid grid-cols-7 gap-1 mb-1">
           {['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di'].map((d) => (
-            <div key={d} className="text-center text-xs text-text-muted font-medium py-1">{d}</div>
+            <div key={d} className="text-center text-[11px] tracking-wide text-[#6B6359] font-medium py-1">{d}</div>
           ))}
         </div>
 
@@ -145,10 +160,12 @@ export default function CalendarPage() {
               <button
                 key={day.toISOString()}
                 onClick={() => setSelectedDate(day)}
-                className={`relative p-1.5 rounded-lg text-sm transition-colors ${
-                  !isCurrentMonth ? 'text-text-muted/40' : ''
-                } ${isToday ? 'ring-1 ring-primary' : ''} ${
-                  isSelected ? 'bg-primary/20 text-primary' : 'hover:bg-surface-lighter'
+                className={`relative p-1.5 rounded-xl text-sm transition-all duration-300 ${
+                  !isCurrentMonth ? 'text-[#6B6359]/40' : 'text-[#F0EAE0]'
+                } ${isToday ? 'shadow-[0_0_0_1px_rgba(212,165,116,0.3)]' : ''} ${
+                  isSelected
+                    ? 'bg-[rgba(212,165,116,0.15)] text-[#D4A574]'
+                    : 'hover:bg-[rgba(212,165,116,0.06)]'
                 }`}
               >
                 {format(day, 'd')}
@@ -165,36 +182,45 @@ export default function CalendarPage() {
         </div>
       </div>
 
+      {/* Selected day events */}
       {selectedDate && (
-        <div className="card space-y-3">
+        <div className="relative overflow-hidden rounded-2xl p-5 md:p-6 bg-[#1E1B17] transition-all duration-500 ease-out space-y-3">
+          <div className="absolute top-0 left-[15%] right-[15%] h-px bg-gradient-to-r from-transparent via-[rgba(212,165,116,0.12)] to-transparent opacity-60" />
+
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold capitalize">
+            <h3 className="text-sm font-medium text-[#F0EAE0] capitalize">
               {format(selectedDate, 'EEEE d MMMM', { locale: fr })}
             </h3>
-            <button onClick={() => openForm(selectedDate)} className="text-primary text-xs flex items-center gap-1">
+            <button
+              onClick={() => openForm(selectedDate)}
+              className="text-[#D4A574] text-[11px] tracking-wide flex items-center gap-1 hover:text-[#E8C9A0] transition-colors duration-300"
+            >
               <Plus size={12} /> Ajouter
             </button>
           </div>
 
           {selectedDayEvents.length === 0 ? (
-            <p className="text-text-muted text-xs py-4 text-center">Aucun événement</p>
+            <p className="text-[#6B6359] text-[11px] tracking-wide py-4 text-center">Aucun evenement</p>
           ) : (
             <div className="space-y-2">
               {selectedDayEvents.map((event) => (
-                <div key={event.id} className="flex items-start gap-3 p-2.5 rounded-lg bg-surface-lighter">
+                <div key={event.id} className="flex items-start gap-3 p-3 rounded-xl bg-[rgba(255,255,255,0.03)]">
                   <div className="w-1 h-full min-h-[2.5rem] rounded-full shrink-0" style={{ backgroundColor: event.color }} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{event.title}</p>
-                    <p className="text-xs text-text-muted flex items-center gap-1 mt-0.5">
+                    <p className="text-sm font-medium text-[#F0EAE0]">{event.title}</p>
+                    <p className="text-[11px] text-[#6B6359] flex items-center gap-1 mt-0.5">
                       <Clock size={10} />
-                      {format(parseISO(event.start_at), 'HH:mm')} – {format(parseISO(event.end_at), 'HH:mm')}
+                      {format(parseISO(event.start_at), 'HH:mm')} - {format(parseISO(event.end_at), 'HH:mm')}
                     </p>
                     {event.description && (
-                      <p className="text-xs text-text-muted mt-1">{event.description}</p>
+                      <p className="text-[11px] text-[#9B9287] mt-1">{event.description}</p>
                     )}
                   </div>
                   {event.created_by === profile?.id && (
-                    <button onClick={() => deleteEvent(event.id)} className="text-text-muted hover:text-danger shrink-0">
+                    <button
+                      onClick={() => deleteEvent(event.id)}
+                      className="text-[#6B6359] hover:text-red-400 shrink-0 transition-colors duration-300"
+                    >
                       <X size={14} />
                     </button>
                   )}
@@ -205,12 +231,18 @@ export default function CalendarPage() {
         </div>
       )}
 
+      {/* New event modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="card w-full max-w-md space-y-4">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
+          <div
+            className="relative overflow-hidden rounded-2xl p-5 md:p-6 bg-[#1E1B17] w-full max-w-md space-y-4"
+            style={{ animation: 'fadeIn 400ms ease-out' }}
+          >
+            <div className="absolute top-0 left-[15%] right-[15%] h-px bg-gradient-to-r from-transparent via-[rgba(212,165,116,0.12)] to-transparent opacity-60" />
+
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold">Nouvel événement</h3>
-              <button onClick={() => setShowForm(false)} className="text-text-muted hover:text-text">
+              <h3 className="text-sm font-medium tracking-wide text-[#F0EAE0]">Nouvel evenement</h3>
+              <button onClick={() => setShowForm(false)} className="text-[#6B6359] hover:text-[#F0EAE0] transition-colors duration-300">
                 <X size={18} />
               </button>
             </div>
@@ -220,7 +252,7 @@ export default function CalendarPage() {
               placeholder="Titre"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="input"
+              className="w-full bg-[rgba(255,255,255,0.03)] rounded-xl px-4 py-3 text-sm text-[#F0EAE0] placeholder-[#6B6359] outline-none transition-all duration-300 ease-out focus:bg-[rgba(255,255,255,0.05)] focus:shadow-[0_0_0_2px_rgba(212,165,116,0.15),0_0_0_1px_rgba(212,165,116,0.08)]"
               autoFocus
             />
 
@@ -229,45 +261,49 @@ export default function CalendarPage() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
-              className="input"
+              className="w-full bg-[rgba(255,255,255,0.03)] rounded-xl px-4 py-3 text-sm text-[#F0EAE0] placeholder-[#6B6359] outline-none transition-all duration-300 ease-out focus:bg-[rgba(255,255,255,0.05)] focus:shadow-[0_0_0_2px_rgba(212,165,116,0.15),0_0_0_1px_rgba(212,165,116,0.08)] resize-none"
             />
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-text-muted mb-1">Début</label>
+                <label className="block text-[11px] tracking-wide text-[#6B6359] mb-1.5">Debut</label>
                 <input
                   type="datetime-local"
                   value={startAt}
                   onChange={(e) => setStartAt(e.target.value)}
-                  className="input"
+                  className="w-full bg-[rgba(255,255,255,0.03)] rounded-xl px-4 py-3 text-sm text-[#F0EAE0] outline-none transition-all duration-300 ease-out focus:bg-[rgba(255,255,255,0.05)] focus:shadow-[0_0_0_2px_rgba(212,165,116,0.15),0_0_0_1px_rgba(212,165,116,0.08)]"
                 />
               </div>
               <div>
-                <label className="block text-xs text-text-muted mb-1">Fin</label>
+                <label className="block text-[11px] tracking-wide text-[#6B6359] mb-1.5">Fin</label>
                 <input
                   type="datetime-local"
                   value={endAt}
                   onChange={(e) => setEndAt(e.target.value)}
-                  className="input"
+                  className="w-full bg-[rgba(255,255,255,0.03)] rounded-xl px-4 py-3 text-sm text-[#F0EAE0] outline-none transition-all duration-300 ease-out focus:bg-[rgba(255,255,255,0.05)] focus:shadow-[0_0_0_2px_rgba(212,165,116,0.15),0_0_0_1px_rgba(212,165,116,0.08)]"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs text-text-muted mb-1.5">Couleur</label>
+              <label className="block text-[11px] tracking-wide text-[#6B6359] mb-1.5">Couleur</label>
               <div className="flex gap-2">
                 {COLORS.map((c) => (
                   <button
                     key={c}
                     onClick={() => setColor(c)}
-                    className={`w-7 h-7 rounded-full transition-transform ${color === c ? 'scale-110 ring-2 ring-white/40' : ''}`}
+                    className={`w-7 h-7 rounded-full transition-all duration-300 ${color === c ? 'scale-110 shadow-[0_0_12px_rgba(212,165,116,0.3)]' : 'opacity-60 hover:opacity-100'}`}
                     style={{ backgroundColor: c }}
                   />
                 ))}
               </div>
             </div>
 
-            <button onClick={saveEvent} disabled={saving || !title.trim()} className="btn btn-primary w-full">
+            <button
+              onClick={saveEvent}
+              disabled={saving || !title.trim()}
+              className="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-gradient-to-r from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_2px_20px_rgba(212,165,116,0.2)] hover:shadow-[0_4px_28px_rgba(212,165,116,0.35)] hover:translate-y-[-1px] active:translate-y-0 active:scale-[0.98] transition-all duration-300 ease-out disabled:opacity-40 disabled:cursor-not-allowed"
+            >
               {saving ? 'Enregistrement...' : 'Ajouter'}
             </button>
           </div>

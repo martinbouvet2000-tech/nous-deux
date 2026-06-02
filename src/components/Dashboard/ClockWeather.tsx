@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { MapPin, Clock } from 'lucide-react'
+import { MapPin } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 
 function formatTime(timezone: string): string {
@@ -40,10 +40,10 @@ interface PersonClockProps {
   name: string
   timezone: string
   city: string | null
-  isPartner?: boolean
+  variant: 'amber' | 'rose'
 }
 
-function PersonClock({ name, timezone, city, isPartner }: PersonClockProps) {
+function PersonClock({ name, timezone, city, variant }: PersonClockProps) {
   const [time, setTime] = useState(formatTime(timezone))
   const [seconds, setSeconds] = useState(formatSeconds(timezone))
   const [date, setDate] = useState(formatDate(timezone))
@@ -57,22 +57,36 @@ function PersonClock({ name, timezone, city, isPartner }: PersonClockProps) {
     return () => clearInterval(interval)
   }, [timezone])
 
+  const tintColor = variant === 'amber'
+    ? 'rgba(212, 165, 116, 0.04)'
+    : 'rgba(194, 120, 142, 0.04)'
+
+  const glowColor = variant === 'amber'
+    ? '0 0 20px rgba(212, 165, 116, 0.06)'
+    : '0 0 20px rgba(194, 120, 142, 0.06)'
+
   return (
-    <div className={`flex-1 text-center p-5 rounded-2xl transition-all bg-gradient-to-br ${
-      isPartner
-        ? 'from-secondary/8 to-pink-500/3'
-        : 'from-primary/8 to-violet-500/3'
-    }`}>
-      <p className="text-[11px] text-text-muted mb-1 flex items-center justify-center gap-1 uppercase tracking-wider font-medium">
-        <MapPin size={10} />
-        {city || timezone.split('/').pop()?.replace('_', ' ')}
-      </p>
-      <p className="text-xs font-semibold mb-3 text-text/80">{name}</p>
-      <div className="flex items-baseline justify-center gap-0.5">
-        <p className="text-4xl font-bold tabular-nums tracking-tight">{time}</p>
-        <span className="text-lg text-text-muted tabular-nums font-medium">:{seconds}</span>
+    <div
+      className="flex-1 text-center p-5 rounded-2xl transition-all duration-500 ease-out"
+      style={{ backgroundColor: tintColor }}
+    >
+      <div className="flex items-center justify-center gap-1 mb-1">
+        <MapPin size={10} className="text-[#6B6359]" />
+        <p className="text-[11px] tracking-wide text-[#6B6359] uppercase">
+          {city || timezone.split('/').pop()?.replace('_', ' ')}
+        </p>
       </div>
-      <p className="text-xs text-text-muted mt-2 capitalize">{date}</p>
+      <p className="text-[11px] tracking-wide text-[#9B9287] font-medium mb-3">{name}</p>
+      <div className="flex items-baseline justify-center gap-0.5">
+        <p
+          className="text-4xl font-light tabular-nums tracking-tight text-[#F0EAE0]"
+          style={{ textShadow: glowColor }}
+        >
+          {time}
+        </p>
+        <span className="text-lg text-[#6B6359] tabular-nums font-light">:{seconds}</span>
+      </div>
+      <p className="text-[11px] tracking-wide text-[#6B6359] mt-2 capitalize">{date}</p>
     </div>
   )
 }
@@ -85,28 +99,39 @@ export default function ClockWeather() {
   const timeDiff = partnerProfile ? getTimeDiffLabel(profile.timezone, partnerProfile.timezone) : null
 
   return (
-    <div className="card">
+    <div className="group relative overflow-hidden rounded-2xl p-5 md:p-6 bg-[#1E1B17] transition-all duration-500 ease-out hover:bg-[#252118] hover:shadow-[0_8px_48px_rgba(0,0,0,0.3),0_0_0_1px_rgba(212,165,116,0.04)]">
+      {/* Top glow line */}
+      <div
+        className="absolute top-0 left-[15%] right-[15%] h-px transition-opacity duration-500 ease-out opacity-60 group-hover:opacity-100"
+        style={{ background: 'linear-gradient(90deg, transparent, rgba(212, 165, 116, 0.12), transparent)' }}
+      />
+
+      {/* Header */}
       <div className="flex items-center gap-2 mb-4">
-        <div className="w-7 h-7 rounded-lg bg-primary/15 flex items-center justify-center">
-          <Clock size={15} className="text-primary" />
-        </div>
-        <h3 className="text-sm font-semibold">Nos horloges</h3>
+        <p className="text-sm font-medium tracking-wide uppercase text-[#9B9287]">
+          Nos horloges
+        </p>
         {timeDiff && (
-          <span className="badge ml-auto">{timeDiff}</span>
+          <span className="ml-auto text-[11px] tracking-wide text-[#6B6359] bg-[rgba(255,255,255,0.03)] px-2.5 py-1 rounded-lg">
+            {timeDiff}
+          </span>
         )}
       </div>
+
+      {/* Clocks */}
       <div className="flex gap-3">
         <PersonClock
           name={profile.display_name}
           timezone={profile.timezone}
           city={profile.location_city}
+          variant="amber"
         />
         {partnerProfile && (
           <PersonClock
             name={partnerProfile.display_name}
             timezone={partnerProfile.timezone}
             city={partnerProfile.location_city}
-            isPartner
+            variant="rose"
           />
         )}
       </div>

@@ -108,94 +108,143 @@ export default function Todos() {
   const activeItems = activeListId ? items[activeListId] ?? [] : []
   const doneCount = activeItems.filter((i) => i.is_done).length
 
+  /* ═══════════════ ACTIVE LIST VIEW ═══════════════ */
   if (activeList) {
     return (
-      <div className="px-4 py-6 max-w-2xl mx-auto space-y-4">
+      <div className="px-5 md:px-8 py-6 max-w-3xl mx-auto space-y-5">
+        {/* Header with back */}
         <div className="flex items-center gap-3">
-          <button onClick={() => setActiveListId(null)} className="text-text-muted hover:text-text">
+          <button
+            onClick={() => setActiveListId(null)}
+            className="text-[#6B6359] hover:text-[#F0EAE0] transition-colors duration-300"
+          >
             <ChevronRight size={18} className="rotate-180" />
           </button>
-          <h2 className="text-lg font-semibold flex items-center gap-2">
+          <h2 className="text-lg font-light tracking-tight flex items-center gap-2 text-[#F0EAE0]">
             <span>{activeList.emoji}</span>
             {activeList.title}
           </h2>
-          <span className="text-xs text-text-muted ml-auto">{doneCount}/{activeItems.length}</span>
+          <span className="text-[11px] tracking-wide text-[#6B6359] ml-auto">{doneCount}/{activeItems.length}</span>
         </div>
 
+        {/* Progress bar */}
         {activeItems.length > 0 && (
-          <div className="w-full bg-surface-lighter rounded-full h-1.5">
+          <div className="w-full bg-[rgba(255,255,255,0.03)] rounded-full h-1.5">
             <div
-              className="h-full bg-gradient-to-r from-primary to-secondary rounded-full transition-all"
+              className="h-full bg-gradient-to-r from-[#D4A574] to-[#C2788E] rounded-full transition-all duration-500"
               style={{ width: `${activeItems.length > 0 ? (doneCount / activeItems.length) * 100 : 0}%` }}
             />
           </div>
         )}
 
+        {/* Items */}
         <div className="space-y-1.5">
           {activeItems.map((item) => (
-            <div key={item.id} className={`flex items-center gap-3 p-3 rounded-lg ${item.is_done ? 'bg-surface/50' : 'bg-surface-lighter'}`}>
-              <button onClick={() => toggleItem(item)} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${item.is_done ? 'bg-success border-success' : 'border-text-muted hover:border-primary'}`}>
+            <div
+              key={item.id}
+              className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-300 ${
+                item.is_done ? 'bg-[rgba(255,255,255,0.015)]' : 'bg-[#1E1B17]'
+              }`}
+            >
+              <button
+                onClick={() => toggleItem(item)}
+                className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 transition-all duration-300 ${
+                  item.is_done
+                    ? 'bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.2)]'
+                    : 'shadow-[0_0_0_2px_rgba(155,146,135,0.3)] hover:shadow-[0_0_0_2px_rgba(212,165,116,0.4)]'
+                }`}
+              >
                 {item.is_done && <Check size={12} className="text-white" />}
               </button>
-              <span className={`flex-1 text-sm ${item.is_done ? 'line-through text-text-muted' : ''}`}>
+              <span className={`flex-1 text-sm leading-relaxed ${item.is_done ? 'line-through text-[#6B6359]' : 'text-[#F0EAE0]'}`}>
                 {item.title}
               </span>
-              <button onClick={() => deleteItem(item)} className="text-text-muted/50 hover:text-danger">
+              <button
+                onClick={() => deleteItem(item)}
+                className="text-[#6B6359]/30 hover:text-red-400 transition-colors duration-300"
+              >
                 <X size={14} />
               </button>
             </div>
           ))}
         </div>
 
+        {/* Add item input */}
         <div className="flex gap-2">
           <input
             type="text"
-            placeholder="Ajouter une tâche..."
+            placeholder="Ajouter une tache..."
             value={newItemTitle}
             onChange={(e) => setNewItemTitle(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && addItem()}
-            className="input flex-1"
+            className="flex-1 bg-[rgba(255,255,255,0.03)] rounded-xl px-4 py-3 text-sm text-[#F0EAE0] placeholder-[#6B6359] outline-none transition-all duration-300 ease-out focus:bg-[rgba(255,255,255,0.05)] focus:shadow-[0_0_0_2px_rgba(212,165,116,0.15),0_0_0_1px_rgba(212,165,116,0.08)]"
           />
-          <button onClick={addItem} disabled={!newItemTitle.trim()} className="btn btn-primary px-3">
+          <button
+            onClick={addItem}
+            disabled={!newItemTitle.trim()}
+            className="inline-flex items-center justify-center px-3 rounded-xl text-sm font-medium bg-gradient-to-r from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_2px_20px_rgba(212,165,116,0.2)] hover:shadow-[0_4px_28px_rgba(212,165,116,0.35)] hover:translate-y-[-1px] active:translate-y-0 active:scale-[0.98] transition-all duration-300 ease-out disabled:opacity-40 disabled:cursor-not-allowed"
+          >
             <Plus size={16} />
           </button>
         </div>
 
-        <button onClick={() => deleteList(activeList.id)} className="btn btn-ghost w-full text-danger text-xs mt-4">
+        {/* Delete list */}
+        <button
+          onClick={() => deleteList(activeList.id)}
+          className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[11px] tracking-wide font-medium text-red-400/70 bg-transparent hover:text-red-400 hover:bg-[rgba(239,68,68,0.06)] transition-all duration-300 ease-out mt-4"
+        >
           <Trash2 size={14} /> Supprimer cette liste
         </button>
       </div>
     )
   }
 
+  /* ═══════════════ LISTS OVERVIEW ═══════════════ */
   return (
-    <div className="px-4 py-6 max-w-2xl mx-auto space-y-4">
+    <div className="px-5 md:px-8 py-6 max-w-3xl mx-auto space-y-5">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <ListTodo size={18} className="text-primary" />
+        <h2 className="text-lg font-light tracking-tight flex items-center gap-2.5 text-[#F0EAE0]">
+          <div className="w-8 h-8 rounded-xl bg-[rgba(212,165,116,0.12)] flex items-center justify-center">
+            <ListTodo size={16} className="text-[#D4A574]" />
+          </div>
           Projets communs
         </h2>
-        <button onClick={() => setShowNewList(true)} className="btn btn-primary text-xs px-3 py-1.5">
+        <button
+          onClick={() => setShowNewList(true)}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-gradient-to-r from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_2px_20px_rgba(212,165,116,0.2)] hover:shadow-[0_4px_28px_rgba(212,165,116,0.35)] hover:translate-y-[-1px] active:translate-y-0 active:scale-[0.98] transition-all duration-300 ease-out"
+        >
           <Plus size={14} /> Nouvelle liste
         </button>
       </div>
 
+      {/* Empty state */}
       {lists.length === 0 && !showNewList && (
-        <div className="card text-center py-10">
-          <p className="text-3xl mb-2">📋</p>
-          <p className="text-text-muted text-sm">Aucune liste pour l'instant</p>
-          <p className="text-xs text-text-muted mt-1">Crée une liste pour organiser vos projets à deux</p>
+        <div className="relative overflow-hidden rounded-2xl p-5 md:p-6 bg-[#1E1B17] text-center py-12">
+          <div className="absolute top-0 left-[15%] right-[15%] h-px bg-gradient-to-r from-transparent via-[rgba(212,165,116,0.12)] to-transparent opacity-60" />
+          <div className="w-14 h-14 rounded-2xl bg-[rgba(212,165,116,0.1)] flex items-center justify-center mx-auto mb-4">
+            <ListTodo size={24} className="text-[#D4A574]/60" />
+          </div>
+          <p className="text-[#9B9287] text-sm leading-relaxed">Aucune liste pour l'instant</p>
+          <p className="text-[#6B6359] text-[11px] tracking-wide mt-1.5">Cree une liste pour organiser vos projets a deux</p>
         </div>
       )}
 
+      {/* New list inline form */}
       {showNewList && (
-        <div className="card space-y-3">
+        <div className="relative overflow-hidden rounded-2xl p-5 md:p-6 bg-[#1E1B17] space-y-3">
+          <div className="absolute top-0 left-[15%] right-[15%] h-px bg-gradient-to-r from-transparent via-[rgba(212,165,116,0.12)] to-transparent opacity-60" />
+
           <div className="flex gap-2 flex-wrap">
             {EMOJIS.map((e) => (
               <button
                 key={e}
                 onClick={() => setNewListEmoji(e)}
-                className={`text-xl p-1.5 rounded-lg transition-colors ${newListEmoji === e ? 'bg-primary/20 ring-1 ring-primary' : 'hover:bg-surface-lighter'}`}
+                className={`text-xl p-1.5 rounded-lg transition-all duration-300 ${
+                  newListEmoji === e
+                    ? 'bg-[rgba(212,165,116,0.15)] shadow-[0_0_12px_rgba(212,165,116,0.1)]'
+                    : 'hover:bg-[rgba(212,165,116,0.06)]'
+                }`}
               >
                 {e}
               </button>
@@ -207,18 +256,28 @@ export default function Todos() {
             value={newListTitle}
             onChange={(e) => setNewListTitle(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && createList()}
-            className="input"
+            className="w-full bg-[rgba(255,255,255,0.03)] rounded-xl px-4 py-3 text-sm text-[#F0EAE0] placeholder-[#6B6359] outline-none transition-all duration-300 ease-out focus:bg-[rgba(255,255,255,0.05)] focus:shadow-[0_0_0_2px_rgba(212,165,116,0.15),0_0_0_1px_rgba(212,165,116,0.08)]"
             autoFocus
           />
           <div className="flex gap-2">
-            <button onClick={() => setShowNewList(false)} className="btn btn-ghost flex-1">Annuler</button>
-            <button onClick={createList} disabled={saving || !newListTitle.trim()} className="btn btn-primary flex-1">
-              {saving ? '...' : 'Créer'}
+            <button
+              onClick={() => setShowNewList(false)}
+              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-[#9B9287] bg-transparent hover:text-[#F0EAE0] hover:bg-[rgba(212,165,116,0.06)] active:scale-[0.98] transition-all duration-300 ease-out"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={createList}
+              disabled={saving || !newListTitle.trim()}
+              className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-gradient-to-r from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_2px_20px_rgba(212,165,116,0.2)] hover:shadow-[0_4px_28px_rgba(212,165,116,0.35)] hover:translate-y-[-1px] active:translate-y-0 active:scale-[0.98] transition-all duration-300 ease-out disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {saving ? '...' : 'Creer'}
             </button>
           </div>
         </div>
       )}
 
+      {/* Lists */}
       <div className="space-y-2">
         {lists.map((list) => {
           const listItems = items[list.id]
@@ -230,16 +289,18 @@ export default function Todos() {
               key={list.id}
               onClick={() => setActiveListId(list.id)}
               onMouseEnter={() => { if (!items[list.id]) fetchItems(list.id) }}
-              className="card w-full text-left flex items-center gap-3"
+              className="relative overflow-hidden rounded-2xl p-5 md:p-6 bg-[#1E1B17] hover:bg-[#252118] transition-all duration-500 ease-out w-full text-left flex items-center gap-3 group"
             >
+              <div className="absolute top-0 left-[15%] right-[15%] h-px bg-gradient-to-r from-transparent via-[rgba(212,165,116,0.12)] to-transparent opacity-60 group-hover:opacity-100 group-hover:via-[rgba(212,165,116,0.2)] transition-opacity duration-500" />
+
               <span className="text-2xl">{list.emoji}</span>
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm">{list.title}</p>
+                <p className="font-medium text-sm text-[#F0EAE0]">{list.title}</p>
                 {total > 0 && (
-                  <p className="text-xs text-text-muted">{done}/{total} terminé{done > 1 ? 's' : ''}</p>
+                  <p className="text-[11px] tracking-wide text-[#6B6359]">{done}/{total} termine{done > 1 ? 's' : ''}</p>
                 )}
               </div>
-              <ChevronRight size={16} className="text-text-muted" />
+              <ChevronRight size={16} className="text-[#6B6359] group-hover:text-[#9B9287] transition-colors duration-300" />
             </button>
           )
         })}

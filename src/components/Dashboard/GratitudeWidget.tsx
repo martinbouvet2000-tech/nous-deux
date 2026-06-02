@@ -85,47 +85,50 @@ export default function GratitudeWidget() {
   // Already filled today — show summary
   if (myItems.length > 0 && !showForm) {
     return (
-      <div className="card">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-secondary/15 flex items-center justify-center">
-              <Heart size={15} className="text-secondary" fill="currentColor" />
+      <div className="relative overflow-hidden rounded-2xl p-5 md:p-6 bg-[#1E1B17] transition-all duration-500 ease-out hover:bg-[#252118] hover:shadow-[0_8px_48px_rgba(0,0,0,0.3),0_0_0_1px_rgba(212,165,116,0.04)] group">
+        {/* Top edge glow */}
+        <div className="absolute top-0 left-[15%] right-[15%] h-px bg-gradient-to-r from-transparent via-[rgba(212,165,116,0.12)] to-transparent opacity-60 group-hover:opacity-100 group-hover:via-[rgba(212,165,116,0.2)] transition-opacity duration-500 ease-out" />
+
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-[rgba(194,120,142,0.12)] flex items-center justify-center">
+              <Heart size={15} className="text-[#C2788E]" fill="currentColor" />
             </div>
-            <h3 className="text-sm font-semibold">Gratitude</h3>
+            <h3 className="text-sm font-medium tracking-wide uppercase text-[#9B9287]">Gratitude</h3>
           </div>
-          <span className="text-[10px] text-text-dim">
+          <span className="text-[11px] tracking-wide text-[#6B6359]">
             {format(new Date(), 'd MMM', { locale: fr })}
           </span>
         </div>
 
         {/* My items */}
-        <div className="space-y-1.5 mb-3">
+        <div className="space-y-2 mb-3">
           {myItems.map((item, i) => (
-            <div key={i} className="flex items-start gap-2 text-sm">
-              <Sparkles size={12} className="text-accent mt-0.5 shrink-0" />
-              <span className="text-text/80">{item}</span>
+            <div key={i} className="flex items-start gap-2.5 text-sm">
+              <Sparkles size={12} className="text-[#E8B86D] mt-0.5 shrink-0 opacity-70" />
+              <span className="text-[#F0EAE0]/80 leading-relaxed">{item}</span>
             </div>
           ))}
         </div>
 
         {/* Partner items */}
         {partnerItems.length > 0 ? (
-          <div className="pt-2.5 border-t border-white/[0.04]">
-            <p className="text-[10px] text-secondary-light font-semibold uppercase tracking-wider mb-1.5">
+          <div className="pt-3 border-t border-white/[0.04]">
+            <p className="text-[11px] text-[#D99AAD] font-medium uppercase tracking-wider mb-2">
               {partnerProfile.display_name}
             </p>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {partnerItems.map((item, i) => (
-                <div key={i} className="flex items-start gap-2 text-sm">
-                  <Sparkles size={12} className="text-secondary mt-0.5 shrink-0" />
-                  <span className="text-text/80">{item}</span>
+                <div key={i} className="flex items-start gap-2.5 text-sm">
+                  <Sparkles size={12} className="text-[#C2788E] mt-0.5 shrink-0 opacity-70" />
+                  <span className="text-[#F0EAE0]/80 leading-relaxed">{item}</span>
                 </div>
               ))}
             </div>
           </div>
         ) : (
-          <div className="pt-2.5 border-t border-white/[0.04]">
-            <p className="text-[10px] text-text-dim text-center">
+          <div className="pt-3 border-t border-white/[0.04]">
+            <p className="text-[11px] tracking-wide text-[#6B6359] text-center">
               {partnerProfile.display_name} n'a pas encore rempli aujourd'hui
             </p>
           </div>
@@ -136,26 +139,29 @@ export default function GratitudeWidget() {
 
   // Form or prompt
   return (
-    <div className="card">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-7 h-7 rounded-lg bg-secondary/15 flex items-center justify-center">
-          <Heart size={15} className="text-secondary" fill="currentColor" />
+    <div className="relative overflow-hidden rounded-2xl p-5 md:p-6 bg-[#1E1B17] transition-all duration-500 ease-out hover:bg-[#252118] hover:shadow-[0_8px_48px_rgba(0,0,0,0.3),0_0_0_1px_rgba(212,165,116,0.04)] group">
+      {/* Top edge glow */}
+      <div className="absolute top-0 left-[15%] right-[15%] h-px bg-gradient-to-r from-transparent via-[rgba(212,165,116,0.12)] to-transparent opacity-60 group-hover:opacity-100 group-hover:via-[rgba(212,165,116,0.2)] transition-opacity duration-500 ease-out" />
+
+      <div className="flex items-center gap-2.5 mb-4">
+        <div className="w-7 h-7 rounded-lg bg-[rgba(194,120,142,0.12)] flex items-center justify-center">
+          <Heart size={15} className="text-[#C2788E]" fill="currentColor" />
         </div>
-        <h3 className="text-sm font-semibold">Gratitude du jour</h3>
+        <h3 className="text-sm font-medium tracking-wide uppercase text-[#9B9287]">Gratitude du jour</h3>
       </div>
 
       {saved ? (
         <div className="text-center py-4 animate-bounce-in">
-          <p className="text-secondary text-sm font-medium">Merci pour ta gratitude ! 💜</p>
+          <p className="text-[#C2788E] text-sm font-medium leading-relaxed">Merci pour ta gratitude</p>
         </div>
       ) : showForm ? (
-        <div className="space-y-2 animate-slide-up">
-          <p className="text-xs text-text-muted mb-2">
-            3 choses que tu apprécies aujourd'hui
+        <div className="space-y-2.5 animate-slide-up">
+          <p className="text-[11px] tracking-wide text-[#9B9287] mb-2">
+            3 choses que tu apprecies aujourd'hui
           </p>
           {inputs.map((val, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <span className="text-accent text-xs shrink-0">{i + 1}.</span>
+            <div key={i} className="flex items-center gap-2.5">
+              <span className="text-[#E8B86D] text-[11px] shrink-0 font-medium">{i + 1}.</span>
               <input
                 type="text"
                 value={val}
@@ -165,7 +171,7 @@ export default function GratitudeWidget() {
                   : i === 1 ? 'Ex: Notre appel hier soir...'
                   : 'Ex: Sa patience infinie...'
                 }
-                className="input text-sm py-2"
+                className="w-full bg-[rgba(255,255,255,0.03)] rounded-xl px-4 py-2.5 text-sm text-[#F0EAE0] placeholder-[#6B6359] outline-none transition-all duration-300 ease-out focus:bg-[rgba(255,255,255,0.05)] focus:shadow-[0_0_0_2px_rgba(212,165,116,0.15),0_0_0_1px_rgba(212,165,116,0.08)]"
                 autoFocus={i === 0}
                 maxLength={120}
               />
@@ -174,14 +180,14 @@ export default function GratitudeWidget() {
           <div className="flex gap-2 pt-1">
             <button
               onClick={() => { setShowForm(false); setInputs(['', '', '']) }}
-              className="btn btn-ghost flex-1 text-xs py-2"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-[#9B9287] bg-transparent hover:text-[#F0EAE0] hover:bg-[rgba(212,165,116,0.06)] active:scale-[0.98] transition-all duration-300 ease-out flex-1"
             >
               <X size={14} /> Annuler
             </button>
             <button
               onClick={saveGratitude}
               disabled={saving || inputs.every(i => !i.trim())}
-              className="btn btn-secondary flex-1 text-xs py-2"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-gradient-to-r from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_2px_20px_rgba(212,165,116,0.2)] hover:shadow-[0_4px_28px_rgba(212,165,116,0.35)] hover:translate-y-[-1px] active:translate-y-0 active:scale-[0.98] transition-all duration-300 ease-out disabled:opacity-40 disabled:cursor-not-allowed flex-1"
             >
               {saving ? '...' : 'Enregistrer'}
             </button>
@@ -190,10 +196,10 @@ export default function GratitudeWidget() {
       ) : (
         <button
           onClick={() => setShowForm(true)}
-          className="w-full flex items-center justify-center gap-2 py-4 rounded-xl border border-dashed border-white/[0.08] hover:border-white/[0.15] hover:bg-white/[0.03] transition-all text-text-muted hover:text-text text-sm"
+          className="w-full flex items-center justify-center gap-2.5 py-5 rounded-xl bg-[rgba(255,255,255,0.02)] hover:bg-[rgba(212,165,116,0.06)] transition-all duration-300 ease-out text-[#9B9287] hover:text-[#F0EAE0] text-sm leading-relaxed"
         >
-          <Plus size={16} className="text-secondary" />
-          <span>Qu'apprécies-tu aujourd'hui ?</span>
+          <Plus size={16} className="text-[#C2788E]" />
+          <span>Qu'apprecies-tu aujourd'hui ?</span>
         </button>
       )}
     </div>
