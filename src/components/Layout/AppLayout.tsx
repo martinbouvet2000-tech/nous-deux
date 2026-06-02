@@ -12,12 +12,12 @@ import AmbientMood from '@/components/AmbientMood'
 
 const NAV_ITEMS = [
   { to: '/', icon: Home, label: 'Accueil' },
-  { to: '/thoughts', icon: MessageCircleHeart, label: 'Pensees' },
+  { to: '/thoughts', icon: MessageCircleHeart, label: 'Pensées' },
   { to: '/calendar', icon: Calendar, label: 'Agenda' },
   { to: '/memories', icon: Camera, label: 'Souvenirs' },
   { to: '/todos', icon: ListTodo, label: 'Projets' },
-  { to: '/activities', icon: Heart, label: 'Activites' },
-  { to: '/settings', icon: Settings, label: 'Reglages' },
+  { to: '/activities', icon: Heart, label: 'Activités' },
+  { to: '/settings', icon: Settings, label: 'Réglages' },
 ]
 
 export default function AppLayout() {

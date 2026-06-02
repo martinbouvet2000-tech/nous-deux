@@ -215,11 +215,11 @@ export default function Dashboard() {
     <div className="max-w-2xl mx-auto px-5 py-8 animate-fade-in">
 
       {/* ════════ SECTION 1: Greeting + Clocks ════════ */}
-      <section className="text-center mb-10">
-        <p className="text-[11px] tracking-[0.2em] uppercase text-text-dim mb-3">{getGreeting()}</p>
-        <h1 className="text-3xl md:text-4xl font-light tracking-tight mb-6">
+      <section className="text-center mb-8 pt-4">
+        <p className="text-[11px] tracking-[0.25em] uppercase text-text-dim/70 mb-4">{getGreeting()}</p>
+        <h1 className="text-3xl md:text-[2.5rem] font-light tracking-tight mb-7 gradient-text leading-tight">
           {profile.display_name}
-          {partnerProfile && <span className="text-text-dim mx-3">&</span>}
+          {partnerProfile && <span className="text-text-dim/40 mx-2 font-extralight">&</span>}
           {partnerProfile?.display_name}
         </h1>
 
@@ -260,66 +260,82 @@ export default function Dashboard() {
       <LoveNoteWidget />
 
       {/* ════════ SECTION 2: Heart — THE centerpiece ════════ */}
-      <section className="text-center py-12 mb-2">
-        <div className="relative inline-flex items-center justify-center mb-6">
-          {/* Ambient glow */}
-          <div className={`absolute w-32 h-32 rounded-full blur-2xl transition-all duration-1000 ${
-            tapped ? 'bg-secondary/25 scale-125' : receivedTap ? 'bg-secondary/15 scale-110' : 'bg-primary/8 scale-100'
+      <section className="text-center py-16 mb-2 relative">
+        {/* Background ambient glow — always alive */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="w-64 h-64 rounded-full bg-primary/[0.04] blur-[80px] animate-glow-breath" />
+        </div>
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="w-40 h-40 rounded-full bg-secondary/[0.06] blur-[60px] animate-glow-breath" style={{ animationDelay: '2s' }} />
+        </div>
+
+        <div className="relative inline-flex items-center justify-center mb-8">
+          {/* Outer breathing ring */}
+          <div className={`absolute w-36 h-36 rounded-full transition-all duration-1000 ${
+            tapped
+              ? 'bg-secondary/20 scale-125 blur-xl'
+              : receivedTap
+                ? 'bg-secondary/12 scale-115 blur-lg'
+                : 'border border-primary/[0.08] animate-heart-breath'
           }`} />
 
-          {/* Pulse ring at rest */}
-          <div className={`absolute w-28 h-28 rounded-full transition-all duration-1000 ${
-            !tapped && !receivedTap ? 'border border-white/[0.04] animate-pulse-soft' : 'border-transparent scale-110'
+          {/* Inner glow ring */}
+          <div className={`absolute w-28 h-28 rounded-full transition-all duration-700 ${
+            tapped
+              ? 'bg-secondary/15 scale-110'
+              : receivedTap
+                ? 'bg-secondary/10 scale-105'
+                : 'bg-primary/[0.03]'
           }`} />
 
           <button
             onClick={sendTap}
             disabled={tapped || !partnerProfile}
             className={`relative z-10 w-24 h-24 rounded-full flex items-center justify-center transition-all duration-500 ease-out ${
-              tapped ? 'scale-110' : receivedTap ? 'scale-105' : 'hover:scale-105 active:scale-95'
+              tapped ? 'scale-115' : receivedTap ? 'scale-108' : 'hover:scale-105 active:scale-90'
             }`}
           >
             <Heart
-              size={44}
-              strokeWidth={1.5}
-              className={`transition-all duration-500 ${
-                tapped ? 'text-secondary fill-current scale-110' : receivedTap ? 'text-secondary/80 fill-current' : 'text-text-muted/60 hover:text-primary'
+              size={46}
+              strokeWidth={1.2}
+              className={`transition-all duration-700 ease-out ${
+                tapped
+                  ? 'text-secondary fill-secondary drop-shadow-[0_0_20px_rgba(194,120,142,0.5)]'
+                  : receivedTap
+                    ? 'text-secondary/90 fill-secondary/90 drop-shadow-[0_0_15px_rgba(194,120,142,0.3)]'
+                    : 'text-primary/40 fill-primary/10 hover:text-primary/70 hover:fill-primary/20'
               }`}
             />
           </button>
         </div>
 
         {/* Status text */}
-        <p className="text-sm mb-1">
+        <p className="text-[15px] font-light tracking-wide mb-2">
           {tapped ? (
-            <span className="text-secondary animate-fade-in">Envoyé avec amour</span>
+            <span className="text-secondary/90 animate-fade-in">Envoyé avec amour</span>
           ) : receivedTap ? (
-            <span className="text-secondary animate-fade-in">{partnerProfile?.display_name} pense à toi</span>
+            <span className="text-secondary/80 animate-fade-in">{partnerProfile?.display_name} pense à toi</span>
           ) : (
-            <span className="text-text-dim">Je pense à toi</span>
+            <span className="text-text-muted/70">Je pense à toi</span>
           )}
         </p>
 
-        {/* Streak + Stats */}
-        <div className="flex items-center justify-center gap-4 mt-3 text-xs text-text-dim">
+        {/* Streak + Stats — subtle, below */}
+        <div className="flex items-center justify-center gap-4 text-[11px] text-text-dim/80">
           {streak > 0 && (
-            <span className="flex items-center gap-1">
-              <span className="text-accent">🔥</span>
-              <span className="font-medium text-text-muted tabular-nums">{streak}</span> jour{streak > 1 ? 's' : ''}
+            <span className="flex items-center gap-1.5">
+              <span className="text-accent/80">🔥</span>
+              <span className="tabular-nums">{streak} jour{streak > 1 ? 's' : ''}</span>
             </span>
           )}
-          {(todayCount > 0 || partnerTodayCount > 0) && (
-            <span className="flex items-center gap-2">
-              {todayCount > 0 && <span><span className="text-text-muted font-medium">{todayCount}</span> envoyé{todayCount > 1 ? 's' : ''}</span>}
-              {partnerTodayCount > 0 && <span><span className="text-text-muted font-medium">{partnerTodayCount}</span> reçu{partnerTodayCount > 1 ? 's' : ''}</span>}
-            </span>
-          )}
+          {todayCount > 0 && <span>{todayCount} envoyé{todayCount > 1 ? 's' : ''}</span>}
+          {partnerTodayCount > 0 && <span>{partnerTodayCount} reçu{partnerTodayCount > 1 ? 's' : ''}</span>}
         </div>
 
-        {/* Days together */}
+        {/* Days together — the quiet anchor */}
         {daysTogether > 0 && (
-          <p className="text-[10px] text-text-dim/60 mt-4 tracking-wide">
-            Jour {daysTogether} ensemble
+          <p className="text-[10px] text-text-dim/40 mt-5 tracking-[0.15em] uppercase">
+            Jour {daysTogether}
           </p>
         )}
       </section>
