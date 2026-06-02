@@ -166,14 +166,14 @@ export default function AmbientMood({ children }: { children: React.ReactNode })
     ]
     if (emojis.length === 0) return
 
-    const newParticles: FloatingParticle[] = Array.from({ length: 6 }, (_, i) => ({
+    const newParticles: FloatingParticle[] = Array.from({ length: 3 }, (_, i) => ({
       id: ++particleCounter,
       emoji: emojis[i % emojis.length],
-      x: 10 + (i * 15) + (i % 2 === 0 ? 5 : -5),
-      y: 100 + (i * 10),
-      duration: 12 + (i * 3),
-      delay: i * 2,
-      size: 14 + (i % 3) * 4,
+      x: 15 + (i * 25),
+      y: 100 + (i * 15),
+      duration: 18 + (i * 4),
+      delay: i * 4,
+      size: 10,
     }))
 
     setParticles(newParticles)
@@ -205,7 +205,7 @@ export default function AmbientMood({ children }: { children: React.ReactNode })
       {particles.map((p) => (
         <div
           key={p.id}
-          className="fixed pointer-events-none z-0 animate-float opacity-20"
+          className="fixed pointer-events-none z-0 animate-float opacity-[0.08]"
           style={{
             left: `${p.x}%`,
             top: `-${p.size}px`,
