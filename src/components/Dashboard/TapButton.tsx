@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Heart, Flame } from 'lucide-react'
+import { Heart } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import { formatDistanceToNow } from 'date-fns'
@@ -13,9 +13,6 @@ export default function TapButton() {
   const [receivedTap, setReceivedTap] = useState(false)
   const [lastPartnerTap, setLastPartnerTap] = useState<string | null>(null)
   const [consecutiveDays, setConsecutiveDays] = useState(0)
-  const [showFlames, setShowFlames] = useState(false)
-  const [particles, setParticles] = useState<{ id: number; x: number; y: number; delay: number }[]>([])
-  const particleId = useRef(0)
   const abortRef = useRef<AbortController | null>(null)
 
   const loadTaps = useCallback(async () => {
@@ -32,9 +29,7 @@ export default function TapButton() {
       .gte('created_at', today)
       .abortSignal(controller.signal)
 
-    if (!controller.signal.aborted) {
-      setTodayCount(count ?? 0)
-    }
+    if (!controller.signal.aborted) setTodayCount(count ?? 0)
 
     if (partnerProfile) {
       const { count: pCount } = await supabase
@@ -45,9 +40,7 @@ export default function TapButton() {
         .gte('created_at', today)
         .abortSignal(controller.signal)
 
-      if (!controller.signal.aborted) {
-        setPartnerTodayCount(pCount ?? 0)
-      }
+      if (!controller.signal.aborted) setPartnerTodayCount(pCount ?? 0)
 
       const { data: lastTap } = await supabase
         .from('taps')
@@ -62,7 +55,6 @@ export default function TapButton() {
         setLastPartnerTap(lastTap[0].created_at)
       }
 
-      // Calculate consecutive days streak
       await loadStreak(controller.signal)
     }
   }, [profile, partnerProfile])
@@ -70,7 +62,6 @@ export default function TapButton() {
   const loadStreak = async (signal: AbortSignal) => {
     if (!profile || !partnerProfile) return
 
-    // Get distinct dates where BOTH partners tapped each other
     const { data: myDates } = await supabase
       .from('taps')
       .select('created_at')
@@ -94,7 +85,6 @@ export default function TapButton() {
     const myDays = new Set((myDates ?? []).map(t => toDateStr(t.created_at)))
     const partnerDays = new Set((partnerDates ?? []).map(t => toDateStr(t.created_at)))
 
-    // Find consecutive days where both tapped
     let streak = 0
     const now = new Date()
     for (let i = 0; i < 60; i++) {
@@ -104,13 +94,11 @@ export default function TapButton() {
       if (myDays.has(ds) && partnerDays.has(ds)) {
         streak++
       } else if (i === 0) {
-        // Today might not have both yet, skip
         continue
       } else {
         break
       }
     }
-
     setConsecutiveDays(streak)
   }
 
@@ -127,10 +115,7 @@ export default function TapButton() {
         filter: `receiver_id=eq.${profile.id}`,
       }, () => {
         setReceivedTap(true)
-        setShowFlames(true)
-        spawnParticles()
-        setTimeout(() => setReceivedTap(false), 4000)
-        setTimeout(() => setShowFlames(false), 2000)
+        setTimeout(() => setReceivedTap(false), 3000)
         loadTaps()
       })
       .subscribe()
@@ -141,19 +126,6 @@ export default function TapButton() {
     }
   }, [profile, loadTaps])
 
-  const spawnParticles = () => {
-    const newParticles = Array.from({ length: 8 }, () => ({
-      id: particleId.current++,
-      x: Math.random() * 80 - 40,
-      y: -(Math.random() * 60 + 20),
-      delay: Math.random() * 0.3,
-    }))
-    setParticles(prev => [...prev, ...newParticles])
-    setTimeout(() => {
-      setParticles(prev => prev.filter(p => !newParticles.includes(p)))
-    }, 1200)
-  }
-
   const sendTap = async () => {
     if (!profile || !partnerProfile || tapped) return
 
@@ -163,147 +135,92 @@ export default function TapButton() {
     })
 
     setTapped(true)
-    setShowFlames(true)
     setTodayCount((c) => c + 1)
-    spawnParticles()
     setTimeout(() => setTapped(false), 1500)
-    setTimeout(() => setShowFlames(false), 1500)
   }
 
   const totalToday = todayCount + partnerTodayCount
 
-  // Flame intensity based on streak
-  const getFlameColor = () => {
-    if (consecutiveDays >= 30) return 'text-orange-400'
-    if (consecutiveDays >= 14) return 'text-amber-400'
-    if (consecutiveDays >= 7) return 'text-yellow-400'
-    if (consecutiveDays >= 3) return 'text-orange-300'
-    return 'text-text-dim'
-  }
-
-  const getFlameSize = () => {
-    if (consecutiveDays >= 30) return 'text-4xl'
-    if (consecutiveDays >= 7) return 'text-3xl'
-    return 'text-2xl'
-  }
-
   return (
-    <div className="card-glow text-center relative overflow-hidden">
-      {/* Fire particles */}
-      {particles.map(p => (
-        <span
-          key={p.id}
-          className="absolute pointer-events-none animate-fire-particle"
-          style={{
-            left: `calc(50% + ${p.x}px)`,
-            top: '50%',
-            animationDelay: `${p.delay}s`,
-            fontSize: `${12 + Math.random() * 10}px`,
-          }}
-        >
-          {['🔥', '✨', '💕', '❤️‍🔥'][Math.floor(Math.random() * 4)]}
-        </span>
-      ))}
-
-      {/* Header with streak flame */}
-      <div className="flex items-center justify-center gap-2 mb-3">
-        <Heart size={14} className="text-secondary" />
-        <h3 className="text-sm font-semibold">Je pense à toi</h3>
-      </div>
-
-      {/* Streak flame badge */}
-      {consecutiveDays > 0 && (
-        <div className="flex items-center justify-center gap-1.5 mb-3 animate-fade-in">
-          <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-orange-500/15 to-amber-500/10 border border-orange-500/20`}>
-            <Flame size={14} className={`${getFlameColor()} animate-flame-flicker`} />
-            <span className={`${getFlameSize()} font-extrabold leading-none tabular-nums ${getFlameColor()}`}>
-              {consecutiveDays}
-            </span>
-            <span className="text-[10px] text-orange-300/70 font-medium ml-0.5">
-              jour{consecutiveDays > 1 ? 's' : ''}
-            </span>
-          </div>
-        </div>
-      )}
+    <div className="card text-center py-6">
+      {/* Header */}
+      <p className="text-xs text-text-dim tracking-wide mb-5">Je pense à toi</p>
 
       {/* Heart button */}
-      <div className="relative inline-flex items-center justify-center mb-3">
-        {/* Flame aura */}
-        {showFlames && (
-          <div className="absolute inset-0 w-24 h-24 -m-2">
-            <div className="absolute inset-0 rounded-full bg-gradient-to-t from-orange-500/30 via-amber-400/20 to-transparent animate-flame-pulse" />
-            <div className="absolute inset-1 rounded-full bg-gradient-to-t from-secondary/25 via-pink-400/15 to-transparent animate-flame-pulse" style={{ animationDelay: '0.15s' }} />
-          </div>
-        )}
-
-        {/* Ripple rings */}
-        {showFlames && (
-          <>
-            <span className="absolute w-20 h-20 rounded-full border-2 border-orange-400/40 animate-ripple" />
-            <span className="absolute w-20 h-20 rounded-full border-2 border-amber-400/30 animate-ripple" style={{ animationDelay: '0.15s' }} />
-            <span className="absolute w-20 h-20 rounded-full border-2 border-secondary/20 animate-ripple" style={{ animationDelay: '0.3s' }} />
-          </>
-        )}
+      <div className="relative inline-flex items-center justify-center mb-5">
+        {/* Soft glow behind */}
+        <div className={`absolute w-24 h-24 rounded-full transition-all duration-700 ${
+          tapped
+            ? 'bg-secondary/20 scale-110'
+            : receivedTap
+              ? 'bg-pink-400/15 scale-105'
+              : 'bg-primary/10 scale-100'
+        }`} />
 
         <button
           onClick={sendTap}
           disabled={tapped}
-          className={`relative z-10 inline-flex items-center justify-center w-[4.5rem] h-[4.5rem] rounded-full transition-all duration-500 ${
+          className={`relative z-10 w-[72px] h-[72px] rounded-full flex items-center justify-center transition-all duration-300 ease-out ${
             tapped
-              ? 'bg-gradient-to-br from-orange-500/40 to-secondary/30 scale-110 shadow-[0_0_35px_rgba(249,115,22,0.4)]'
+              ? 'scale-110 bg-white/[0.08]'
               : receivedTap
-                ? 'bg-gradient-to-br from-secondary/30 to-pink-500/20 scale-105 shadow-[0_0_25px_rgba(236,72,153,0.25)]'
-                : 'bg-gradient-to-br from-primary/20 to-secondary/10 hover:from-orange-500/25 hover:to-secondary/15 hover:scale-105 active:scale-90 hover:shadow-[0_0_25px_rgba(249,115,22,0.2)]'
+                ? 'scale-105 bg-white/[0.06]'
+                : 'bg-white/[0.04] hover:bg-white/[0.07] hover:scale-105 active:scale-95'
           }`}
         >
           <Heart
-            size={32}
-            className={`transition-all duration-500 ${
+            size={30}
+            className={`transition-all duration-300 ${
               tapped
-                ? 'text-orange-400 fill-current animate-heartbeat'
+                ? 'text-secondary fill-current scale-110'
                 : receivedTap
-                  ? 'text-secondary fill-current animate-heartbeat'
-                  : 'text-primary hover:text-orange-400'
+                  ? 'text-pink-400 fill-current'
+                  : 'text-text-muted hover:text-primary'
             }`}
           />
         </button>
 
-        {/* Received badge */}
+        {/* Received indicator */}
         {receivedTap && (
-          <span className="absolute -top-1 -right-1 z-20 bg-gradient-to-r from-orange-500 to-secondary text-white text-[10px] px-2 py-0.5 rounded-full animate-bounce-in font-semibold shadow-lg">
-            ❤️‍🔥
+          <span className="absolute -top-1 -right-1 z-20 w-5 h-5 rounded-full bg-secondary text-white text-[10px] flex items-center justify-center animate-bounce-in">
+            !
           </span>
         )}
       </div>
 
-      {/* Status message */}
-      <p className="text-sm font-medium mb-1 min-h-[1.25rem] transition-all">
+      {/* Status */}
+      <p className="text-xs min-h-[1rem] mb-1 transition-all">
         {tapped ? (
-          <span className="text-orange-400 animate-fade-in">🔥 Envoyé !</span>
+          <span className="text-secondary animate-fade-in">Envoyé !</span>
         ) : receivedTap ? (
-          <span className="text-secondary animate-bounce-in">
-            {partnerProfile?.display_name} pense à toi ! 💗
+          <span className="text-pink-400 animate-fade-in">
+            {partnerProfile?.display_name} pense à toi
           </span>
         ) : (
-          <span className="text-text-dim text-xs">Appuie pour envoyer</span>
+          <span className="text-text-dim">Appuie pour envoyer</span>
         )}
       </p>
 
+      {/* Streak */}
+      {consecutiveDays > 0 && (
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] text-xs text-text-muted mt-2">
+          <span className="text-orange-400">🔥</span>
+          <span className="font-medium tabular-nums">{consecutiveDays}</span>
+          <span className="text-text-dim">jour{consecutiveDays > 1 ? 's' : ''}</span>
+        </div>
+      )}
+
       {/* Stats */}
       {totalToday > 0 && (
-        <div className="mt-2 pt-2 border-t border-surface-lighter/50">
-          <div className="flex items-center justify-center gap-3 text-[11px]">
-            <span className="text-text-muted">
-              <span className="text-orange-400 font-semibold">{todayCount}</span> envoyé{todayCount > 1 ? 's' : ''}
-            </span>
+        <div className="mt-4 pt-3 border-t border-white/[0.04]">
+          <div className="flex items-center justify-center gap-4 text-[11px] text-text-dim">
+            <span><span className="text-text-muted font-medium">{todayCount}</span> envoyé{todayCount > 1 ? 's' : ''}</span>
             {partnerTodayCount > 0 && (
-              <span className="text-text-muted">
-                <span className="text-secondary font-semibold">{partnerTodayCount}</span> reçu{partnerTodayCount > 1 ? 's' : ''}
-              </span>
+              <span><span className="text-text-muted font-medium">{partnerTodayCount}</span> reçu{partnerTodayCount > 1 ? 's' : ''}</span>
             )}
           </div>
           {lastPartnerTap && (
-            <p className="text-[10px] text-text-dim mt-1">
+            <p className="text-[10px] text-text-dim mt-1.5">
               Dernier reçu {formatDistanceToNow(new Date(lastPartnerTap), { addSuffix: true, locale: fr })}
             </p>
           )}

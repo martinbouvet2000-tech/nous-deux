@@ -27,17 +27,23 @@ function getGreetingEmoji(): string {
 export default function Dashboard() {
   const { profile, partnerProfile } = useAuthStore()
 
+  const names = partnerProfile
+    ? `${profile?.display_name} & ${partnerProfile.display_name}`
+    : profile?.display_name ?? ''
+
   return (
-    <div className="px-4 py-6 max-w-5xl mx-auto space-y-6 animate-fade-in">
+    <div className="px-4 py-8 max-w-4xl mx-auto space-y-6 animate-fade-in">
       {/* Hero greeting */}
-      <div className="text-center mb-2">
-        <p className="text-sm text-text-muted mb-1">{getGreetingEmoji()} {getGreeting()}</p>
-        <h1 className="text-2xl md:text-3xl font-bold gradient-text">
-          {profile?.display_name} {partnerProfile ? `& ${partnerProfile.display_name}` : ''}
+      <div className="text-center pb-2">
+        <p className="text-xs text-text-dim tracking-widest uppercase mb-2">
+          {getGreetingEmoji()} {getGreeting()}
+        </p>
+        <h1 className="text-2xl md:text-3xl font-bold text-text tracking-tight">
+          {names}
         </h1>
         {!partnerProfile && (
-          <p className="text-xs text-text-dim mt-2 max-w-xs mx-auto">
-            Invite ton/ta partenaire depuis les Réglages pour débloquer toutes les fonctionnalités
+          <p className="text-xs text-text-dim mt-3 max-w-[280px] mx-auto leading-relaxed">
+            Invite ton/ta partenaire depuis les Réglages pour tout débloquer
           </p>
         )}
       </div>
@@ -46,25 +52,23 @@ export default function Dashboard() {
       <LoveNoteWidget />
 
       {/* Clocks + Countdown */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <ClockWeather />
-        <CountdownWidget />
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <div className="lg:col-span-7">
+          <ClockWeather />
+        </div>
+        <div className="lg:col-span-5">
+          <CountdownWidget />
+        </div>
       </div>
 
       {/* Heart + Streak + Mood */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="sm:col-span-1">
-          <TapButton />
-        </div>
-        <div className="sm:col-span-1">
-          <StreakWidget />
-        </div>
-        <div className="sm:col-span-2 lg:col-span-2">
-          <MoodWidget />
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <TapButton />
+        <StreakWidget />
+        <MoodWidget />
       </div>
 
-      {/* Question of the day + Gratitude */}
+      {/* Question + Gratitude */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <QuestionWidget />
         <GratitudeWidget />

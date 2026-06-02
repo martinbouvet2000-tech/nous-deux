@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Smile, RefreshCw } from 'lucide-react'
+import { Heart } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import type { Mood } from '@/types/database'
@@ -87,61 +87,78 @@ export default function MoodWidget() {
     loadMoods()
   }
 
-  const moodConfig = myMood ? MOODS.find(m => m.emoji === myMood.emoji) : null
-  const partnerMoodConfig = partnerMood ? MOODS.find(m => m.emoji === partnerMood.emoji) : null
-
   return (
-    <div className="card">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-accent/15 flex items-center justify-center">
-            <Smile size={15} className="text-accent" />
-          </div>
-          <h3 className="text-sm font-semibold">Humeur du jour</h3>
+    <div className="card-glow text-center relative">
+      {/* Header */}
+      <div className="flex items-center justify-center gap-2 mb-4">
+        <div className="w-7 h-7 rounded-lg bg-accent/15 flex items-center justify-center">
+          <Heart size={14} className="text-accent" />
         </div>
-        {myMood && !showPicker && (
-          <button
-            onClick={() => setShowPicker(true)}
-            className="flex items-center gap-1.5 text-xs text-text-muted hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-primary/10"
-          >
-            <RefreshCw size={12} />
-            Changer
-          </button>
-        )}
+        <h3 className="text-sm font-semibold">Humeur du jour</h3>
       </div>
 
-      {/* Current moods display */}
+      {/* Mood display — both moods side by side */}
       {(myMood || partnerMood) && !showPicker && (
-        <div className="flex gap-3 mb-1">
-          <div className={`flex-1 text-center p-4 rounded-xl bg-gradient-to-br ${moodConfig?.color ?? 'from-primary/10 to-primary/5'} transition-all`}>
-            <p className="text-xs text-text-muted mb-1.5 font-medium">{profile?.display_name}</p>
-            {myMood ? (
-              <div className="animate-bounce-in">
-                <span className="text-4xl block mb-1">{myMood.emoji}</span>
-                <p className="text-xs font-medium text-text/80">{myMood.label}</p>
+        <div className="animate-fade-in">
+          <div className="flex items-center justify-center gap-6 mb-3">
+            {/* My mood */}
+            <div className="flex flex-col items-center gap-1.5">
+              <div className="w-16 h-16 rounded-2xl bg-white/[0.04] flex items-center justify-center">
+                {myMood ? (
+                  <span className="text-[2.75rem] leading-none animate-bounce-in">{myMood.emoji}</span>
+                ) : (
+                  <span className="text-3xl opacity-20">?</span>
+                )}
               </div>
-            ) : (
-              <div className="py-2">
-                <span className="text-3xl opacity-30">?</span>
+              <div className="text-center">
+                <p className="text-[11px] font-medium text-text/70 leading-tight">
+                  {profile?.display_name}
+                </p>
+                {myMood && (
+                  <p className="text-[10px] text-text-muted mt-0.5">{myMood.label}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Divider dot */}
+            {partnerProfile && (
+              <div className="w-1 h-1 rounded-full bg-white/10 self-start mt-7" />
+            )}
+
+            {/* Partner mood */}
+            {partnerProfile && (
+              <div className="flex flex-col items-center gap-1.5">
+                <div className="w-16 h-16 rounded-2xl bg-white/[0.04] flex items-center justify-center">
+                  {partnerMood ? (
+                    <span className="text-[2.75rem] leading-none animate-bounce-in">{partnerMood.emoji}</span>
+                  ) : (
+                    <div className="flex flex-col items-center gap-1">
+                      <Heart size={18} className="text-white/10" />
+                    </div>
+                  )}
+                </div>
+                <div className="text-center">
+                  <p className="text-[11px] font-medium text-text/70 leading-tight">
+                    {partnerProfile.display_name}
+                  </p>
+                  {partnerMood ? (
+                    <p className="text-[10px] text-text-muted mt-0.5">{partnerMood.label}</p>
+                  ) : (
+                    <p className="text-[10px] text-text-dim mt-0.5">En attente...</p>
+                  )}
+                </div>
               </div>
             )}
           </div>
 
-          {partnerProfile && (
-            <div className={`flex-1 text-center p-4 rounded-xl bg-gradient-to-br ${partnerMoodConfig?.color ?? 'from-secondary/10 to-secondary/5'} transition-all`}>
-              <p className="text-xs text-text-muted mb-1.5 font-medium">{partnerProfile.display_name}</p>
-              {partnerMood ? (
-                <div className="animate-bounce-in">
-                  <span className="text-4xl block mb-1">{partnerMood.emoji}</span>
-                  <p className="text-xs font-medium text-text/80">{partnerMood.label}</p>
-                </div>
-              ) : (
-                <div className="py-2">
-                  <span className="text-3xl opacity-30">?</span>
-                  <p className="text-[10px] text-text-muted mt-1">Pas encore renseigné</p>
-                </div>
-              )}
-            </div>
+          {/* Change button */}
+          {myMood && (
+            <button
+              onClick={() => setShowPicker(true)}
+              className="text-[11px] text-text-dim hover:text-text-muted transition-colors duration-300"
+            >
+              Changer
+            </button>
           )}
         </div>
       )}
@@ -149,28 +166,35 @@ export default function MoodWidget() {
       {/* Mood picker */}
       {(showPicker || !myMood) && (
         <div className="animate-fade-in">
-          <p className="text-xs text-text-muted mb-3 text-center">
-            {myMood ? 'Comment tu te sens maintenant ?' : 'Comment tu te sens aujourd\'hui ?'}
+          <p className="text-xs text-text-muted mb-4">
+            Comment te sens-tu ?
           </p>
-          <div className="grid grid-cols-5 gap-1.5">
-            {MOODS.map(({ emoji, label, color }) => (
+          <div className="grid grid-cols-5 gap-2">
+            {MOODS.map(({ emoji, label }) => (
               <button
                 key={emoji}
                 onClick={() => selectMood(emoji, label)}
-                className={`flex flex-col items-center gap-1 p-2.5 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 bg-gradient-to-br ${color} hover:shadow-lg ${
-                  animatingEmoji === emoji ? 'scale-110 ring-2 ring-primary/50' : ''
-                }`}
+                className={`group flex flex-col items-center gap-1 py-2 px-1 rounded-xl transition-all duration-200 ease-in-out
+                  hover:bg-white/[0.05] active:scale-95
+                  ${animatingEmoji === emoji
+                    ? 'bg-white/[0.08] ring-1 ring-accent/30 scale-105'
+                    : ''
+                  }`}
                 title={label}
               >
-                <span className="text-2xl">{emoji}</span>
-                <span className="text-[10px] text-text-muted font-medium">{label}</span>
+                <span className="text-[1.4rem] transition-transform duration-200 ease-in-out group-hover:scale-110">
+                  {emoji}
+                </span>
+                <span className="text-[9px] text-text-dim font-medium leading-tight group-hover:text-text-muted transition-colors duration-200">
+                  {label}
+                </span>
               </button>
             ))}
           </div>
           {myMood && showPicker && (
             <button
               onClick={() => setShowPicker(false)}
-              className="w-full mt-3 text-xs text-text-muted hover:text-text transition-colors py-1.5"
+              className="mt-3 text-[11px] text-text-dim hover:text-text-muted transition-colors duration-300"
             >
               Annuler
             </button>
