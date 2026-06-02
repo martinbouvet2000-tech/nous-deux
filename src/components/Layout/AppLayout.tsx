@@ -8,6 +8,7 @@ import {
   Heart,
   Settings,
 } from 'lucide-react'
+import AmbientMood from '@/components/AmbientMood'
 
 const NAV_ITEMS = [
   { to: '/', icon: Home, label: 'Accueil' },
@@ -73,7 +74,9 @@ export default function AppLayout() {
 
       {/* Main content */}
       <main className="flex-1 md:ml-60 pb-20 md:pb-6 overflow-y-auto">
-        <Outlet />
+        <AmbientMood>
+          <Outlet />
+        </AmbientMood>
       </main>
 
       {/* Mobile bottom nav */}

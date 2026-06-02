@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import AppLayout from '@/components/Layout/AppLayout'
+import ErrorBoundary from '@/components/ErrorBoundary'
 
 const Login = lazy(() => import('@/pages/Login'))
 const Dashboard = lazy(() => import('@/pages/Dashboard'))
@@ -82,21 +83,23 @@ export default function App() {
   }
 
   return (
-    <BrowserRouter>
-      <Suspense fallback={<LoadingSpinner />}>
-        <Routes>
-          <Route element={<AppLayout />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/thoughts" element={<Thoughts />} />
-            <Route path="/calendar" element={<CalendarPage />} />
-            <Route path="/memories" element={<Memories />} />
-            <Route path="/todos" element={<Todos />} />
-            <Route path="/activities" element={<Activities />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <Suspense fallback={<LoadingSpinner />}>
+          <Routes>
+            <Route element={<AppLayout />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/thoughts" element={<Thoughts />} />
+              <Route path="/calendar" element={<CalendarPage />} />
+              <Route path="/memories" element={<Memories />} />
+              <Route path="/todos" element={<Todos />} />
+              <Route path="/activities" element={<Activities />} />
+              <Route path="/settings" element={<SettingsPage />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
+      </BrowserRouter>
+    </ErrorBoundary>
   )
 }
