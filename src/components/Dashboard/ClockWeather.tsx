@@ -60,8 +60,8 @@ function PersonClock({ name, timezone, city, isPartner }: PersonClockProps) {
   return (
     <div className={`flex-1 text-center p-5 rounded-2xl transition-all bg-gradient-to-br ${
       isPartner
-        ? 'from-secondary/12 to-pink-500/5 border border-secondary/10'
-        : 'from-primary/12 to-violet-500/5 border border-primary/10'
+        ? 'from-secondary/8 to-pink-500/3'
+        : 'from-primary/8 to-violet-500/3'
     }`}>
       <p className="text-[11px] text-text-muted mb-1 flex items-center justify-center gap-1 uppercase tracking-wider font-medium">
         <MapPin size={10} />

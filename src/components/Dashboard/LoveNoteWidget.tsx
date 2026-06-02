@@ -107,7 +107,7 @@ export default function LoveNoteWidget() {
         <div className="absolute -top-20 -right-20 w-40 h-40 rounded-full bg-secondary/10 blur-[60px]" />
         <div className="absolute -bottom-10 -left-10 w-32 h-32 rounded-full bg-primary/10 blur-[50px]" />
 
-        <div className="relative px-5 py-5 border border-secondary/15 rounded-2xl backdrop-blur-sm">
+        <div className="relative px-5 py-5 bg-white/[0.03] rounded-2xl backdrop-blur-sm">
           <div className="flex items-start gap-3">
             {/* Quote icon */}
             <div className="shrink-0 mt-0.5">
@@ -177,7 +177,7 @@ export default function LoveNoteWidget() {
   // No note received — show write prompt (compact)
   return (
     <div className="relative overflow-hidden rounded-2xl">
-      <div className="relative px-5 py-4 border border-surface-lighter/30 rounded-2xl bg-gradient-to-r from-surface-lighter/20 to-surface/40 backdrop-blur-sm">
+      <div className="relative px-5 py-4 border-t border-white/[0.04] rounded-2xl bg-gradient-to-r from-surface-lighter/20 to-surface/40 backdrop-blur-sm">
         {justSent ? (
           <div className="flex items-center justify-center gap-2 py-1 animate-bounce-in">
             <span className="text-secondary text-sm font-medium">Petit mot envoyé avec amour !</span>

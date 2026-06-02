@@ -85,7 +85,7 @@ export default function GratitudeWidget() {
   // Already filled today — show summary
   if (myItems.length > 0 && !showForm) {
     return (
-      <div className="card-glow">
+      <div className="card">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-secondary/15 flex items-center justify-center">
@@ -110,7 +110,7 @@ export default function GratitudeWidget() {
 
         {/* Partner items */}
         {partnerItems.length > 0 ? (
-          <div className="pt-2.5 border-t border-surface-lighter/50">
+          <div className="pt-2.5 border-t border-white/[0.04]">
             <p className="text-[10px] text-secondary-light font-semibold uppercase tracking-wider mb-1.5">
               {partnerProfile.display_name}
             </p>
@@ -124,7 +124,7 @@ export default function GratitudeWidget() {
             </div>
           </div>
         ) : (
-          <div className="pt-2.5 border-t border-surface-lighter/50">
+          <div className="pt-2.5 border-t border-white/[0.04]">
             <p className="text-[10px] text-text-dim text-center">
               {partnerProfile.display_name} n'a pas encore rempli aujourd'hui
             </p>
@@ -136,7 +136,7 @@ export default function GratitudeWidget() {
 
   // Form or prompt
   return (
-    <div className="card-glow">
+    <div className="card">
       <div className="flex items-center gap-2 mb-3">
         <div className="w-7 h-7 rounded-lg bg-secondary/15 flex items-center justify-center">
           <Heart size={15} className="text-secondary" fill="currentColor" />
@@ -190,7 +190,7 @@ export default function GratitudeWidget() {
       ) : (
         <button
           onClick={() => setShowForm(true)}
-          className="w-full flex items-center justify-center gap-2 py-4 rounded-xl border border-dashed border-secondary/20 hover:border-secondary/40 hover:bg-secondary/5 transition-all text-text-muted hover:text-text text-sm"
+          className="w-full flex items-center justify-center gap-2 py-4 rounded-xl border border-dashed border-white/[0.08] hover:border-white/[0.15] hover:bg-white/[0.03] transition-all text-text-muted hover:text-text text-sm"
         >
           <Plus size={16} className="text-secondary" />
           <span>Qu'apprécies-tu aujourd'hui ?</span>

@@ -88,7 +88,7 @@ export default function MoodWidget() {
   }
 
   return (
-    <div className="card-glow text-center relative">
+    <div className="card text-center relative">
       {/* Header */}
       <div className="flex items-center justify-center gap-2 mb-4">
         <div className="w-7 h-7 rounded-lg bg-accent/15 flex items-center justify-center">

@@ -79,7 +79,7 @@ export default function QuestionWidget() {
   if (!question) return null
 
   return (
-    <div className="card-glow">
+    <div className="card">
       <div className="flex items-center gap-2 mb-4">
         <div className="w-7 h-7 rounded-lg bg-primary/15 flex items-center justify-center">
           <MessageCircle size={15} className="text-primary" />
@@ -96,21 +96,21 @@ export default function QuestionWidget() {
       {savedMyAnswer ? (
         <div className="space-y-3 animate-fade-in">
           {/* My answer */}
-          <div className="rounded-xl p-4 bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/10">
+          <div className="rounded-xl p-4 bg-white/[0.04]">
             <p className="text-[11px] text-primary-light mb-1.5 font-semibold uppercase tracking-wider">Ta réponse</p>
             <p className="text-sm leading-relaxed">{savedMyAnswer}</p>
           </div>
 
           {/* Partner answer */}
           {partnerAnswer ? (
-            <div className="rounded-xl p-4 bg-gradient-to-br from-secondary/10 to-secondary/5 border border-secondary/10 animate-slide-up">
+            <div className="rounded-xl p-4 bg-white/[0.04] animate-slide-up">
               <p className="text-[11px] text-secondary-light mb-1.5 font-semibold uppercase tracking-wider">
                 {partnerProfile?.display_name}
               </p>
               <p className="text-sm leading-relaxed">{partnerAnswer}</p>
             </div>
           ) : (
-            <div className="flex items-center justify-center gap-2 text-text-muted text-sm py-4 rounded-xl bg-surface-lighter/20 border border-dashed border-surface-lighter">
+            <div className="flex items-center justify-center gap-2 text-text-muted text-sm py-4 rounded-xl bg-white/[0.03]">
               <Lock size={14} />
               <span>En attente de {partnerProfile?.display_name ?? 'ton/ta partenaire'}</span>
             </div>

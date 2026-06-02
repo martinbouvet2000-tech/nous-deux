@@ -126,7 +126,7 @@ export default function CountdownWidget() {
                   { value: remaining.hours, label: 'heures' },
                   { value: remaining.minutes, label: 'min' },
                 ].map(({ value, label }) => (
-                  <div key={label} className="min-w-[4.5rem] p-3 rounded-xl bg-gradient-to-b from-surface-lighter/60 to-surface-lighter/30 border border-surface-lighter/50">
+                  <div key={label} className="min-w-[4.5rem] p-3 rounded-xl bg-white/[0.04]">
                     <p className={`text-3xl font-extrabold tabular-nums ${getUrgencyColor(remaining.days)}`}>
                       {value}
                     </p>
@@ -149,7 +149,7 @@ export default function CountdownWidget() {
       )}
 
       {countdowns.length > 1 && (
-        <div className="mt-3 pt-3 border-t border-surface-lighter/50 space-y-2">
+        <div className="mt-3 pt-3 border-t border-white/[0.04] space-y-2">
           {countdowns.slice(1).map((c) => {
             const r = getTimeRemaining(c.target_date)
             return (

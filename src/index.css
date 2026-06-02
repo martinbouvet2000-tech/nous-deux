@@ -119,15 +119,14 @@
     content: '';
     position: absolute;
     top: 0;
-    left: 15%;
-    right: 15%;
+    left: 20%;
+    right: 20%;
     height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(167, 139, 250, 0.15), rgba(236, 72, 153, 0.08), transparent);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
   }
 
   .card-glow:hover {
     background: rgba(255, 255, 255, 0.065);
-    box-shadow: 0 8px 48px rgba(0, 0, 0, 0.25), 0 0 60px rgba(139, 92, 246, 0.04);
   }
 
   /* ─── Card Flat — zero decoration, pure container ─── */
