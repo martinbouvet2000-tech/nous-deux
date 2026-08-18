@@ -26,7 +26,7 @@ jobs:
         run: npm run type-check
 
       - name: Lint
-        run: npx eslint . --max-warnings 50
+        run: npx eslint . --max-warnings 10
 
   test:
     name: Tests

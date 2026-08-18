@@ -1,10 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, type FormEvent } from 'react'
 import { ListTodo, Plus, Check, X, ChevronRight, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import type { TodoList, TodoItem } from '@/types/database'
+import { confirm } from '@/lib/confirm'
+import { run } from '@/lib/db'
+import { BTN_PRIMARY, BTN_GHOST, INPUT, CARD, CARD_EDGE } from '@/lib/ui'
 
-export default function Todos() {
+const EMOJIS = ['📋', '🏠', '✈️', '🎁', '💰', '📦', '🍳', '💪', '📚', '🎯']
+
+/** Section "Projets communs" — listes de tâches partagées. Rendue dans l'onglet "À deux". */
+export default function TodosSection() {
   const { profile } = useAuthStore()
   const [lists, setLists] = useState<TodoList[]>([])
   const [items, setItems] = useState<Record<string, TodoItem[]>>({})
@@ -15,296 +21,216 @@ export default function Todos() {
   const [newItemTitle, setNewItemTitle] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const EMOJIS = ['📋', '🏠', '✈️', '🎁', '💰', '📦', '🍳', '💪', '📚', '🎯']
-
-  const fetchLists = async () => {
-    const { data } = await supabase
-      .from('todo_lists')
-      .select('*')
-      .order('created_at', { ascending: false })
-
+  const fetchLists = useCallback(async () => {
+    const { data } = await run(supabase.from('todo_lists').select('*').order('created_at', { ascending: false }), { errorMessage: 'Impossible de charger les listes.' })
     if (data) setLists(data)
-  }
+  }, [])
 
-  const fetchItems = async (listId: string) => {
-    const { data } = await supabase
-      .from('todo_items')
-      .select('*')
-      .eq('list_id', listId)
-      .order('created_at', { ascending: true })
-
+  const fetchItems = useCallback(async (listId: string) => {
+    const { data } = await supabase.from('todo_items').select('*').eq('list_id', listId).order('created_at', { ascending: true })
     if (data) setItems((prev) => ({ ...prev, [listId]: data }))
-  }
+  }, [])
+
+  const fetchAllItems = useCallback(async () => {
+    const { data } = await supabase.from('todo_items').select('*').order('created_at', { ascending: true })
+    if (data) {
+      const grouped: Record<string, TodoItem[]> = {}
+      data.forEach((it) => { (grouped[it.list_id] ||= []).push(it) })
+      setItems(grouped)
+    }
+  }, [])
 
   useEffect(() => {
     fetchLists()
-
+    fetchAllItems()
     const channel = supabase
-      .channel('todos-realtime')
+      .channel(`todos:${profile?.id ?? 'anon'}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'todo_lists' }, () => fetchLists())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'todo_items' }, () => {
-        if (activeListId) fetchItems(activeListId)
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'todo_items' }, () => fetchAllItems())
       .subscribe()
-
     return () => { supabase.removeChannel(channel) }
-  }, [activeListId])
+  }, [fetchLists, fetchAllItems, profile?.id])
 
-  useEffect(() => {
-    if (activeListId) fetchItems(activeListId)
-  }, [activeListId])
-
-  const createList = async () => {
+  const createList = async (e?: FormEvent) => {
+    e?.preventDefault()
     if (!profile || !newListTitle.trim()) return
     setSaving(true)
-
-    await supabase.from('todo_lists').insert({
-      title: newListTitle.trim(),
-      emoji: newListEmoji,
-      created_by: profile.id,
-    })
-
-    setNewListTitle('')
-    setNewListEmoji('📋')
-    setShowNewList(false)
+    const { ok } = await run(
+      supabase.from('todo_lists').insert({ title: newListTitle.trim(), emoji: newListEmoji, created_by: profile.id }),
+      { errorMessage: "La liste n'a pas pu être créée." },
+    )
     setSaving(false)
-    fetchLists()
+    if (ok) { setNewListTitle(''); setNewListEmoji('📋'); setShowNewList(false); fetchLists() }
   }
 
   const addItem = async () => {
-    if (!activeListId || !newItemTitle.trim()) return
-
-    await supabase.from('todo_items').insert({
-      list_id: activeListId,
-      title: newItemTitle.trim(),
-    })
-
+    const title = newItemTitle.trim()
+    if (!activeListId || !title) return
     setNewItemTitle('')
-    fetchItems(activeListId)
+    const { ok } = await run(supabase.from('todo_items').insert({ list_id: activeListId, title }), { errorMessage: "La tâche n'a pas pu être ajoutée." })
+    if (ok) fetchItems(activeListId); else setNewItemTitle(title)
   }
 
   const toggleItem = async (item: TodoItem) => {
-    await supabase
-      .from('todo_items')
-      .update({ is_done: !item.is_done })
-      .eq('id', item.id)
-
-    fetchItems(item.list_id)
+    // Optimiste
+    setItems((prev) => ({ ...prev, [item.list_id]: (prev[item.list_id] ?? []).map((i) => (i.id === item.id ? { ...i, is_done: !i.is_done } : i)) }))
+    const { ok } = await run(supabase.from('todo_items').update({ is_done: !item.is_done }).eq('id', item.id))
+    if (!ok) fetchItems(item.list_id)
   }
 
   const deleteItem = async (item: TodoItem) => {
-    await supabase.from('todo_items').delete().eq('id', item.id)
-    fetchItems(item.list_id)
+    const { ok } = await run(supabase.from('todo_items').delete().eq('id', item.id), { errorMessage: 'Suppression impossible.' })
+    if (ok) fetchItems(item.list_id)
   }
 
-  const deleteList = async (listId: string) => {
-    await supabase.from('todo_items').delete().eq('list_id', listId)
-    await supabase.from('todo_lists').delete().eq('id', listId)
-    setActiveListId(null)
-    fetchLists()
+  const deleteList = async (list: TodoList) => {
+    const n = items[list.id]?.length ?? 0
+    const yes = await confirm({
+      title: 'Supprimer cette liste ?',
+      message: n > 0 ? `« ${list.title} » et ses ${n} tâche${n > 1 ? 's' : ''} seront supprimées pour vous deux.` : `« ${list.title} » sera supprimée pour vous deux.`,
+      confirmLabel: 'Supprimer', danger: true,
+    })
+    if (!yes) return
+    // Les tâches sont supprimées en cascade côté base
+    const { ok } = await run(supabase.from('todo_lists').delete().eq('id', list.id), { errorMessage: 'Suppression impossible. Seul le créateur de la liste peut la supprimer.' })
+    if (ok) { setActiveListId(null); fetchLists() }
   }
 
   const activeList = lists.find((l) => l.id === activeListId)
   const activeItems = activeListId ? items[activeListId] ?? [] : []
   const doneCount = activeItems.filter((i) => i.is_done).length
 
-  /* ═══════════════ ACTIVE LIST VIEW ═══════════════ */
+  /* ═══ Vue liste active ═══ */
   if (activeList) {
     return (
-      <div className="px-5 md:px-8 py-6 max-w-3xl mx-auto space-y-5">
-        {/* Header with back */}
+      <div className="space-y-5">
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setActiveListId(null)}
-            className="text-[#6B6359] hover:text-[#F0EAE0] transition-colors duration-300"
-          >
-            <ChevronRight size={18} className="rotate-180" />
+          <button onClick={() => setActiveListId(null)} className="text-[#8A8177] hover:text-[#F0EAE0] transition-colors duration-300 p-1 -m-1" aria-label="Retour aux listes">
+            <ChevronRight size={18} className="rotate-180" aria-hidden="true" />
           </button>
-          <h2 className="text-lg font-light tracking-tight flex items-center gap-2 text-[#F0EAE0]">
-            <span>{activeList.emoji}</span>
+          <h3 className="text-base font-light tracking-tight flex items-center gap-2 text-[#F0EAE0]">
+            <span aria-hidden="true">{activeList.emoji}</span>
             {activeList.title}
-          </h2>
-          <span className="text-[11px] tracking-wide text-[#6B6359] ml-auto">{doneCount}/{activeItems.length}</span>
+          </h3>
+          <span className="text-xs tracking-wide text-[#8A8177] ml-auto tabular-nums">{doneCount}/{activeItems.length}</span>
         </div>
 
-        {/* Progress bar */}
         {activeItems.length > 0 && (
-          <div className="w-full bg-[rgba(255,255,255,0.03)] rounded-full h-1.5">
-            <div
-              className="h-full bg-gradient-to-r from-[#D4A574] to-[#C2788E] rounded-full transition-all duration-500"
-              style={{ width: `${activeItems.length > 0 ? (doneCount / activeItems.length) * 100 : 0}%` }}
-            />
+          <div className="w-full bg-[rgba(255,255,255,0.03)] rounded-full h-1.5" role="progressbar" aria-valuemin={0} aria-valuemax={activeItems.length} aria-valuenow={doneCount}>
+            <div className="h-full bg-gradient-to-r from-[#D4A574] to-[#C2788E] rounded-full transition-all duration-500" style={{ width: `${(doneCount / activeItems.length) * 100}%` }} />
           </div>
         )}
 
-        {/* Items */}
-        <div className="space-y-1.5">
+        <ul className="space-y-1.5">
           {activeItems.map((item) => (
-            <div
-              key={item.id}
-              className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-300 ${
-                item.is_done ? 'bg-[rgba(255,255,255,0.015)]' : 'bg-[#1E1B17]'
-              }`}
-            >
+            <li key={item.id} className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-300 ${item.is_done ? 'bg-[rgba(255,255,255,0.015)]' : 'bg-[#1E1B17]'}`}>
               <button
                 onClick={() => toggleItem(item)}
-                className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 transition-all duration-300 ${
-                  item.is_done
-                    ? 'bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.2)]'
-                    : 'shadow-[0_0_0_2px_rgba(155,146,135,0.3)] hover:shadow-[0_0_0_2px_rgba(212,165,116,0.4)]'
+                role="checkbox"
+                aria-checked={item.is_done}
+                aria-label={item.title}
+                className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/50 ${
+                  item.is_done ? 'bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.2)]' : 'shadow-[0_0_0_2px_rgba(155,146,135,0.3)] hover:shadow-[0_0_0_2px_rgba(212,165,116,0.4)]'
                 }`}
               >
-                {item.is_done && <Check size={12} className="text-white" />}
+                {item.is_done && <Check size={12} className="text-white" aria-hidden="true" />}
               </button>
-              <span className={`flex-1 text-sm leading-relaxed ${item.is_done ? 'line-through text-[#6B6359]' : 'text-[#F0EAE0]'}`}>
-                {item.title}
-              </span>
-              <button
-                onClick={() => deleteItem(item)}
-                className="text-[#6B6359]/30 hover:text-red-400 transition-colors duration-300"
-              >
-                <X size={14} />
+              <span className={`flex-1 text-sm leading-relaxed ${item.is_done ? 'line-through text-[#8A8177]' : 'text-[#F0EAE0]'}`}>{item.title}</span>
+              <button onClick={() => deleteItem(item)} className="text-[#8A8177]/40 hover:text-red-400 transition-colors duration-300 p-1" aria-label={`Supprimer ${item.title}`}>
+                <X size={14} aria-hidden="true" />
               </button>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
 
-        {/* Add item input */}
         <div className="flex gap-2">
           <input
             type="text"
-            placeholder="Ajouter une tache..."
+            placeholder="Ajouter une tâche…"
+            aria-label="Nouvelle tâche"
             value={newItemTitle}
             onChange={(e) => setNewItemTitle(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && addItem()}
-            className="flex-1 bg-[rgba(255,255,255,0.03)] rounded-xl px-4 py-3 text-sm text-[#F0EAE0] placeholder-[#6B6359] outline-none transition-all duration-300 ease-out focus:bg-[rgba(255,255,255,0.05)] focus:shadow-[0_0_0_2px_rgba(212,165,116,0.15),0_0_0_1px_rgba(212,165,116,0.08)]"
+            maxLength={200}
+            className={`${INPUT} flex-1`}
           />
-          <button
-            onClick={addItem}
-            disabled={!newItemTitle.trim()}
-            className="inline-flex items-center justify-center px-3 rounded-xl text-sm font-medium bg-gradient-to-r from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_2px_20px_rgba(212,165,116,0.2)] hover:shadow-[0_4px_28px_rgba(212,165,116,0.35)] hover:translate-y-[-1px] active:translate-y-0 active:scale-[0.98] transition-all duration-300 ease-out disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Plus size={16} />
+          <button onClick={addItem} disabled={!newItemTitle.trim()} className={`${BTN_PRIMARY} px-3`} aria-label="Ajouter la tâche">
+            <Plus size={16} aria-hidden="true" />
           </button>
         </div>
 
-        {/* Delete list */}
-        <button
-          onClick={() => deleteList(activeList.id)}
-          className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[11px] tracking-wide font-medium text-red-400/70 bg-transparent hover:text-red-400 hover:bg-[rgba(239,68,68,0.06)] transition-all duration-300 ease-out mt-4"
-        >
-          <Trash2 size={14} /> Supprimer cette liste
-        </button>
+        {activeList.created_by === profile?.id && (
+          <button onClick={() => deleteList(activeList)} className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs tracking-wide font-medium text-red-400/70 bg-transparent hover:text-red-400 hover:bg-[rgba(239,68,68,0.06)] transition-all duration-300 mt-4">
+            <Trash2 size={14} aria-hidden="true" /> Supprimer cette liste
+          </button>
+        )}
       </div>
     )
   }
 
-  /* ═══════════════ LISTS OVERVIEW ═══════════════ */
+  /* ═══ Vue d'ensemble ═══ */
   return (
-    <div className="px-5 md:px-8 py-6 max-w-3xl mx-auto space-y-5">
-      {/* Header */}
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-light tracking-tight flex items-center gap-2.5 text-[#F0EAE0]">
-          <div className="w-8 h-8 rounded-xl bg-[rgba(212,165,116,0.12)] flex items-center justify-center">
-            <ListTodo size={16} className="text-[#D4A574]" />
-          </div>
-          Projets communs
-        </h2>
-        <button
-          onClick={() => setShowNewList(true)}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-gradient-to-r from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_2px_20px_rgba(212,165,116,0.2)] hover:shadow-[0_4px_28px_rgba(212,165,116,0.35)] hover:translate-y-[-1px] active:translate-y-0 active:scale-[0.98] transition-all duration-300 ease-out"
-        >
-          <Plus size={14} /> Nouvelle liste
+        <p className="text-xs text-[#8A8177]">Vos listes partagées : courses, préparatifs, projets…</p>
+        <button onClick={() => setShowNewList(true)} className={`${BTN_PRIMARY} shrink-0 whitespace-nowrap`}>
+          <Plus size={14} aria-hidden="true" /> Nouvelle liste
         </button>
       </div>
 
-      {/* Empty state */}
       {lists.length === 0 && !showNewList && (
-        <div className="relative overflow-hidden rounded-2xl p-5 md:p-6 bg-[#1E1B17] text-center py-12">
-          <div className="absolute top-0 left-[15%] right-[15%] h-px bg-gradient-to-r from-transparent via-[rgba(212,165,116,0.12)] to-transparent opacity-60" />
+        <div className={`${CARD} text-center py-12`}>
+          <div className={CARD_EDGE} aria-hidden="true" />
           <div className="w-14 h-14 rounded-2xl bg-[rgba(212,165,116,0.1)] flex items-center justify-center mx-auto mb-4">
-            <ListTodo size={24} className="text-[#D4A574]/60" />
+            <ListTodo size={24} className="text-[#D4A574]/60" aria-hidden="true" />
           </div>
           <p className="text-[#9B9287] text-sm leading-relaxed">Aucune liste pour l'instant</p>
-          <p className="text-[#6B6359] text-[11px] tracking-wide mt-1.5">Cree une liste pour organiser vos projets a deux</p>
+          <p className="text-[#8A8177] text-xs tracking-wide mt-1.5">Crée une liste pour organiser vos projets à deux</p>
         </div>
       )}
 
-      {/* New list inline form */}
       {showNewList && (
-        <div className="relative overflow-hidden rounded-2xl p-5 md:p-6 bg-[#1E1B17] space-y-3">
-          <div className="absolute top-0 left-[15%] right-[15%] h-px bg-gradient-to-r from-transparent via-[rgba(212,165,116,0.12)] to-transparent opacity-60" />
-
-          <div className="flex gap-2 flex-wrap">
+        <form onSubmit={createList} className={`${CARD} space-y-3`}>
+          <div className={CARD_EDGE} aria-hidden="true" />
+          <div className="flex gap-2 flex-wrap" role="group" aria-label="Emoji">
             {EMOJIS.map((e) => (
-              <button
-                key={e}
-                onClick={() => setNewListEmoji(e)}
-                className={`text-xl p-1.5 rounded-lg transition-all duration-300 ${
-                  newListEmoji === e
-                    ? 'bg-[rgba(212,165,116,0.15)] shadow-[0_0_12px_rgba(212,165,116,0.1)]'
-                    : 'hover:bg-[rgba(212,165,116,0.06)]'
-                }`}
-              >
+              <button type="button" key={e} onClick={() => setNewListEmoji(e)} aria-label={`Emoji ${e}`} aria-pressed={newListEmoji === e}
+                className={`text-xl p-1.5 rounded-lg transition-all duration-300 ${newListEmoji === e ? 'bg-[rgba(212,165,116,0.15)] shadow-[0_0_12px_rgba(212,165,116,0.1)]' : 'hover:bg-[rgba(212,165,116,0.06)]'}`}>
                 {e}
               </button>
             ))}
           </div>
-          <input
-            type="text"
-            placeholder="Nom de la liste"
-            value={newListTitle}
-            onChange={(e) => setNewListTitle(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && createList()}
-            className="w-full bg-[rgba(255,255,255,0.03)] rounded-xl px-4 py-3 text-sm text-[#F0EAE0] placeholder-[#6B6359] outline-none transition-all duration-300 ease-out focus:bg-[rgba(255,255,255,0.05)] focus:shadow-[0_0_0_2px_rgba(212,165,116,0.15),0_0_0_1px_rgba(212,165,116,0.08)]"
-            autoFocus
-          />
+          <input type="text" placeholder="Nom de la liste" aria-label="Nom de la liste" value={newListTitle} onChange={(e) => setNewListTitle(e.target.value)} className={INPUT} maxLength={80} autoFocus />
           <div className="flex gap-2">
-            <button
-              onClick={() => setShowNewList(false)}
-              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-[#9B9287] bg-transparent hover:text-[#F0EAE0] hover:bg-[rgba(212,165,116,0.06)] active:scale-[0.98] transition-all duration-300 ease-out"
-            >
-              Annuler
-            </button>
-            <button
-              onClick={createList}
-              disabled={saving || !newListTitle.trim()}
-              className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-gradient-to-r from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_2px_20px_rgba(212,165,116,0.2)] hover:shadow-[0_4px_28px_rgba(212,165,116,0.35)] hover:translate-y-[-1px] active:translate-y-0 active:scale-[0.98] transition-all duration-300 ease-out disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {saving ? '...' : 'Creer'}
-            </button>
+            <button type="button" onClick={() => setShowNewList(false)} className={`${BTN_GHOST} flex-1`}>Annuler</button>
+            <button type="submit" disabled={saving || !newListTitle.trim()} className={`${BTN_PRIMARY} flex-1 py-2.5`}>{saving ? '…' : 'Créer'}</button>
           </div>
-        </div>
+        </form>
       )}
 
-      {/* Lists */}
-      <div className="space-y-2">
+      <ul className="space-y-2">
         {lists.map((list) => {
           const listItems = items[list.id]
           const done = listItems?.filter((i) => i.is_done).length ?? 0
           const total = listItems?.length ?? 0
-
           return (
-            <button
-              key={list.id}
-              onClick={() => setActiveListId(list.id)}
-              onMouseEnter={() => { if (!items[list.id]) fetchItems(list.id) }}
-              className="relative overflow-hidden rounded-2xl p-5 md:p-6 bg-[#1E1B17] hover:bg-[#252118] transition-all duration-500 ease-out w-full text-left flex items-center gap-3 group"
-            >
-              <div className="absolute top-0 left-[15%] right-[15%] h-px bg-gradient-to-r from-transparent via-[rgba(212,165,116,0.12)] to-transparent opacity-60 group-hover:opacity-100 group-hover:via-[rgba(212,165,116,0.2)] transition-opacity duration-500" />
-
-              <span className="text-2xl">{list.emoji}</span>
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm text-[#F0EAE0]">{list.title}</p>
-                {total > 0 && (
-                  <p className="text-[11px] tracking-wide text-[#6B6359]">{done}/{total} termine{done > 1 ? 's' : ''}</p>
-                )}
-              </div>
-              <ChevronRight size={16} className="text-[#6B6359] group-hover:text-[#9B9287] transition-colors duration-300" />
-            </button>
+            <li key={list.id}>
+              <button
+                onClick={() => setActiveListId(list.id)}
+                className={`${CARD} hover:bg-[#252118] w-full text-left flex items-center gap-3 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/40`}
+              >
+                <div className={CARD_EDGE} aria-hidden="true" />
+                <span className="text-2xl" aria-hidden="true">{list.emoji}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm text-[#F0EAE0]">{list.title}</p>
+                  {total > 0 && <p className="text-xs tracking-wide text-[#8A8177] tabular-nums">{done}/{total} terminée{done > 1 ? 's' : ''}</p>}
+                </div>
+                <ChevronRight size={16} className="text-[#8A8177] group-hover:text-[#B5ACA1] transition-colors duration-300" aria-hidden="true" />
+              </button>
+            </li>
           )
         })}
-      </div>
+      </ul>
     </div>
   )
 }

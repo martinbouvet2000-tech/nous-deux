@@ -34,7 +34,7 @@ describe('App', () => {
   it('shows loading spinner initially', () => {
     mockGetSession.mockReturnValue(new Promise(() => {})) // never resolves
     render(<App />)
-    expect(screen.getByText('Chargement...')).toBeInTheDocument()
+    expect(screen.getByText('Chargement…')).toBeInTheDocument()
   })
 
   it('shows login when no session', async () => {

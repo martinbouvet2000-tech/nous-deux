@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { format } from 'date-fns'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 
@@ -106,52 +107,43 @@ export default function AmbientMood({ children }: { children: React.ReactNode })
   const [partnerEmoji, setPartnerEmoji] = useState<string | null>(null)
   const [particles, setParticles] = useState<FloatingParticle[]>([])
 
+  const loadCurrentMoods = useCallback(async () => {
+    if (!profile) return
+    const today = format(new Date(), 'yyyy-MM-dd')
+
+    const { data: myData } = await supabase
+      .from('moods').select('emoji').eq('user_id', profile.id).gte('created_at', today)
+      .order('created_at', { ascending: false }).limit(1)
+    setMyEmoji(myData?.[0]?.emoji ?? null)
+
+    if (partnerProfile) {
+      const { data: pData } = await supabase
+        .from('moods').select('emoji').eq('user_id', partnerProfile.id).gte('created_at', today)
+        .order('created_at', { ascending: false }).limit(1)
+      setPartnerEmoji(pData?.[0]?.emoji ?? null)
+    } else {
+      setPartnerEmoji(null)
+    }
+  }, [profile, partnerProfile])
+
   useEffect(() => {
     if (!profile) return
     loadCurrentMoods()
 
-    const channel = supabase
-      .channel('ambient-moods')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'moods' }, () => {
-        loadCurrentMoods()
-      })
-      .subscribe()
+    // Un canal par utilisateur, filtré : on n'écoute que nos deux humeurs
+    const channel = supabase.channel(`ambient:${profile.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'moods', filter: `user_id=eq.${profile.id}` }, () => loadCurrentMoods())
+    if (partnerProfile) {
+      channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'moods', filter: `user_id=eq.${partnerProfile.id}` }, () => loadCurrentMoods())
+    }
+    channel.subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [profile, partnerProfile])
-
-  const loadCurrentMoods = async () => {
-    if (!profile) return
-    const today = new Date().toISOString().split('T')[0]
-
-    const { data: myData } = await supabase
-      .from('moods')
-      .select('emoji')
-      .eq('user_id', profile.id)
-      .gte('created_at', today)
-      .order('created_at', { ascending: false })
-      .limit(1)
-
-    if (myData?.[0]) setMyEmoji(myData[0].emoji)
-    else setMyEmoji(null)
-
-    if (partnerProfile) {
-      const { data: pData } = await supabase
-        .from('moods')
-        .select('emoji')
-        .eq('user_id', partnerProfile.id)
-        .gte('created_at', today)
-        .order('created_at', { ascending: false })
-        .limit(1)
-
-      if (pData?.[0]) setPartnerEmoji(pData[0].emoji)
-      else setPartnerEmoji(null)
-    }
-  }
+  }, [profile, partnerProfile, loadCurrentMoods])
 
   const myTheme = myEmoji ? (MOOD_THEMES[myEmoji] ?? DEFAULT_THEME) : DEFAULT_THEME
   const partnerTheme = partnerEmoji ? (MOOD_THEMES[partnerEmoji] ?? null) : null
-  const theme = useMemo(() => blendThemes(myTheme, partnerTheme), [myEmoji, partnerEmoji])
+  const theme = useMemo(() => blendThemes(myTheme, partnerTheme), [myTheme, partnerTheme])
 
   // Generate floating particles based on mood
   useEffect(() => {

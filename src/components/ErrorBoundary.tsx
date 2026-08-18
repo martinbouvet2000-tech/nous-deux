@@ -46,7 +46,7 @@ export default class ErrorBoundary extends Component<Props, State> {
               Oups, petit souci...
             </h2>
             <p className="text-text-muted text-sm mb-6 leading-relaxed">
-              Quelque chose s'est mal passe. Pas de panique, tes donnees sont en securite.
+              Quelque chose s'est mal passé. Pas de panique, tes données sont en sécurité.
             </p>
 
             <button
@@ -59,10 +59,10 @@ export default class ErrorBoundary extends Component<Props, State> {
 
             {this.state.error && (
               <details className="mt-6 text-left">
-                <summary className="text-[10px] text-text-dim cursor-pointer hover:text-text-muted">
-                  Details techniques
+                <summary className="text-[11px] text-text-dim cursor-pointer hover:text-text-muted">
+                  Détails techniques
                 </summary>
-                <pre className="mt-2 p-3 bg-surface rounded-lg text-[10px] text-text-dim overflow-x-auto">
+                <pre className="mt-2 p-3 bg-surface rounded-lg text-[11px] text-text-dim overflow-x-auto">
                   {this.state.error.message}
                 </pre>
               </details>

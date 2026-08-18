@@ -17,7 +17,7 @@
   --color-bg-gradient-2: #0E0C0B;
   --color-text: #F0EAE0;
   --color-text-muted: #9B9287;
-  --color-text-dim: #6B6359;
+  --color-text-dim: #8A8177;
   --color-success: #10B981;
   --color-success-light: #34D399;
   --color-danger: #EF4444;
@@ -279,7 +279,7 @@
   }
 
   .input::placeholder {
-    color: #6B6359;
+    color: #8A8177;
   }
 
   select.input {

@@ -1,30 +1,27 @@
-import { useEffect, useState } from 'react'
-import { Calendar, Plus, ChevronLeft, ChevronRight, X, Clock } from 'lucide-react'
+import { useEffect, useState, useCallback, type FormEvent } from 'react'
+import { Calendar, Plus, ChevronLeft, ChevronRight, X, Clock, Globe } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import type { CalendarEvent } from '@/types/database'
 import {
-  format,
-  startOfMonth,
-  endOfMonth,
-  startOfWeek,
-  endOfWeek,
-  eachDayOfInterval,
-  isSameMonth,
-  isSameDay,
-  addMonths,
-  subMonths,
-  parseISO,
+  format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval,
+  isSameMonth, isSameDay, addMonths, subMonths, parseISO, isBefore,
 } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import Modal from '@/components/ui/Modal'
+import { confirm } from '@/lib/confirm'
+import { run } from '@/lib/db'
+import { toast } from '@/lib/toast'
+import { formatTimeIn, timezoneCity } from '@/lib/timezone'
+import { BTN_PRIMARY, BTN_GHOST, INPUT, LABEL, CARD, CARD_EDGE, ICON_BTN } from '@/lib/ui'
 
 const COLORS = ['#D4A574', '#C2788E', '#E8B86D', '#10B981', '#3B82F6', '#EF4444']
 
 export default function CalendarPage() {
-  const { profile } = useAuthStore()
+  const { profile, partnerProfile } = useAuthStore()
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [currentMonth, setCurrentMonth] = useState(new Date())
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date())
   const [showForm, setShowForm] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -32,28 +29,27 @@ export default function CalendarPage() {
   const [endAt, setEndAt] = useState('')
   const [color, setColor] = useState(COLORS[0])
   const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState('')
 
-  const fetchEvents = async () => {
-    const { data } = await supabase
-      .from('calendar_events')
-      .select('*')
-      .order('start_at', { ascending: true })
-
+  const fetchEvents = useCallback(async () => {
+    // On charge une fenêtre glissante : mois affiché ± 2 mois (pas toute la table)
+    const from = subMonths(startOfMonth(currentMonth), 2).toISOString()
+    const to = addMonths(endOfMonth(currentMonth), 2).toISOString()
+    const { data } = await run(
+      supabase.from('calendar_events').select('*').gte('start_at', from).lte('start_at', to).order('start_at', { ascending: true }),
+      { errorMessage: "Impossible de charger l'agenda." },
+    )
     if (data) setEvents(data)
-  }
+  }, [currentMonth])
 
   useEffect(() => {
     fetchEvents()
-
     const channel = supabase
-      .channel('calendar-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_events' }, () => {
-        fetchEvents()
-      })
+      .channel(`calendar:${profile?.id ?? 'anon'}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_events' }, () => fetchEvents())
       .subscribe()
-
     return () => { supabase.removeChannel(channel) }
-  }, [])
+  }, [fetchEvents, profile?.id])
 
   const monthStart = startOfMonth(currentMonth)
   const monthEnd = endOfMonth(currentMonth)
@@ -61,116 +57,122 @@ export default function CalendarPage() {
   const calEnd = endOfWeek(monthEnd, { weekStartsOn: 1 })
   const days = eachDayOfInterval({ start: calStart, end: calEnd })
 
-  const eventsForDay = (day: Date) =>
-    events.filter((e) => isSameDay(parseISO(e.start_at), day))
-
-  const selectedDayEvents = selectedDate
-    ? events.filter((e) => isSameDay(parseISO(e.start_at), selectedDate))
-    : []
+  const eventsForDay = (day: Date) => events.filter((e) => isSameDay(parseISO(e.start_at), day))
+  const selectedDayEvents = selectedDate ? eventsForDay(selectedDate) : []
 
   const openForm = (date?: Date) => {
     const d = date ?? selectedDate ?? new Date()
     const dateStr = format(d, 'yyyy-MM-dd')
-    setStartAt(`${dateStr}T10:00`)
-    setEndAt(`${dateStr}T11:00`)
-    setTitle('')
-    setDescription('')
-    setColor(COLORS[0])
+    setStartAt(`${dateStr}T20:00`)
+    setEndAt(`${dateStr}T21:00`)
+    setTitle(''); setDescription(''); setColor(COLORS[0]); setFormError('')
     setShowForm(true)
   }
 
-  const saveEvent = async () => {
+  const saveEvent = async (e: FormEvent) => {
+    e.preventDefault()
     if (!profile || !title.trim() || !startAt || !endAt) return
+    const start = new Date(startAt)
+    const end = new Date(endAt)
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return setFormError('Date invalide.')
+    if (!isBefore(start, end)) return setFormError("L'heure de fin doit être après le début.")
+    setFormError('')
     setSaving(true)
-
-    await supabase.from('calendar_events').insert({
-      created_by: profile.id,
-      title: title.trim(),
-      description: description.trim() || null,
-      start_at: new Date(startAt).toISOString(),
-      end_at: new Date(endAt).toISOString(),
-      color,
-      is_shared: true,
-    })
-
-    setShowForm(false)
+    const { ok } = await run(
+      supabase.from('calendar_events').insert({
+        created_by: profile.id,
+        title: title.trim(),
+        description: description.trim() || null,
+        start_at: start.toISOString(),
+        end_at: end.toISOString(),
+        color,
+      }),
+      { errorMessage: "L'événement n'a pas pu être créé." },
+    )
     setSaving(false)
-    fetchEvents()
+    if (ok) {
+      toast.success('Événement ajouté à votre agenda')
+      setShowForm(false)
+      setSelectedDate(start)
+      setCurrentMonth(start)
+      fetchEvents()
+    }
   }
 
-  const deleteEvent = async (id: string) => {
-    await supabase.from('calendar_events').delete().eq('id', id)
-    fetchEvents()
+  const deleteEvent = async (event: CalendarEvent) => {
+    const yes = await confirm({ title: 'Supprimer cet événement ?', message: `« ${event.title} » sera retiré de votre agenda à tous les deux.`, confirmLabel: 'Supprimer', danger: true })
+    if (!yes) return
+    const { ok } = await run(supabase.from('calendar_events').delete().eq('id', event.id), { errorMessage: 'Suppression impossible.' })
+    if (ok) fetchEvents()
   }
+
+  const partnerTz = partnerProfile?.timezone
+  const showPartnerTime = !!partnerTz && !!profile && partnerTz !== profile.timezone
 
   return (
     <div className="px-5 md:px-8 py-6 max-w-3xl mx-auto space-y-5">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-light tracking-tight flex items-center gap-2.5 text-[#F0EAE0]">
           <div className="w-8 h-8 rounded-xl bg-[rgba(212,165,116,0.12)] flex items-center justify-center">
-            <Calendar size={16} className="text-[#D4A574]" />
+            <Calendar size={16} className="text-[#D4A574]" aria-hidden="true" />
           </div>
-          Agenda partage
+          Agenda partagé
         </h2>
-        <button
-          onClick={() => openForm()}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-gradient-to-r from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_2px_20px_rgba(212,165,116,0.2)] hover:shadow-[0_4px_28px_rgba(212,165,116,0.35)] hover:translate-y-[-1px] active:translate-y-0 active:scale-[0.98] transition-all duration-300 ease-out"
-        >
-          <Plus size={14} /> Ajouter
+        <button onClick={() => openForm()} className={BTN_PRIMARY}>
+          <Plus size={14} aria-hidden="true" /> Ajouter
         </button>
       </div>
 
-      {/* Calendar card */}
-      <div className="relative overflow-hidden rounded-2xl p-5 md:p-6 bg-[#1E1B17] transition-all duration-500 ease-out">
-        <div className="absolute top-0 left-[15%] right-[15%] h-px bg-gradient-to-r from-transparent via-[rgba(212,165,116,0.12)] to-transparent opacity-60" />
+      {showPartnerTime && (
+        <p className="text-xs text-[#8A8177] flex items-center gap-1.5">
+          <Globe size={12} aria-hidden="true" />
+          Les heures sont affichées dans ton fuseau ({timezoneCity(profile!.timezone)}) et celui de {partnerProfile!.display_name} ({timezoneCity(partnerTz!)}).
+        </p>
+      )}
 
+      {/* Calendar card */}
+      <div className={CARD}>
+        <div className={CARD_EDGE} aria-hidden="true" />
         <div className="flex items-center justify-between mb-4">
-          <button
-            onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-            className="p-1.5 rounded-lg text-[#9B9287] hover:text-[#F0EAE0] hover:bg-[rgba(212,165,116,0.06)] transition-all duration-300"
-          >
-            <ChevronLeft size={18} />
+          <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className={ICON_BTN} aria-label="Mois précédent">
+            <ChevronLeft size={18} aria-hidden="true" />
           </button>
-          <h3 className="text-sm font-medium tracking-wide text-[#F0EAE0] capitalize">
+          <h3 className="text-sm font-medium tracking-wide text-[#F0EAE0] first-letter:uppercase" aria-live="polite">
             {format(currentMonth, 'MMMM yyyy', { locale: fr })}
           </h3>
-          <button
-            onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-            className="p-1.5 rounded-lg text-[#9B9287] hover:text-[#F0EAE0] hover:bg-[rgba(212,165,116,0.06)] transition-all duration-300"
-          >
-            <ChevronRight size={18} />
+          <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className={ICON_BTN} aria-label="Mois suivant">
+            <ChevronRight size={18} aria-hidden="true" />
           </button>
         </div>
 
-        <div className="grid grid-cols-7 gap-1 mb-1">
+        <div className="grid grid-cols-7 gap-1 mb-1" aria-hidden="true">
           {['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di'].map((d) => (
-            <div key={d} className="text-center text-[11px] tracking-wide text-[#6B6359] font-medium py-1">{d}</div>
+            <div key={d} className="text-center text-xs tracking-wide text-[#8A8177] font-medium py-1">{d}</div>
           ))}
         </div>
 
-        <div className="grid grid-cols-7 gap-1">
+        <div className="grid grid-cols-7 gap-1" role="grid">
           {days.map((day) => {
             const isCurrentMonth = isSameMonth(day, currentMonth)
             const isToday = isSameDay(day, new Date())
             const isSelected = selectedDate && isSameDay(day, selectedDate)
             const dayEvents = eventsForDay(day)
-
             return (
               <button
                 key={day.toISOString()}
                 onClick={() => setSelectedDate(day)}
-                className={`relative p-1.5 rounded-xl text-sm transition-all duration-300 ${
-                  !isCurrentMonth ? 'text-[#6B6359]/40' : 'text-[#F0EAE0]'
+                onDoubleClick={() => openForm(day)}
+                aria-label={`${format(day, 'EEEE d MMMM', { locale: fr })}${dayEvents.length ? `, ${dayEvents.length} événement${dayEvents.length > 1 ? 's' : ''}` : ''}`}
+                aria-pressed={!!isSelected}
+                className={`relative p-1.5 min-h-[40px] rounded-xl text-sm transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/50 ${
+                  !isCurrentMonth ? 'text-[#8A8177]/40' : 'text-[#F0EAE0]'
                 } ${isToday ? 'shadow-[0_0_0_1px_rgba(212,165,116,0.3)]' : ''} ${
-                  isSelected
-                    ? 'bg-[rgba(212,165,116,0.15)] text-[#D4A574]'
-                    : 'hover:bg-[rgba(212,165,116,0.06)]'
+                  isSelected ? 'bg-[rgba(212,165,116,0.15)] text-[#D4A574]' : 'hover:bg-[rgba(212,165,116,0.06)]'
                 }`}
               >
                 {format(day, 'd')}
                 {dayEvents.length > 0 && (
-                  <div className="flex justify-center gap-0.5 mt-0.5">
+                  <div className="flex justify-center gap-0.5 mt-0.5" aria-hidden="true">
                     {dayEvents.slice(0, 3).map((e) => (
                       <div key={e.id} className="w-1 h-1 rounded-full" style={{ backgroundColor: e.color }} />
                     ))}
@@ -182,132 +184,103 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Selected day events */}
+      {/* Selected day */}
       {selectedDate && (
-        <div className="relative overflow-hidden rounded-2xl p-5 md:p-6 bg-[#1E1B17] transition-all duration-500 ease-out space-y-3">
-          <div className="absolute top-0 left-[15%] right-[15%] h-px bg-gradient-to-r from-transparent via-[rgba(212,165,116,0.12)] to-transparent opacity-60" />
-
+        <div className={`${CARD} space-y-3`}>
+          <div className={CARD_EDGE} aria-hidden="true" />
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-[#F0EAE0] capitalize">
-              {format(selectedDate, 'EEEE d MMMM', { locale: fr })}
-            </h3>
-            <button
-              onClick={() => openForm(selectedDate)}
-              className="text-[#D4A574] text-[11px] tracking-wide flex items-center gap-1 hover:text-[#E8C9A0] transition-colors duration-300"
-            >
-              <Plus size={12} /> Ajouter
+            <h3 className="text-sm font-medium text-[#F0EAE0] first-letter:uppercase">{format(selectedDate, 'EEEE d MMMM', { locale: fr })}</h3>
+            <button onClick={() => openForm(selectedDate)} className="text-[#D4A574] text-xs tracking-wide flex items-center gap-1 hover:text-[#E8C9A0] transition-colors">
+              <Plus size={12} aria-hidden="true" /> Ajouter
             </button>
           </div>
 
           {selectedDayEvents.length === 0 ? (
-            <p className="text-[#6B6359] text-[11px] tracking-wide py-4 text-center">Aucun evenement</p>
+            <p className="text-[#8A8177] text-xs tracking-wide py-4 text-center">Rien de prévu ce jour-là</p>
           ) : (
-            <div className="space-y-2">
-              {selectedDayEvents.map((event) => (
-                <div key={event.id} className="flex items-start gap-3 p-3 rounded-xl bg-[rgba(255,255,255,0.03)]">
-                  <div className="w-1 h-full min-h-[2.5rem] rounded-full shrink-0" style={{ backgroundColor: event.color }} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[#F0EAE0]">{event.title}</p>
-                    <p className="text-[11px] text-[#6B6359] flex items-center gap-1 mt-0.5">
-                      <Clock size={10} />
-                      {format(parseISO(event.start_at), 'HH:mm')} - {format(parseISO(event.end_at), 'HH:mm')}
-                    </p>
-                    {event.description && (
-                      <p className="text-[11px] text-[#9B9287] mt-1">{event.description}</p>
-                    )}
-                  </div>
-                  {event.created_by === profile?.id && (
-                    <button
-                      onClick={() => deleteEvent(event.id)}
-                      className="text-[#6B6359] hover:text-red-400 shrink-0 transition-colors duration-300"
-                    >
-                      <X size={14} />
+            <ul className="space-y-2">
+              {selectedDayEvents.map((event) => {
+                const start = parseISO(event.start_at)
+                const end = parseISO(event.end_at)
+                return (
+                  <li key={event.id} className="flex items-start gap-3 p-3 rounded-xl bg-[rgba(255,255,255,0.03)]">
+                    <div className="w-1 self-stretch min-h-[2.5rem] rounded-full shrink-0" style={{ backgroundColor: event.color }} aria-hidden="true" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[#F0EAE0]">{event.title}</p>
+                      <p className="text-xs text-[#8A8177] flex items-center gap-1 mt-0.5">
+                        <Clock size={10} aria-hidden="true" />
+                        {format(start, 'HH:mm')} – {format(end, 'HH:mm')}
+                        {showPartnerTime && (
+                          <span className="text-[#C2788E]/80 ml-1">
+                            · {formatTimeIn(partnerTz!, start)} – {formatTimeIn(partnerTz!, end)} pour {partnerProfile!.display_name}
+                          </span>
+                        )}
+                      </p>
+                      {event.description && <p className="text-xs text-[#9B9287] mt-1 whitespace-pre-wrap">{event.description}</p>}
+                    </div>
+                    <button onClick={() => deleteEvent(event)} className="text-[#8A8177] hover:text-red-400 shrink-0 transition-colors duration-300 p-1" aria-label={`Supprimer ${event.title}`}>
+                      <X size={14} aria-hidden="true" />
                     </button>
-                  )}
-                </div>
-              ))}
-            </div>
+                  </li>
+                )
+              })}
+            </ul>
           )}
         </div>
       )}
 
-      {/* New event modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
-          <div
-            className="relative overflow-hidden rounded-2xl p-5 md:p-6 bg-[#1E1B17] w-full max-w-md space-y-4"
-            style={{ animation: 'fadeIn 400ms ease-out' }}
-          >
-            <div className="absolute top-0 left-[15%] right-[15%] h-px bg-gradient-to-r from-transparent via-[rgba(212,165,116,0.12)] to-transparent opacity-60" />
-
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium tracking-wide text-[#F0EAE0]">Nouvel evenement</h3>
-              <button onClick={() => setShowForm(false)} className="text-[#6B6359] hover:text-[#F0EAE0] transition-colors duration-300">
-                <X size={18} />
-              </button>
+        <Modal title="Nouvel événement" description={showPartnerTime ? `Saisis l'heure dans ton fuseau (${timezoneCity(profile!.timezone)}) ; ${partnerProfile!.display_name} la verra convertie.` : undefined} onClose={() => setShowForm(false)}>
+          <form onSubmit={saveEvent} className="space-y-4" noValidate>
+            <div>
+              <label htmlFor="ev-title" className={LABEL}>Titre</label>
+              <input id="ev-title" type="text" placeholder="Ex : Appel du soir, Ciné en ligne…" value={title} onChange={(e) => setTitle(e.target.value)} className={INPUT} maxLength={120} required />
             </div>
-
-            <input
-              type="text"
-              placeholder="Titre"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full bg-[rgba(255,255,255,0.03)] rounded-xl px-4 py-3 text-sm text-[#F0EAE0] placeholder-[#6B6359] outline-none transition-all duration-300 ease-out focus:bg-[rgba(255,255,255,0.05)] focus:shadow-[0_0_0_2px_rgba(212,165,116,0.15),0_0_0_1px_rgba(212,165,116,0.08)]"
-              autoFocus
-            />
-
-            <textarea
-              placeholder="Description (optionnel)"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-              className="w-full bg-[rgba(255,255,255,0.03)] rounded-xl px-4 py-3 text-sm text-[#F0EAE0] placeholder-[#6B6359] outline-none transition-all duration-300 ease-out focus:bg-[rgba(255,255,255,0.05)] focus:shadow-[0_0_0_2px_rgba(212,165,116,0.15),0_0_0_1px_rgba(212,165,116,0.08)] resize-none"
-            />
-
+            <div>
+              <label htmlFor="ev-desc" className={LABEL}>Description (optionnel)</label>
+              <textarea id="ev-desc" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={`${INPUT} resize-none`} maxLength={1000} />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] tracking-wide text-[#6B6359] mb-1.5">Debut</label>
-                <input
-                  type="datetime-local"
-                  value={startAt}
-                  onChange={(e) => setStartAt(e.target.value)}
-                  className="w-full bg-[rgba(255,255,255,0.03)] rounded-xl px-4 py-3 text-sm text-[#F0EAE0] outline-none transition-all duration-300 ease-out focus:bg-[rgba(255,255,255,0.05)] focus:shadow-[0_0_0_2px_rgba(212,165,116,0.15),0_0_0_1px_rgba(212,165,116,0.08)]"
-                />
+                <label htmlFor="ev-start" className={LABEL}>Début</label>
+                <input id="ev-start" type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} className={INPUT} required />
               </div>
               <div>
-                <label className="block text-[11px] tracking-wide text-[#6B6359] mb-1.5">Fin</label>
-                <input
-                  type="datetime-local"
-                  value={endAt}
-                  onChange={(e) => setEndAt(e.target.value)}
-                  className="w-full bg-[rgba(255,255,255,0.03)] rounded-xl px-4 py-3 text-sm text-[#F0EAE0] outline-none transition-all duration-300 ease-out focus:bg-[rgba(255,255,255,0.05)] focus:shadow-[0_0_0_2px_rgba(212,165,116,0.15),0_0_0_1px_rgba(212,165,116,0.08)]"
-                />
+                <label htmlFor="ev-end" className={LABEL}>Fin</label>
+                <input id="ev-end" type="datetime-local" value={endAt} min={startAt} onChange={(e) => setEndAt(e.target.value)} className={INPUT} required />
               </div>
             </div>
-
+            {showPartnerTime && startAt && !Number.isNaN(new Date(startAt).getTime()) && (
+              <p className="text-xs text-[#C2788E]/80">
+                Soit {formatTimeIn(partnerTz!, new Date(startAt))} chez {partnerProfile!.display_name}.
+              </p>
+            )}
             <div>
-              <label className="block text-[11px] tracking-wide text-[#6B6359] mb-1.5">Couleur</label>
-              <div className="flex gap-2">
+              <span className={LABEL}>Couleur</span>
+              <div className="flex gap-2" role="radiogroup" aria-label="Couleur">
                 {COLORS.map((c) => (
                   <button
+                    type="button"
                     key={c}
                     onClick={() => setColor(c)}
-                    className={`w-7 h-7 rounded-full transition-all duration-300 ${color === c ? 'scale-110 shadow-[0_0_12px_rgba(212,165,116,0.3)]' : 'opacity-60 hover:opacity-100'}`}
+                    role="radio"
+                    aria-checked={color === c}
+                    aria-label={`Couleur ${c}`}
+                    className={`w-7 h-7 rounded-full transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 ${color === c ? 'scale-110 shadow-[0_0_12px_rgba(212,165,116,0.3)]' : 'opacity-60 hover:opacity-100'}`}
                     style={{ backgroundColor: c }}
                   />
                 ))}
               </div>
             </div>
-
-            <button
-              onClick={saveEvent}
-              disabled={saving || !title.trim()}
-              className="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-gradient-to-r from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_2px_20px_rgba(212,165,116,0.2)] hover:shadow-[0_4px_28px_rgba(212,165,116,0.35)] hover:translate-y-[-1px] active:translate-y-0 active:scale-[0.98] transition-all duration-300 ease-out disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {saving ? 'Enregistrement...' : 'Ajouter'}
-            </button>
-          </div>
-        </div>
+            <div aria-live="polite">{formError && <p role="alert" className="text-red-300 text-xs">{formError}</p>}</div>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setShowForm(false)} className={`${BTN_GHOST} flex-1`}>Annuler</button>
+              <button type="submit" disabled={saving || !title.trim()} className={`${BTN_PRIMARY} flex-1 py-2.5`}>
+                {saving ? 'Enregistrement…' : 'Ajouter'}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   )

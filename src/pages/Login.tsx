@@ -1,495 +1,183 @@
-import { useState } from 'react'
-import { Heart, ArrowRight } from 'lucide-react'
+import { useState, type FormEvent } from 'react'
+import { Heart, ArrowRight, ArrowLeft, MailCheck } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
+import { INPUT } from '@/lib/ui'
+
+type Mode = 'signin' | 'signup' | 'forgot' | 'check-email' | 'reset-sent'
+
+const LABEL = 'block text-xs font-medium tracking-[0.08em] uppercase text-[#9B9287] mb-1.5'
 
 export default function Login() {
-  const [isSignUp, setIsSignUp] = useState(false)
+  const [mode, setMode] = useState<Mode>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const { signIn, signUp } = useAuthStore()
+  const { signIn, signUp, requestPasswordReset } = useAuthStore()
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const switchMode = (m: Mode) => { setMode(m); setError('') }
+
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
     setLoading(true)
-
     try {
-      if (isSignUp) {
-        await signUp(email, password, displayName)
+      if (mode === 'signup') {
+        if (password.length < 8) throw new Error('8 caractères minimum pour le mot de passe.')
+        const { needsEmailConfirmation } = await signUp(email, password, displayName)
+        if (needsEmailConfirmation) setMode('check-email')
+      } else if (mode === 'forgot') {
+        await requestPasswordReset(email)
+        setMode('reset-sent')
       } else {
         await signIn(email, password)
       }
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Une erreur est survenue.')
     } finally {
       setLoading(false)
     }
   }
 
+  const heading =
+    mode === 'signup' ? 'Créer un compte'
+    : mode === 'forgot' ? 'Mot de passe oublié'
+    : mode === 'check-email' ? 'Vérifie ta boîte mail'
+    : mode === 'reset-sent' ? 'Email envoyé'
+    : 'Bon retour'
+
+  const subheading =
+    mode === 'signup' ? 'Rejoins ton/ta partenaire sur Nous Deux'
+    : mode === 'forgot' ? 'On t’envoie un lien pour choisir un nouveau mot de passe'
+    : mode === 'check-email' ? `Un lien de confirmation a été envoyé à ${email}. Clique dessus pour activer ton compte (pense aux spams).`
+    : mode === 'reset-sent' ? `Si un compte existe pour ${email}, un lien de réinitialisation vient d’être envoyé. Il est valable une heure.`
+    : 'Connecte-toi pour retrouver ton/ta partenaire'
+
   return (
-    <div
-      className="min-h-dvh flex"
-      style={{ fontFamily: "'Instrument Sans', 'Inter', system-ui, -apple-system, sans-serif" }}
-    >
-      {/* ─── Left panel — atmospheric branding (desktop only) ─── */}
-      <div
-        className="hidden lg:flex flex-1 items-center justify-center relative overflow-hidden"
-        style={{ background: '#110F0E' }}
-      >
-        {/* Pulsing amber orb — top-left */}
-        <div
-          className="absolute"
-          style={{
-            top: '10%',
-            left: '10%',
-            width: '500px',
-            height: '500px',
-            borderRadius: '50%',
-            background: 'rgba(212, 165, 116, 0.08)',
-            filter: 'blur(140px)',
-            animation: 'loginOrbDrift1 12s ease-in-out infinite',
-          }}
-        />
-        {/* Pulsing rose orb — bottom-right */}
-        <div
-          className="absolute"
-          style={{
-            bottom: '5%',
-            right: '10%',
-            width: '450px',
-            height: '450px',
-            borderRadius: '50%',
-            background: 'rgba(194, 120, 142, 0.06)',
-            filter: 'blur(120px)',
-            animation: 'loginOrbDrift2 14s ease-in-out infinite',
-          }}
-        />
-
-        {/* Content */}
+    <div className="min-h-dvh flex" style={{ fontFamily: "'Instrument Sans', 'Inter', system-ui, -apple-system, sans-serif" }}>
+      {/* ─── Left panel — branding (desktop) ─── */}
+      <div className="hidden lg:flex flex-1 items-center justify-center relative overflow-hidden bg-[#110F0E]">
+        <div className="absolute rounded-full" style={{ top: '10%', left: '10%', width: 500, height: 500, background: 'rgba(212,165,116,0.08)', filter: 'blur(140px)', animation: 'loginOrbDrift1 12s ease-in-out infinite' }} aria-hidden="true" />
+        <div className="absolute rounded-full" style={{ bottom: '5%', right: '10%', width: 450, height: 450, background: 'rgba(194,120,142,0.06)', filter: 'blur(120px)', animation: 'loginOrbDrift2 14s ease-in-out infinite' }} aria-hidden="true" />
         <div className="relative z-10 text-center px-12 max-w-md">
-          {/* Floating heart — large, minimal, no box */}
           <div className="relative inline-block mb-12">
-            {/* Ambient glow beneath heart */}
-            <div
-              className="absolute"
-              style={{
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -40%)',
-                width: '120px',
-                height: '80px',
-                borderRadius: '50%',
-                background: 'rgba(212, 165, 116, 0.12)',
-                filter: 'blur(40px)',
-                animation: 'loginGlowPulse 4s ease-in-out infinite',
-              }}
-            />
-            <Heart
-              size={72}
-              className="relative"
-              fill="currentColor"
-              style={{
-                color: '#D4A574',
-                opacity: 0.85,
-                filter: 'drop-shadow(0 4px 24px rgba(212, 165, 116, 0.2))',
-              }}
-            />
+            <div className="absolute rounded-full" style={{ top: '50%', left: '50%', transform: 'translate(-50%,-40%)', width: 120, height: 80, background: 'rgba(212,165,116,0.12)', filter: 'blur(40px)', animation: 'loginGlowPulse 4s ease-in-out infinite' }} aria-hidden="true" />
+            <Heart size={72} className="relative" fill="currentColor" style={{ color: '#D4A574', opacity: 0.85, filter: 'drop-shadow(0 4px 24px rgba(212,165,116,0.2))' }} aria-hidden="true" />
           </div>
-
-          <h1
-            className="mb-5"
-            style={{
-              fontSize: '3rem',
-              fontWeight: 300,
-              letterSpacing: '0.06em',
-              color: '#F0EAE0',
-              lineHeight: 1.1,
-            }}
-          >
-            Nous Deux
-          </h1>
-          <p
-            style={{
-              fontSize: '1rem',
-              lineHeight: 1.65,
-              color: '#9B9287',
-              maxWidth: '320px',
-              margin: '0 auto',
-            }}
-          >
+          <h1 className="mb-5 text-[3rem] font-light leading-[1.1] tracking-[0.06em] text-[#F0EAE0]">Nous Deux</h1>
+          <p className="text-base leading-relaxed text-[#9B9287] max-w-[320px] mx-auto">
             Votre espace intime pour cultiver votre amour, peu importe la distance.
           </p>
         </div>
       </div>
 
       {/* ─── Right panel — form ─── */}
-      <div
-        className="flex-1 flex items-center justify-center px-6 py-12"
-        style={{ background: '#110F0E' }}
-      >
+      <div className="flex-1 flex items-center justify-center px-6 py-12 bg-[#110F0E]">
         <div className="w-full max-w-sm">
           {/* Mobile branding */}
           <div className="text-center mb-10 lg:hidden animate-fade-in">
             <div className="relative inline-block mb-6">
-              {/* Ambient glow */}
-              <div
-                className="absolute"
-                style={{
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -40%)',
-                  width: '80px',
-                  height: '60px',
-                  borderRadius: '50%',
-                  background: 'rgba(212, 165, 116, 0.15)',
-                  filter: 'blur(30px)',
-                  animation: 'loginGlowPulse 4s ease-in-out infinite',
-                }}
-              />
-              <Heart
-                size={48}
-                className="relative"
-                fill="currentColor"
-                style={{
-                  color: '#D4A574',
-                  opacity: 0.85,
-                  filter: 'drop-shadow(0 4px 20px rgba(212, 165, 116, 0.2))',
-                }}
-              />
+              <div className="absolute rounded-full" style={{ top: '50%', left: '50%', transform: 'translate(-50%,-40%)', width: 80, height: 60, background: 'rgba(212,165,116,0.15)', filter: 'blur(30px)', animation: 'loginGlowPulse 4s ease-in-out infinite' }} aria-hidden="true" />
+              <Heart size={48} className="relative" fill="currentColor" style={{ color: '#D4A574', opacity: 0.85, filter: 'drop-shadow(0 4px 20px rgba(212,165,116,0.2))' }} aria-hidden="true" />
             </div>
-            <h1
-              style={{
-                fontSize: '1.875rem',
-                fontWeight: 300,
-                letterSpacing: '0.05em',
-                color: '#F0EAE0',
-                lineHeight: 1.2,
-              }}
-            >
-              Nous Deux
-            </h1>
-            <p style={{ color: '#9B9287', fontSize: '0.875rem', marginTop: '0.5rem' }}>
-              Votre espace intime, privé et chaleureux
-            </p>
+            <h1 className="text-[1.875rem] font-light leading-[1.2] tracking-[0.05em] text-[#F0EAE0]">Nous Deux</h1>
+            <p className="text-[#9B9287] text-sm mt-2">Votre espace intime, privé et chaleureux</p>
           </div>
 
-          {/* Desktop form header */}
-          <div className="lg:block hidden mb-8 animate-slide-up">
-            <h2
-              style={{
-                fontSize: '1.5rem',
-                fontWeight: 300,
-                letterSpacing: '0.02em',
-                color: '#F0EAE0',
-              }}
-            >
-              {isSignUp ? 'Créer un compte' : 'Bon retour'}
-            </h2>
-            <p style={{ color: '#9B9287', fontSize: '0.875rem', marginTop: '0.375rem' }}>
-              {isSignUp
-                ? 'Rejoins ton/ta partenaire sur Nous Deux'
-                : 'Connecte-toi pour retrouver ton/ta partenaire'}
-            </p>
+          <div className="mb-8 animate-slide-up">
+            <h2 className="text-2xl font-light tracking-[0.02em] text-[#F0EAE0]">{heading}</h2>
+            <p className="text-[#9B9287] text-sm mt-1.5 leading-relaxed">{subheading}</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4 animate-slide-up" style={{ animationDelay: '0.1s' }}>
-            {isSignUp && (
-              <div className="animate-slide-up">
-                <label
-                  htmlFor="login-name"
-                  style={{
-                    display: 'block',
-                    fontSize: '0.6875rem',
-                    fontWeight: 500,
-                    letterSpacing: '0.08em',
-                    textTransform: 'uppercase',
-                    color: '#9B9287',
-                    marginBottom: '0.375rem',
-                  }}
-                >
-                  Prénom
-                </label>
-                <input
-                  id="login-name"
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Ton prénom"
-                  required
-                  autoComplete="given-name"
-                  style={{
-                    width: '100%',
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    border: 'none',
-                    borderRadius: '0.75rem',
-                    padding: '0.75rem 1rem',
-                    fontSize: '0.875rem',
-                    color: '#F0EAE0',
-                    outline: 'none',
-                    transition: 'all 0.3s ease-out',
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.background = 'rgba(255, 255, 255, 0.05)'
-                    e.target.style.boxShadow = '0 0 0 2px rgba(212, 165, 116, 0.15), 0 0 0 1px rgba(212, 165, 116, 0.08)'
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.background = 'rgba(255, 255, 255, 0.03)'
-                    e.target.style.boxShadow = 'none'
-                  }}
-                />
+          {(mode === 'check-email' || mode === 'reset-sent') ? (
+            <div className="space-y-5 animate-slide-up">
+              <div className="w-14 h-14 rounded-2xl bg-[rgba(212,165,116,0.12)] flex items-center justify-center">
+                <MailCheck size={26} className="text-[#D4A574]" aria-hidden="true" />
               </div>
-            )}
-
-            <div>
-              <label
-                htmlFor="login-email"
-                style={{
-                  display: 'block',
-                  fontSize: '0.6875rem',
-                  fontWeight: 500,
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  color: '#9B9287',
-                  marginBottom: '0.375rem',
-                }}
-              >
-                Email
-              </label>
-              <input
-                id="login-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="ton@email.com"
-                required
-                autoFocus
-                autoComplete="email"
-                style={{
-                  width: '100%',
-                  background: 'rgba(255, 255, 255, 0.03)',
-                  border: 'none',
-                  borderRadius: '0.75rem',
-                  padding: '0.75rem 1rem',
-                  fontSize: '0.875rem',
-                  color: '#F0EAE0',
-                  outline: 'none',
-                  transition: 'all 0.3s ease-out',
-                }}
-                onFocus={(e) => {
-                  e.target.style.background = 'rgba(255, 255, 255, 0.05)'
-                  e.target.style.boxShadow = '0 0 0 2px rgba(212, 165, 116, 0.15), 0 0 0 1px rgba(212, 165, 116, 0.08)'
-                }}
-                onBlur={(e) => {
-                  e.target.style.background = 'rgba(255, 255, 255, 0.03)'
-                  e.target.style.boxShadow = 'none'
-                }}
-              />
+              <button type="button" onClick={() => switchMode('signin')} className="inline-flex items-center gap-2 text-sm text-[#D4A574] hover:text-[#E8C9A0] transition-colors">
+                <ArrowLeft size={16} aria-hidden="true" /> Retour à la connexion
+              </button>
             </div>
-
-            <div>
-              <label
-                htmlFor="login-password"
-                style={{
-                  display: 'block',
-                  fontSize: '0.6875rem',
-                  fontWeight: 500,
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  color: '#9B9287',
-                  marginBottom: '0.375rem',
-                }}
-              >
-                Mot de passe
-              </label>
-              <input
-                id="login-password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                minLength={6}
-                autoComplete={isSignUp ? 'new-password' : 'current-password'}
-                style={{
-                  width: '100%',
-                  background: 'rgba(255, 255, 255, 0.03)',
-                  border: 'none',
-                  borderRadius: '0.75rem',
-                  padding: '0.75rem 1rem',
-                  fontSize: '0.875rem',
-                  color: '#F0EAE0',
-                  outline: 'none',
-                  transition: 'all 0.3s ease-out',
-                }}
-                onFocus={(e) => {
-                  e.target.style.background = 'rgba(255, 255, 255, 0.05)'
-                  e.target.style.boxShadow = '0 0 0 2px rgba(212, 165, 116, 0.15), 0 0 0 1px rgba(212, 165, 116, 0.08)'
-                }}
-                onBlur={(e) => {
-                  e.target.style.background = 'rgba(255, 255, 255, 0.03)'
-                  e.target.style.boxShadow = 'none'
-                }}
-              />
-            </div>
-
-            <div aria-live="polite" aria-atomic="true">
-              {error && (
-                <div
-                  role="alert"
-                  className="animate-bounce-in"
-                  style={{
-                    background: 'rgba(239, 68, 68, 0.08)',
-                    borderRadius: '0.75rem',
-                    padding: '0.75rem 1rem',
-                  }}
-                >
-                  <p style={{ color: '#F87171', fontSize: '0.875rem', margin: 0 }}>{error}</p>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4 animate-slide-up" style={{ animationDelay: '0.1s' }} noValidate>
+              {mode === 'signup' && (
+                <div className="animate-slide-up">
+                  <label htmlFor="login-name" className={LABEL}>Prénom</label>
+                  <input id="login-name" type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="Ton prénom" required maxLength={40} autoComplete="given-name" className={INPUT} />
                 </div>
               )}
-            </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              aria-label={isSignUp ? "S'inscrire" : 'Se connecter'}
-              className="group"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-                width: '100%',
-                padding: '0.875rem 1.25rem',
-                borderRadius: '0.75rem',
-                fontSize: '0.9375rem',
-                fontWeight: 500,
-                border: 'none',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                background: 'linear-gradient(135deg, #D4A574, #C2788E)',
-                color: '#110F0E',
-                boxShadow: '0 2px 20px rgba(212, 165, 116, 0.2)',
-                transition: 'all 0.3s ease-out',
-                opacity: loading ? 0.4 : 1,
-                outline: 'none',
-                letterSpacing: '0.01em',
-              }}
-              onMouseEnter={(e) => {
-                if (!loading) {
-                  e.currentTarget.style.boxShadow = '0 4px 28px rgba(212, 165, 116, 0.35)'
-                  e.currentTarget.style.transform = 'translateY(-1px)'
-                }
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.boxShadow = '0 2px 20px rgba(212, 165, 116, 0.2)'
-                e.currentTarget.style.transform = 'translateY(0)'
-              }}
-              onMouseDown={(e) => {
-                if (!loading) {
-                  e.currentTarget.style.transform = 'translateY(0) scale(0.98)'
-                }
-              }}
-              onMouseUp={(e) => {
-                if (!loading) {
-                  e.currentTarget.style.transform = 'translateY(-1px)'
-                }
-              }}
-            >
-              {loading ? (
-                <div
-                  style={{
-                    width: '1.25rem',
-                    height: '1.25rem',
-                    borderRadius: '50%',
-                    border: '2px solid rgba(17, 15, 14, 0.3)',
-                    borderTopColor: '#110F0E',
-                    animation: 'spin 0.6s linear infinite',
-                  }}
-                />
-              ) : (
-                <>
-                  {isSignUp ? "S'inscrire" : 'Se connecter'}
-                  <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-                </>
+              <div>
+                <label htmlFor="login-email" className={LABEL}>Email</label>
+                <input id="login-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                  placeholder="ton@email.com" required autoFocus autoComplete="email" inputMode="email" className={INPUT} />
+              </div>
+
+              {mode !== 'forgot' && (
+                <div>
+                  <div className="flex items-baseline justify-between">
+                    <label htmlFor="login-password" className={LABEL}>Mot de passe</label>
+                    {mode === 'signin' && (
+                      <button type="button" onClick={() => switchMode('forgot')} className="text-xs text-[#9B9287] hover:text-[#D4A574] transition-colors mb-1.5">
+                        Oublié ?
+                      </button>
+                    )}
+                  </div>
+                  <input id="login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••" required minLength={mode === 'signup' ? 8 : 6}
+                    autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} className={INPUT} />
+                  {mode === 'signup' && <p className="text-xs text-[#8A8177] mt-1.5">8 caractères minimum.</p>}
+                </div>
               )}
-            </button>
 
-            <p className="text-center pt-2" style={{ fontSize: '0.875rem', color: '#9B9287' }}>
-              {isSignUp ? 'Déjà un compte ?' : 'Pas encore de compte ?'}{' '}
+              <div aria-live="polite" aria-atomic="true">
+                {error && (
+                  <div role="alert" className="animate-bounce-in rounded-xl px-4 py-3 bg-[rgba(239,68,68,0.08)]">
+                    <p className="text-[#F87171] text-sm m-0">{error}</p>
+                  </div>
+                )}
+              </div>
+
               <button
-                type="button"
-                onClick={() => { setIsSignUp(!isSignUp); setError('') }}
-                style={{
-                  color: '#D4A574',
-                  fontWeight: 600,
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: 0,
-                  transition: 'color 0.3s ease',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = '#E8C9A0' }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = '#D4A574' }}
+                type="submit"
+                disabled={loading}
+                className="group w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl text-[0.9375rem] font-medium bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_2px_20px_rgba(212,165,116,0.2)] hover:shadow-[0_4px_28px_rgba(212,165,116,0.35)] hover:-translate-y-px active:translate-y-0 active:scale-[0.98] transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60"
               >
-                {isSignUp ? 'Se connecter' : "S'inscrire"}
+                {loading ? (
+                  <span className="w-5 h-5 rounded-full border-2 border-[#110F0E]/30 border-t-[#110F0E] animate-spin" aria-label="Chargement" />
+                ) : (
+                  <>
+                    {mode === 'signup' ? "S'inscrire" : mode === 'forgot' ? 'Envoyer le lien' : 'Se connecter'}
+                    <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" aria-hidden="true" />
+                  </>
+                )}
               </button>
-            </p>
-          </form>
+
+              <p className="text-center pt-2 text-sm text-[#9B9287]">
+                {mode === 'forgot' ? (
+                  <button type="button" onClick={() => switchMode('signin')} className="text-[#D4A574] font-semibold hover:text-[#E8C9A0] transition-colors">
+                    Retour à la connexion
+                  </button>
+                ) : (
+                  <>
+                    {mode === 'signup' ? 'Déjà un compte ?' : 'Pas encore de compte ?'}{' '}
+                    <button type="button" onClick={() => switchMode(mode === 'signup' ? 'signin' : 'signup')} className="text-[#D4A574] font-semibold hover:text-[#E8C9A0] transition-colors">
+                      {mode === 'signup' ? 'Se connecter' : "S'inscrire"}
+                    </button>
+                  </>
+                )}
+              </p>
+            </form>
+          )}
         </div>
       </div>
 
-      {/* ─── Keyframe animations ─── */}
       <style>{`
-        @keyframes loginOrbDrift1 {
-          0%, 100% {
-            transform: translate(0, 0) scale(1);
-            opacity: 0.7;
-          }
-          33% {
-            transform: translate(30px, -20px) scale(1.05);
-            opacity: 1;
-          }
-          66% {
-            transform: translate(-15px, 15px) scale(0.95);
-            opacity: 0.8;
-          }
-        }
-        @keyframes loginOrbDrift2 {
-          0%, 100% {
-            transform: translate(0, 0) scale(1);
-            opacity: 0.6;
-          }
-          40% {
-            transform: translate(-25px, 15px) scale(1.08);
-            opacity: 0.9;
-          }
-          70% {
-            transform: translate(20px, -10px) scale(0.92);
-            opacity: 0.7;
-          }
-        }
-        @keyframes loginGlowPulse {
-          0%, 100% {
-            opacity: 0.6;
-            transform: translate(-50%, -40%) scale(1);
-          }
-          50% {
-            opacity: 1;
-            transform: translate(-50%, -40%) scale(1.15);
-          }
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        /* Placeholder color for login inputs */
-        #login-name::placeholder,
-        #login-email::placeholder,
-        #login-password::placeholder {
-          color: #6B6359;
-        }
+        @keyframes loginOrbDrift1 { 0%,100%{transform:translate(0,0) scale(1);opacity:.7} 33%{transform:translate(30px,-20px) scale(1.05);opacity:1} 66%{transform:translate(-15px,15px) scale(.95);opacity:.8} }
+        @keyframes loginOrbDrift2 { 0%,100%{transform:translate(0,0) scale(1);opacity:.6} 40%{transform:translate(-25px,15px) scale(1.08);opacity:.9} 70%{transform:translate(20px,-10px) scale(.92);opacity:.7} }
+        @keyframes loginGlowPulse { 0%,100%{opacity:.6;transform:translate(-50%,-40%) scale(1)} 50%{opacity:1;transform:translate(-50%,-40%) scale(1.15)} }
       `}</style>
     </div>
   )

@@ -9,6 +9,7 @@ export interface Profile {
   location_lng: number | null
   partner_id: string | null
   partner_code: string
+  relationship_start: string | null
   created_at: string
   updated_at: string
 }
@@ -84,6 +85,8 @@ export interface DailyQuestion {
   question: string
   category: string
   date: string
+  couple_id: string | null
+  bank_id: string | null
   created_at: string
 }
 

@@ -1,16 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { User } from '@supabase/supabase-js'
 
-// ---------------------------------------------------------------------------
-// Mock supabase client — vi.hoisted ensures these exist before vi.mock runs
-// ---------------------------------------------------------------------------
-
-const { mockFrom, mockRpc, mockSignIn, mockSignUp, mockSignOut } = vi.hoisted(() => ({
+const { mockFrom, mockRpc, mockSignIn, mockSignUp, mockSignOut, mockReset, mockUpdateUser } = vi.hoisted(() => ({
   mockFrom: vi.fn(),
   mockRpc: vi.fn(),
   mockSignIn: vi.fn(),
   mockSignUp: vi.fn(),
   mockSignOut: vi.fn(),
+  mockReset: vi.fn(),
+  mockUpdateUser: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase', () => ({
@@ -21,16 +19,13 @@ vi.mock('@/lib/supabase', () => ({
       signInWithPassword: mockSignIn,
       signUp: mockSignUp,
       signOut: mockSignOut,
+      resetPasswordForEmail: mockReset,
+      updateUser: mockUpdateUser,
     },
   },
 }))
 
-// Import after mock so the store picks up the mocked module
 import { useAuthStore } from '../authStore'
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 const fakeUser: User = {
   id: 'user-123',
@@ -52,45 +47,27 @@ const fakeProfile = {
   location_lng: null,
   partner_id: null,
   partner_code: 'ABCD1234',
+  relationship_start: null,
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
 }
 
-const fakePartner = {
-  ...fakeProfile,
-  id: 'partner-456',
-  display_name: 'Partner',
-  partner_code: 'EFGH5678',
-}
+const fakePartner = { ...fakeProfile, id: 'partner-456', display_name: 'Clarisse', partner_code: 'EFGH5678' }
 
-/** Build a chainable query mock */
+/** Chaîne de requête factice : chaque appel renvoie `result` en fin de chaîne */
 function chainable(result: { data?: unknown; error?: unknown }) {
   const chain: Record<string, unknown> = {}
-  chain.select = vi.fn().mockReturnValue(chain)
-  chain.eq = vi.fn().mockReturnValue(chain)
+  for (const m of ['select', 'eq', 'update', 'in', 'gte', 'limit', 'order', 'insert', 'upsert', 'neq', 'lt', 'delete']) {
+    chain[m] = vi.fn().mockReturnValue(chain)
+  }
   chain.single = vi.fn().mockResolvedValue(result)
-  chain.insert = vi.fn().mockResolvedValue(result)
-  chain.update = vi.fn().mockReturnValue(chain)
-  chain.in = vi.fn().mockReturnValue(chain)
-  chain.gte = vi.fn().mockReturnValue(chain)
-  chain.limit = vi.fn().mockReturnValue(chain)
-  chain.order = vi.fn().mockReturnValue(chain)
-  chain.abortSignal = vi.fn().mockReturnValue(chain)
+  chain.maybeSingle = vi.fn().mockResolvedValue(result)
   return chain
 }
 
 function resetStore() {
-  useAuthStore.setState({
-    user: null,
-    profile: null,
-    partnerProfile: null,
-    loading: true,
-  })
+  useAuthStore.setState({ user: null, profile: null, partnerProfile: null, loading: true })
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('authStore', () => {
   beforeEach(() => {
@@ -98,193 +75,116 @@ describe('authStore', () => {
     resetStore()
   })
 
-  // ---- setUser ----
-  it('setUser sets the user in state', () => {
+  it('setUser sets / clears the user', () => {
     useAuthStore.getState().setUser(fakeUser)
     expect(useAuthStore.getState().user).toEqual(fakeUser)
-  })
-
-  it('setUser(null) clears the user', () => {
-    useAuthStore.getState().setUser(fakeUser)
     useAuthStore.getState().setUser(null)
     expect(useAuthStore.getState().user).toBeNull()
   })
 
-  // ---- fetchProfile ----
   it('fetchProfile does nothing if no user', async () => {
     await useAuthStore.getState().fetchProfile()
     expect(mockFrom).not.toHaveBeenCalled()
   })
 
-  it('fetchProfile fetches profile and stores it', async () => {
+  it('fetchProfile stores profile (no partner)', async () => {
     useAuthStore.setState({ user: fakeUser })
-
-    const profileChain = chainable({ data: fakeProfile, error: null })
-    mockFrom.mockReturnValue(profileChain)
-
+    mockFrom.mockReturnValue(chainable({ data: fakeProfile, error: null }))
     await useAuthStore.getState().fetchProfile()
-
-    expect(mockFrom).toHaveBeenCalledWith('profiles')
     expect(useAuthStore.getState().profile).toEqual(fakeProfile)
     expect(useAuthStore.getState().partnerProfile).toBeNull()
   })
 
-  it('fetchProfile fetches partner when partner_id exists', async () => {
+  it('fetchProfile also loads the partner profile', async () => {
     useAuthStore.setState({ user: fakeUser })
-
-    const profileWithPartner = { ...fakeProfile, partner_id: 'partner-456' }
-    let callCount = 0
-
-    mockFrom.mockImplementation(() => {
-      callCount++
-      if (callCount === 1) {
-        return chainable({ data: profileWithPartner, error: null })
-      }
-      return chainable({ data: fakePartner, error: null })
-    })
-
+    mockFrom
+      .mockReturnValueOnce(chainable({ data: { ...fakeProfile, partner_id: 'partner-456' }, error: null }))
+      .mockReturnValueOnce(chainable({ data: fakePartner, error: null }))
     await useAuthStore.getState().fetchProfile()
-
-    expect(useAuthStore.getState().profile).toEqual(profileWithPartner)
     expect(useAuthStore.getState().partnerProfile).toEqual(fakePartner)
   })
 
-  it('fetchProfile handles supabase error gracefully', async () => {
-    useAuthStore.setState({ user: fakeUser })
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    mockFrom.mockReturnValue(
-      chainable({ data: null, error: { message: 'Not found' } })
-    )
-
+  it('fetchProfile creates a profile client-side when none exists (fallback)', async () => {
+    useAuthStore.setState({ user: { ...fakeUser, user_metadata: { display_name: 'Martin' } } as User })
+    mockFrom
+      .mockReturnValueOnce(chainable({ data: null, error: null }))            // select → rien
+      .mockReturnValueOnce(chainable({ data: fakeProfile, error: null }))     // insert().select().single()
     await useAuthStore.getState().fetchProfile()
-
-    expect(consoleSpy).toHaveBeenCalledWith(
-      '[authStore] fetchProfile error:',
-      'Not found'
-    )
-    expect(useAuthStore.getState().profile).toBeNull()
-    consoleSpy.mockRestore()
+    expect(useAuthStore.getState().profile).toEqual(fakeProfile)
   })
 
-  // ---- signIn ----
-  it('signIn calls supabase and sets user + fetches profile', async () => {
-    mockSignIn.mockResolvedValue({ data: { user: fakeUser, session: {} }, error: null })
+  it('signIn stores the user then fetches the profile', async () => {
+    mockSignIn.mockResolvedValue({ data: { user: fakeUser }, error: null })
     mockFrom.mockReturnValue(chainable({ data: fakeProfile, error: null }))
-
     await useAuthStore.getState().signIn('test@example.com', 'password')
-
-    expect(mockSignIn).toHaveBeenCalledWith({
-      email: 'test@example.com',
-      password: 'password',
-    })
+    expect(mockSignIn).toHaveBeenCalledWith({ email: 'test@example.com', password: 'password' })
     expect(useAuthStore.getState().user).toEqual(fakeUser)
+    expect(useAuthStore.getState().profile).toEqual(fakeProfile)
   })
 
-  it('signIn throws on error', async () => {
-    const authError = { message: 'Invalid credentials', status: 401 }
-    mockSignIn.mockResolvedValue({ data: { user: null, session: null }, error: authError })
-
-    await expect(
-      useAuthStore.getState().signIn('bad@email.com', 'wrong')
-    ).rejects.toEqual(authError)
+  it('signIn maps Supabase errors to a friendly French message', async () => {
+    mockSignIn.mockResolvedValue({ data: { user: null }, error: { message: 'Invalid login credentials' } })
+    await expect(useAuthStore.getState().signIn('a@b.c', 'x')).rejects.toThrow('Email ou mot de passe incorrect.')
   })
 
-  // ---- signUp ----
-  it('signUp creates user and inserts profile', async () => {
-    mockSignUp.mockResolvedValue({ data: { user: fakeUser }, error: null })
-    mockFrom.mockReturnValue(chainable({ data: null, error: null }))
-
-    await useAuthStore.getState().signUp('new@example.com', 'password', 'NewUser')
-
-    expect(mockSignUp).toHaveBeenCalledWith({
+  it('signUp passes display_name in metadata and reports email confirmation when no session', async () => {
+    mockSignUp.mockResolvedValue({ data: { user: { ...fakeUser, identities: [{}] }, session: null }, error: null })
+    const res = await useAuthStore.getState().signUp('new@example.com', 'password123', 'Martin')
+    expect(mockSignUp).toHaveBeenCalledWith(expect.objectContaining({
       email: 'new@example.com',
-      password: 'password',
-    })
-    expect(mockFrom).toHaveBeenCalledWith('profiles')
+      options: expect.objectContaining({ data: { display_name: 'Martin' } }),
+    }))
+    expect(res.needsEmailConfirmation).toBe(true)
+    // Le profil est créé par le trigger serveur : pas d'insert client
+    expect(mockFrom).not.toHaveBeenCalled()
   })
 
-  it('signUp throws if auth fails', async () => {
-    const authError = { message: 'Email already in use' }
-    mockSignUp.mockResolvedValue({ data: { user: null }, error: authError })
-
-    await expect(
-      useAuthStore.getState().signUp('existing@example.com', 'password', 'User')
-    ).rejects.toEqual(authError)
+  it('signUp with an immediate session logs the user in', async () => {
+    mockSignUp.mockResolvedValue({ data: { user: { ...fakeUser, identities: [{}] }, session: { access_token: 't' } }, error: null })
+    mockFrom.mockReturnValue(chainable({ data: fakeProfile, error: null }))
+    const res = await useAuthStore.getState().signUp('new@example.com', 'password123', 'Martin')
+    expect(res.needsEmailConfirmation).toBe(false)
+    expect(useAuthStore.getState().profile).toEqual(fakeProfile)
   })
 
-  it('signUp throws friendly error if profile insert fails', async () => {
-    mockSignUp.mockResolvedValue({ data: { user: fakeUser }, error: null })
-
-    const insertChain = chainable({ data: null, error: null })
-    insertChain.insert = vi.fn().mockResolvedValue({ error: { message: 'duplicate key' } })
-    mockFrom.mockReturnValue(insertChain)
-
-    await expect(
-      useAuthStore.getState().signUp('new@example.com', 'password', 'User')
-    ).rejects.toThrow('Compte créé mais erreur lors de la création du profil')
+  it('signUp detects an already-registered email (empty identities)', async () => {
+    mockSignUp.mockResolvedValue({ data: { user: { ...fakeUser, identities: [] }, session: null }, error: null })
+    await expect(useAuthStore.getState().signUp('dup@example.com', 'password123', 'X')).rejects.toThrow(/existe déjà/)
   })
 
-  // ---- signOut ----
-  it('signOut clears all state', async () => {
-    useAuthStore.setState({
-      user: fakeUser,
-      profile: fakeProfile as any,
-      partnerProfile: fakePartner as any,
-    })
+  it('requestPasswordReset calls Supabase with a redirect to /reset-password', async () => {
+    mockReset.mockResolvedValue({ error: null })
+    await useAuthStore.getState().requestPasswordReset('a@b.c')
+    expect(mockReset).toHaveBeenCalledWith('a@b.c', expect.objectContaining({ redirectTo: expect.stringContaining('/reset-password') }))
+  })
 
-    mockSignOut.mockResolvedValue({ error: null })
-
+  it('signOut clears state even if Supabase throws', async () => {
+    useAuthStore.setState({ user: fakeUser, profile: fakeProfile, partnerProfile: fakePartner })
+    mockSignOut.mockRejectedValue(new Error('network'))
     await useAuthStore.getState().signOut()
-
     expect(useAuthStore.getState().user).toBeNull()
     expect(useAuthStore.getState().profile).toBeNull()
     expect(useAuthStore.getState().partnerProfile).toBeNull()
   })
 
-  it('signOut clears state even if supabase throws', async () => {
-    useAuthStore.setState({ user: fakeUser, profile: fakeProfile as any })
-    mockSignOut.mockRejectedValue(new Error('network error'))
-
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    await useAuthStore.getState().signOut()
-    consoleSpy.mockRestore()
-
-    expect(useAuthStore.getState().user).toBeNull()
-    expect(useAuthStore.getState().profile).toBeNull()
+  it('linkPartner rejects codes that are not 8 chars', async () => {
+    await expect(useAuthStore.getState().linkPartner('abc')).rejects.toThrow('8 caractères')
+    expect(mockRpc).not.toHaveBeenCalled()
   })
 
-  // ---- linkPartner ----
-  it('linkPartner calls rpc and refetches profile', async () => {
+  it('linkPartner surfaces business errors raised by SQL (P0001) verbatim', async () => {
+    mockRpc.mockResolvedValue({ error: { code: 'P0001', message: 'Code invalide ou introuvable' } })
+    await expect(useAuthStore.getState().linkPartner('abcd1234')).rejects.toThrow('Code invalide ou introuvable')
+    expect(mockRpc).toHaveBeenCalledWith('link_partner_by_code', { invite_code: 'ABCD1234' })
+  })
+
+  it('linkPartner refetches the profile on success', async () => {
     useAuthStore.setState({ user: fakeUser })
     mockRpc.mockResolvedValue({ error: null })
-
-    const profileWithPartner = { ...fakeProfile, partner_id: 'partner-456' }
-    let callCount = 0
-    mockFrom.mockImplementation(() => {
-      callCount++
-      if (callCount === 1) return chainable({ data: profileWithPartner, error: null })
-      return chainable({ data: fakePartner, error: null })
-    })
-
-    await useAuthStore.getState().linkPartner('  abcd1234  ')
-
-    expect(mockRpc).toHaveBeenCalledWith('link_partner_by_code', {
-      invite_code: 'ABCD1234',
-    })
-  })
-
-  it('linkPartner throws on empty code', async () => {
-    await expect(
-      useAuthStore.getState().linkPartner('   ')
-    ).rejects.toThrow('Le code partenaire ne peut pas être vide')
-  })
-
-  it('linkPartner throws on rpc error', async () => {
-    mockRpc.mockResolvedValue({ error: { message: 'Invalid code' } })
-
-    await expect(
-      useAuthStore.getState().linkPartner('BADCODE')
-    ).rejects.toThrow('Invalid code')
+    mockFrom
+      .mockReturnValueOnce(chainable({ data: { ...fakeProfile, partner_id: 'partner-456' }, error: null }))
+      .mockReturnValueOnce(chainable({ data: fakePartner, error: null }))
+    await useAuthStore.getState().linkPartner('EFGH5678')
+    expect(useAuthStore.getState().partnerProfile).toEqual(fakePartner)
   })
 })
