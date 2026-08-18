@@ -414,7 +414,7 @@ export default function Dashboard() {
               </div>
             )}
 
-            <p className="text-xs text-text-dim/80 mt-4 capitalize">
+            <p className="text-xs text-text-dim/80 mt-4 first-letter:uppercase">
               {format(new Date(countdown.target_date), 'EEEE d MMMM yyyy', { locale: fr })}
             </p>
 
