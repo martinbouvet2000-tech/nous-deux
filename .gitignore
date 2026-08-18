@@ -29,3 +29,7 @@ dist-ssr
 .tsw?
 
 .vercel
+
+# Icônes PWA générées au build (npm run icons)
+public/icon-*.png
+public/apple-touch-icon.png
