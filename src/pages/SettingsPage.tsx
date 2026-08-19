@@ -350,9 +350,9 @@ export default function SettingsPage() {
         </button>
       </section>
 
-      <p className="lg:col-span-2 text-center text-[11px] tracking-[0.18em] uppercase text-[#9B9287] pt-2 pb-4">Nous Deux · v{__APP_VERSION__}</p>
       </div>
       </div>
+      <p className="text-center text-[11px] tracking-[0.18em] uppercase text-[#9B9287] pt-8 pb-4">Nous Deux · v{__APP_VERSION__}</p>
     </div>
   )
 }

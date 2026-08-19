@@ -62,11 +62,11 @@ export default function Login() {
       {/* ─── Left panel — branding (desktop) ─── */}
       <div className="hidden lg:flex items-center justify-center relative overflow-hidden z-10">
         <span className="absolute right-0 inset-y-[12%] w-px bg-gradient-to-b from-transparent via-[#D4A574]/25 to-transparent" aria-hidden="true" />
-        <div className="absolute rounded-full" style={{ top: '10%', left: '10%', width: 500, height: 500, background: 'rgba(212,165,116,0.08)', filter: 'blur(140px)', animation: 'loginOrbDrift1 12s ease-in-out infinite' }} aria-hidden="true" />
-        <div className="absolute rounded-full" style={{ bottom: '5%', right: '10%', width: 450, height: 450, background: 'rgba(194,120,142,0.06)', filter: 'blur(120px)', animation: 'loginOrbDrift2 14s ease-in-out infinite' }} aria-hidden="true" />
+        <div className="absolute rounded-full" style={{ top: '10%', left: '10%', width: 500, height: 500, background: 'radial-gradient(closest-side, rgba(212,165,116,0.10), rgba(212,165,116,0.04) 45%, transparent 72%)', animation: 'loginOrbDrift1 12s ease-in-out infinite' }} aria-hidden="true" />
+        <div className="absolute rounded-full" style={{ bottom: '5%', right: '10%', width: 450, height: 450, background: 'radial-gradient(closest-side, rgba(194,120,142,0.08), rgba(194,120,142,0.03) 45%, transparent 72%)', animation: 'loginOrbDrift2 14s ease-in-out infinite' }} aria-hidden="true" />
         <div className="relative z-10 text-center px-12 max-w-md">
           <div className="relative inline-block mb-12">
-            <div className="absolute rounded-full" style={{ top: '50%', left: '50%', transform: 'translate(-50%,-40%)', width: 120, height: 80, background: 'rgba(212,165,116,0.12)', filter: 'blur(40px)', animation: 'loginGlowPulse 4s ease-in-out infinite' }} aria-hidden="true" />
+            <div className="absolute rounded-full" style={{ top: '50%', left: '50%', transform: 'translate(-50%,-40%)', width: 120, height: 80, background: 'radial-gradient(closest-side, rgba(212,165,116,0.16), transparent 75%)', animation: 'loginGlowPulse 4s ease-in-out infinite' }} aria-hidden="true" />
             <Heart size={72} className="relative" fill="currentColor" style={{ color: '#D4A574', opacity: 0.85, filter: 'drop-shadow(0 4px 24px rgba(212,165,116,0.2))' }} aria-hidden="true" />
           </div>
           <Ornament className="max-w-[200px] mx-auto mb-6" />
@@ -83,7 +83,7 @@ export default function Login() {
           {/* Mobile branding */}
           <div className="text-center mb-8 lg:hidden animate-fade-in">
             <div className="relative inline-block mb-6">
-              <div className="absolute rounded-full" style={{ top: '50%', left: '50%', transform: 'translate(-50%,-40%)', width: 80, height: 60, background: 'rgba(212,165,116,0.15)', filter: 'blur(30px)', animation: 'loginGlowPulse 4s ease-in-out infinite' }} aria-hidden="true" />
+              <div className="absolute rounded-full" style={{ top: '50%', left: '50%', transform: 'translate(-50%,-40%)', width: 80, height: 60, background: 'radial-gradient(closest-side, rgba(212,165,116,0.2), transparent 75%)', animation: 'loginGlowPulse 4s ease-in-out infinite' }} aria-hidden="true" />
               <Heart size={48} className="relative" fill="currentColor" style={{ color: '#D4A574', opacity: 0.85, filter: 'drop-shadow(0 4px 20px rgba(212,165,116,0.2))' }} aria-hidden="true" />
             </div>
             <h1 className="font-display-italic text-[2.4rem] leading-[1.1] gradient-text-live">Nous Deux</h1>

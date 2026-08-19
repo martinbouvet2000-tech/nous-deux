@@ -231,7 +231,7 @@ export default function Thoughts() {
             onClick={sendThought}
             disabled={sending || !message.trim() || !partnerProfile}
             aria-label="Envoyer"
-            className="btn-shine inline-flex items-center justify-center size-11 shrink-0 rounded-full bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_10px_30px_-14px_rgba(194,120,142,0.7)] active:scale-[0.96] transition-all duration-200 disabled:bg-none disabled:bg-[#2A2523] disabled:text-[#6B635B] disabled:shadow-none disabled:cursor-not-allowed"
+            className="btn-shine inline-flex items-center justify-center size-11 shrink-0 rounded-full bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_10px_30px_-14px_rgba(194,120,142,0.7)] active:scale-[0.96] transition-all duration-200 disabled:bg-none disabled:bg-[#2C2724] disabled:text-[#7E7469] disabled:shadow-none disabled:cursor-not-allowed"
           >
             <Send size={17} aria-hidden="true" />
           </button>

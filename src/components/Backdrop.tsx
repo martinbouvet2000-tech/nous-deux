@@ -52,7 +52,7 @@ export default function Backdrop({ glowA = 'rgba(212,165,116,0.16)', glowB = 'rg
     let raf = 0
     let running = true
     let last = performance.now()
-    const FRAME = 1000 / 30 // 30 fps suffisent : les braises dérivent très lentement
+    const FRAME = 1000 / 24 // 24 fps suffisent : les braises dérivent très lentement
 
     // Sprites pré-rendus (un dégradé radial par couleur, une seule fois) au lieu de 70 gradients/frame
     const sprite = (rgb: string) => {
@@ -154,11 +154,11 @@ export default function Backdrop({ glowA = 'rgba(212,165,116,0.16)', glowB = 'rg
       {/* Aurores */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0 [contain:strict]" aria-hidden="true">
         <div
-          className="aurora absolute -top-[10%] -left-[5%] w-[36vw] h-[36vw] max-w-[460px] max-h-[460px] rounded-full blur-[60px] animate-aurora-1 will-change-transform"
+          className="aurora absolute -top-[10%] -left-[5%] w-[36vw] h-[36vw] max-w-[460px] max-h-[460px] rounded-full animate-aurora-1 will-change-transform"
           style={{ ['--glow' as string]: glowA }}
         />
         <div
-          className="aurora absolute -bottom-[12%] -right-[8%] w-[38vw] h-[38vw] max-w-[500px] max-h-[500px] rounded-full blur-[64px] animate-aurora-2 will-change-transform"
+          className="aurora absolute -bottom-[12%] -right-[8%] w-[38vw] h-[38vw] max-w-[500px] max-h-[500px] rounded-full animate-aurora-2 will-change-transform"
           style={{ ['--glow' as string]: glowB }}
         />
         {/* Vignette douce pour concentrer l'œil */}

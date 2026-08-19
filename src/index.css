@@ -291,7 +291,7 @@
   }
   /* Aurore : couleur interpolable (@property) + rendu 2× plus petit puis agrandi (flou moins cher) */
   @property --glow { syntax: '<color>'; inherits: false; initial-value: rgba(212,165,116,0.16); }
-  .aurora { background: radial-gradient(closest-side, var(--glow), transparent 70%); transition: --glow 1600ms ease-in-out; }
+  .aurora { background: radial-gradient(closest-side, var(--glow) 0%, color-mix(in oklab, var(--glow) 55%, transparent) 28%, color-mix(in oklab, var(--glow) 18%, transparent) 58%, transparent 76%); transition: --glow 1600ms ease-in-out; }
   .animate-aurora-1 { animation: aurora1 29s ease-in-out infinite alternate; }
   .animate-aurora-2 { animation: aurora2 37s ease-in-out infinite alternate; }
   @keyframes aurora1 { 0% { transform: translate(-8%, -4%) scale(2) rotate(0deg); } 100% { transform: translate(14%, 10%) scale(2.3) rotate(12deg); } }

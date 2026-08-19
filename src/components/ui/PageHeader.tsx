@@ -30,7 +30,7 @@ export default function PageHeader({ eyebrow, title, accent, subtitle, action, t
           <h1 className="font-display text-[2rem] md:text-[2.4rem] leading-[1.05] text-[#F0EAE0] text-balance">
             {title}{accent && <> <em className="font-display-italic text-[#D4A574]">{accent}</em></>}
           </h1>
-          {subtitle && <p className="mt-2 text-[13px] text-[#9B9287] max-w-[46ch] leading-relaxed">{subtitle}</p>}
+          {subtitle && <p className={`mt-2 text-[13px] text-[#9B9287] max-w-[46ch] leading-relaxed ${tabs ? 'md:min-h-[2.6rem]' : ''}`}>{subtitle}</p>}
         </div>
         {action && <div className="shrink-0 md:pt-1.5 [&>*]:w-full md:[&>*]:w-auto">{action}</div>}
       </div>

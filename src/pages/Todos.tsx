@@ -254,7 +254,7 @@ export default function TodosSection({ openSignal }: Props) {
                     <span className="emoji" aria-hidden="true">{list.emoji}</span>
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[15px] leading-snug text-[#F0EAE0] truncate">{list.title}</p>
+                    <p className="text-[15px] leading-snug text-[#F0EAE0] line-clamp-2">{list.title}</p>
                     <p className="mt-0.5 text-[13px] text-[#9B9287]">
                       {total > 0
                         ? <><span className="num">{done}/{total}</span> terminée{done > 1 ? 's' : ''}</>

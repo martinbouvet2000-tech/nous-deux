@@ -1,6 +1,6 @@
 /** Classes Tailwind partagées — une seule source de vérité pour le style des contrôles */
 export const BTN_PRIMARY =
-  'btn-shine inline-flex items-center justify-center gap-2 min-h-11 px-5 py-2 rounded-full text-sm font-medium bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_10px_30px_-14px_rgba(194,120,142,0.7)] hover:shadow-[0_14px_36px_-14px_rgba(212,165,116,0.8)] hover:-translate-y-px active:translate-y-0 active:scale-[0.98] transition-all duration-200 ease-out disabled:bg-none disabled:bg-[#2A2523] disabled:text-[#6B635B] disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:shadow-none'
+  'btn-shine inline-flex items-center justify-center gap-2 min-h-11 px-5 py-2 rounded-full text-sm font-medium bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_10px_30px_-14px_rgba(194,120,142,0.7)] hover:shadow-[0_14px_36px_-14px_rgba(212,165,116,0.8)] hover:-translate-y-px active:translate-y-0 active:scale-[0.98] transition-all duration-200 ease-out disabled:bg-none disabled:bg-[#2C2724] disabled:text-[#7E7469] disabled:shadow-[inset_0_0_0_1px_rgba(240,234,224,0.07)] disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:shadow-none'
 
 export const BTN_GHOST =
   'inline-flex items-center justify-center gap-2 min-h-11 px-5 py-2 rounded-full text-sm font-medium text-[#F0EAE0]/90 bg-transparent shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] hover:bg-white/[0.06] active:scale-[0.98] transition-all duration-200 ease-out disabled:opacity-60 disabled:cursor-not-allowed'

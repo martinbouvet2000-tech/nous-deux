@@ -33,14 +33,14 @@ function todayISO() {
 }
 
 const MOODS = [
-  { emoji: '😊', label: 'Heureux·se' },
-  { emoji: '🥰', label: 'Amoureux·se' },
-  { emoji: '😌', label: 'Serein·e' },
-  { emoji: '😴', label: 'Fatigué·e' },
-  { emoji: '😔', label: 'Triste' },
-  { emoji: '😤', label: 'Frustré·e' },
-  { emoji: '🤩', label: 'Excité·e' },
-  { emoji: '🥳', label: 'Festif·ve' },
+  { emoji: '😊', label: 'Joie' },
+  { emoji: '🥰', label: 'Amour' },
+  { emoji: '😌', label: 'Sérénité' },
+  { emoji: '😴', label: 'Fatigue' },
+  { emoji: '😔', label: 'Tristesse' },
+  { emoji: '😤', label: 'Frustration' },
+  { emoji: '🤩', label: 'Excitation' },
+  { emoji: '🥳', label: 'Fête' },
 ]
 
 const COUNTDOWN_EMOJIS = ['❤️', '✈️', '🏠', '🎉', '🎂', '💍', '🌅', '🎄']
@@ -328,7 +328,7 @@ export default function Dashboard() {
       <p className="font-display num text-[2rem] md:text-[2.25rem] tracking-tight leading-none text-[#F0EAE0]">{time}</p>
       <div className="mt-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 min-w-0">
         <SunArc tz={tz} />
-        <span className="text-xs text-[#9B9287] inline-flex items-center gap-1 min-w-0 max-w-full"><span className="truncate"><MapPin size={10} aria-hidden="true" />{city || timezoneCity(tz)}</span></span>
+        <span className="text-xs text-[#9B9287] whitespace-nowrap"><MapPin size={10} aria-hidden="true" className="inline -mt-0.5 mr-1" />{city || timezoneCity(tz)}</span>
       </div>
     </div>
   )
@@ -431,9 +431,9 @@ export default function Dashboard() {
   )
 
   const heartBlock = (
-    <section className="lux-card rounded-[20px] text-center py-10 xl:py-12 px-4 relative reveal flex flex-col items-center justify-center overflow-hidden min-h-[480px] xl:min-h-[520px]" style={{ animationDelay: '150ms' }} aria-label="Je pense à toi">
+    <section className="lux-card rounded-[20px] text-center py-10 xl:py-12 px-4 relative reveal flex flex-col items-center justify-center overflow-hidden min-h-[480px] xl:min-h-[520px] xl:flex-1" style={{ animationDelay: '150ms' }} aria-label="Je pense à toi">
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
-        <div className="w-72 h-72 rounded-full bg-primary/[0.05] blur-[90px] animate-glow-breath" />
+        <div className="w-[22rem] h-[22rem] rounded-full animate-glow-breath" style={{ background: 'radial-gradient(closest-side, rgba(212,165,116,0.10), rgba(212,165,116,0.03) 50%, transparent 72%)' }} />
       </div>
 
       <div className="relative inline-flex items-center justify-center mb-7 w-56 h-56">
@@ -526,7 +526,7 @@ export default function Dashboard() {
         </span>
         <span className="min-w-0 text-left">
           <span className="block truncate text-[12px] text-[#9B9287]">{name}</span>
-          <span className="block text-[13px] leading-snug text-[#F0EAE0] line-clamp-2">{m ? m.label : isMe ? 'Choisir mon humeur' : 'En attente…'}</span>
+          <span className="block text-[13px] leading-snug text-[#F0EAE0] line-clamp-2">{m ? m.label : isMe ? 'Comment ça va ?' : 'En attente…'}</span>
         </span>
       </>
     )
@@ -620,7 +620,7 @@ export default function Dashboard() {
         <div className="xl:col-span-12 mb-2 xl:mb-4">{hero}</div>
         {onboarding && <div className="xl:col-span-12">{onboarding}</div>}
 
-        <div className="xl:col-span-7 space-y-6">
+        <div className="xl:col-span-7 space-y-6 xl:flex xl:flex-col">
           {countdownBlock}
           {heartBlock}
         </div>

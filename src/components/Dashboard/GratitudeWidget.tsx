@@ -5,7 +5,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { run } from '@/lib/db'
-import { INPUT, BTN_GHOST, BTN_PRIMARY, CARD, CARD_EDGE } from '@/lib/ui'
+import { INPUT, BTN_GHOST, BTN_PRIMARY, CARD, CARD_EDGE, EYEBROW } from '@/lib/ui'
 
 export default function GratitudeWidget() {
   const { profile, partnerProfile } = useAuthStore()
@@ -75,13 +75,11 @@ export default function GratitudeWidget() {
 
   const header = (title: string) => (
     <div className="flex items-center justify-between mb-4">
-      <div className="flex items-center gap-2.5">
-        <div className="w-7 h-7 rounded-lg bg-[rgba(194,120,142,0.12)] flex items-center justify-center">
-          <Heart size={15} className="text-[#C2788E]" fill="currentColor" aria-hidden="true" />
-        </div>
-        <h2 className="font-display text-[17px] text-[#F0EAE0]">{title}</h2>
-      </div>
-      <span className="text-xs tracking-wide text-[#9B9287]">{format(new Date(), 'd MMM', { locale: fr })}</span>
+      <h2 className={`${EYEBROW} inline-flex items-center gap-1.5`}>
+        <Heart size={11} className="text-[#C2788E]" fill="currentColor" aria-hidden="true" />
+        {title}
+      </h2>
+      <span className="text-[11px] tracking-wide text-[#9B9287] num">{format(new Date(), 'd MMM', { locale: fr })}</span>
     </div>
   )
 
