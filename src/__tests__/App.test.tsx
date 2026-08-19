@@ -43,7 +43,7 @@ describe('App', () => {
       error: null,
     })
     render(<App />)
-    const headings = await screen.findAllByText('Nous Deux')
+    const headings = await screen.findAllByText('Awy')
     expect(headings.length).toBeGreaterThanOrEqual(1)
   })
 })

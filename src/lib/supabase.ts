@@ -8,7 +8,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   if (!supabaseUrl) missing.push('VITE_SUPABASE_URL')
   if (!supabaseAnonKey) missing.push('VITE_SUPABASE_ANON_KEY')
   throw new Error(
-    `[nous-deux] Variables d'environnement manquantes : ${missing.join(', ')}.\n` +
+    `[awy] Variables d'environnement manquantes : ${missing.join(', ')}.\n` +
     `Créez un fichier .env.local à la racine du projet avec :\n` +
     `  VITE_SUPABASE_URL=https://votre-projet.supabase.co\n` +
     `  VITE_SUPABASE_ANON_KEY=sb_publishable_xxx`

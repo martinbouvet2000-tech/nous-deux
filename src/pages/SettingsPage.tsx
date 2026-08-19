@@ -93,10 +93,10 @@ export default function SettingsPage() {
 
   const shareCode = async () => {
     if (!profile?.partner_code) return
-    const text = `Rejoins-moi sur Nous Deux ! Mon code d'invitation : ${profile.partner_code}\n${window.location.origin}${import.meta.env.BASE_URL}`
+    const text = `Rejoins-moi sur Awy ! Mon code d'invitation : ${profile.partner_code}\n${window.location.origin}${import.meta.env.BASE_URL}`
     try {
       if (navigator.share) {
-        await navigator.share({ title: 'Nous Deux', text })
+        await navigator.share({ title: 'Awy', text })
       } else {
         await navigator.clipboard.writeText(text)
         setCopied(true)
@@ -141,7 +141,7 @@ export default function SettingsPage() {
     if (!profile) return
     setBusy(true)
     try {
-      const tables = ['thoughts', 'love_notes', 'moods', 'gratitudes', 'taps', 'countdowns', 'calendar_events', 'timeline_events', 'capsules', 'todo_lists', 'todo_items', 'watch_items', 'bucket_items', 'question_answers'] as const
+      const tables = ['love_notes', 'vlogs', 'availability', 'schedule_slots', 'locations', 'moods', 'gratitudes', 'taps', 'countdowns', 'calendar_events', 'timeline_events', 'capsules', 'todo_lists', 'todo_items', 'watch_items', 'bucket_items', 'question_answers'] as const
       const out: Record<string, unknown> = { exported_at: new Date().toISOString(), profile }
       for (const t of tables) {
         const { data } = await supabase.from(t).select('*')
@@ -151,7 +151,7 @@ export default function SettingsPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `nous-deux-export-${new Date().toISOString().slice(0, 10)}.json`
+      a.download = `awy-export-${new Date().toISOString().slice(0, 10)}.json`
       a.click()
       URL.revokeObjectURL(url)
       toast.success('Export téléchargé.')
@@ -352,7 +352,7 @@ export default function SettingsPage() {
 
       </div>
       </div>
-      <p className="text-center text-[11px] tracking-[0.18em] uppercase text-[#9B9287] pt-8 pb-4">Nous Deux · v{__APP_VERSION__}</p>
+      <p className="text-center text-[11px] tracking-[0.18em] uppercase text-[#9B9287] pt-8 pb-4">Awy · v{__APP_VERSION__}</p>
     </div>
   )
 }

@@ -50,7 +50,7 @@ export default function Login() {
     : 'Bon retour'
 
   const subheading =
-    mode === 'signup' ? 'Rejoins ton/ta partenaire sur Nous Deux'
+    mode === 'signup' ? 'Rejoins ton/ta partenaire sur Awy'
     : mode === 'forgot' ? 'On t’envoie un lien pour choisir un nouveau mot de passe'
     : mode === 'check-email' ? `Un lien de confirmation a été envoyé à ${email}. Clique dessus pour activer ton compte (pense aux spams).`
     : mode === 'reset-sent' ? `Si un compte existe pour ${email}, un lien de réinitialisation vient d’être envoyé. Il est valable une heure.`
@@ -70,7 +70,7 @@ export default function Login() {
             <Heart size={72} className="relative" fill="currentColor" style={{ color: '#D4A574', opacity: 0.85, filter: 'drop-shadow(0 4px 24px rgba(212,165,116,0.2))' }} aria-hidden="true" />
           </div>
           <Ornament className="max-w-[200px] mx-auto mb-6" />
-          <h1 className="mb-5 font-display-italic text-[3.6rem] leading-[1.05] gradient-text-live">Nous Deux</h1>
+          <h1 className="mb-5 font-display-italic text-[3.6rem] leading-[1.05] gradient-text-live">Awy</h1>
           <p className="text-base leading-relaxed text-[#9B9287] max-w-[34ch] mx-auto text-balance">
             Votre espace intime, privé et chaleureux — peu importe la distance.
           </p>
@@ -86,7 +86,7 @@ export default function Login() {
               <div className="absolute rounded-full" style={{ top: '50%', left: '50%', transform: 'translate(-50%,-40%)', width: 80, height: 60, background: 'radial-gradient(closest-side, rgba(212,165,116,0.2), transparent 75%)', animation: 'loginGlowPulse 4s ease-in-out infinite' }} aria-hidden="true" />
               <Heart size={48} className="relative" fill="currentColor" style={{ color: '#D4A574', opacity: 0.85, filter: 'drop-shadow(0 4px 20px rgba(212,165,116,0.2))' }} aria-hidden="true" />
             </div>
-            <h1 className="font-display-italic text-[2.4rem] leading-[1.1] gradient-text-live">Nous Deux</h1>
+            <h1 className="font-display-italic text-[2.4rem] leading-[1.1] gradient-text-live">Awy</h1>
             <p className="text-[#9B9287] text-sm mt-2 text-balance">Votre espace intime, privé et chaleureux — peu importe la distance.</p>
           </div>
 

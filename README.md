@@ -1,4 +1,4 @@
-# Nous Deux
+# Awy (ex-Nous Deux)
 
 Application privée pour couples à distance : pensées en temps réel, petits mots, humeurs, question du jour, gratitude, compte à rebours des retrouvailles, agenda partagé (double fuseau), souvenirs, capsules temporelles, listes à deux.
 

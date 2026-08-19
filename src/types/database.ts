@@ -10,14 +10,18 @@ export interface Profile {
   partner_id: string | null
   partner_code: string
   relationship_start: string | null
+  share_location: boolean
   created_at: string
   updated_at: string
 }
+
+export type MoodState = 'joyful' | 'proud' | 'peaceful' | 'tired' | 'stressed' | 'focused' | 'down'
 
 export interface Mood {
   id: string
   user_id: string
   emoji: string
+  state: MoodState | null
   label: string | null
   note: string | null
   created_at: string
@@ -58,6 +62,8 @@ export interface CalendarEvent {
   start_at: string
   end_at: string
   is_shared: boolean
+  /** 'together' = à deux, 'solo' = seul·e */
+  kind: 'together' | 'solo'
   color: string
   created_at: string
 }
@@ -185,5 +191,48 @@ export interface BucketItem {
   is_done: boolean
   done_date: string | null
   created_by: string
+  created_at: string
+}
+
+export interface Vlog {
+  id: string
+  author_id: string
+  /** Chemin dans le bucket privé `vlogs` : `{author_id}/{uuid}.{ext}` */
+  media_path: string
+  media_type: 'image' | 'video'
+  caption: string | null
+  taken_at: string
+  created_at: string
+}
+
+export type AvailabilityStatus = 'free' | 'soon' | 'with_people' | 'busy_activity' | 'on_call' | 'unavailable'
+
+export interface Availability {
+  user_id: string
+  status: AvailabilityStatus
+  note: string | null
+  updated_at: string
+}
+
+export interface LocationPoint {
+  id: number
+  user_id: string
+  lat: number
+  lng: number
+  accuracy: number | null
+  recorded_at: string
+}
+
+export interface ScheduleSlot {
+  id: string
+  user_id: string
+  /** 1 = lundi … 7 = dimanche */
+  weekday: number
+  /** 'HH:MM:SS' */
+  start_time: string
+  end_time: string
+  title: string
+  location: string | null
+  color: string
   created_at: string
 }

@@ -23,8 +23,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Nous Deux',
-        short_name: 'Nous Deux',
+        name: 'Awy',
+        short_name: 'Awy',
         description: 'Un espace intime à deux, peu importe la distance.',
         lang: 'fr',
         start_url: base,

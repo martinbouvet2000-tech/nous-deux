@@ -10,8 +10,8 @@ import ConfirmDialogHost from '@/components/ui/ConfirmDialog'
 const Login = lazy(() => import('@/pages/Login'))
 const ResetPassword = lazy(() => import('@/pages/ResetPassword'))
 const Dashboard = lazy(() => import('@/pages/Dashboard'))
-const Thoughts = lazy(() => import('@/pages/Thoughts'))
 const CalendarPage = lazy(() => import('@/pages/CalendarPage'))
+const MapPage = lazy(() => import('@/pages/MapPage'))
 const Memories = lazy(() => import('@/pages/Memories'))
 const Activities = lazy(() => import('@/pages/Activities'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
@@ -77,7 +77,8 @@ export default function App() {
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route element={<AppLayout />}>
                 <Route path="/" element={<Dashboard />} />
-                <Route path="/thoughts" element={<Thoughts />} />
+                <Route path="/thoughts" element={<Navigate to="/memories" replace />} />
+                <Route path="/map" element={<MapPage />} />
                 <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/memories" element={<Memories />} />
                 <Route path="/activities" element={<Activities />} />

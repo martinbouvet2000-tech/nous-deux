@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Home, MessageCircleHeart, Calendar, Camera, Sparkles, Settings, Heart } from 'lucide-react'
+import { Home, Calendar, Camera, Sparkles, Settings, Heart, MapPin } from 'lucide-react'
 import AmbientMood from '@/components/AmbientMood'
 
 /**
@@ -7,9 +7,9 @@ import AmbientMood from '@/components/AmbientMood'
  */
 const NAV_ITEMS = [
   { to: '/', icon: Home, label: 'Accueil' },
-  { to: '/thoughts', icon: MessageCircleHeart, label: 'Pensées' },
-  { to: '/calendar', icon: Calendar, label: 'Agenda' },
   { to: '/memories', icon: Camera, label: 'Souvenirs' },
+  { to: '/calendar', icon: Calendar, label: 'Agenda' },
+  { to: '/map', icon: MapPin, label: 'Carte' },
   { to: '/activities', icon: Sparkles, label: 'À deux' },
 ]
 
@@ -25,7 +25,7 @@ export default function AppLayout() {
         <div className="px-6 pt-8 pb-7">
           <div className="flex items-center gap-3">
             <Heart size={17} className="text-[#D4A574]/70" fill="currentColor" aria-hidden="true" />
-            <span className="font-display text-[17px] text-[#F0EAE0]/95 tracking-tight">Nous Deux</span>
+            <span className="font-display text-[17px] text-[#F0EAE0]/95 tracking-tight">Awy</span>
           </div>
         </div>
 
