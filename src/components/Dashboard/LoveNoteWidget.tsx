@@ -96,7 +96,7 @@ export default function LoveNoteWidget() {
         <div className="absolute -bottom-10 -left-10 w-32 h-32 rounded-full bg-[rgba(212,165,116,0.06)] blur-[50px]" aria-hidden="true" />
         <div className="absolute top-0 left-[10%] right-[10%] h-px bg-gradient-to-r from-transparent via-[rgba(194,120,142,0.15)] to-transparent opacity-70 group-hover:opacity-100 transition-opacity duration-500" aria-hidden="true" />
 
-        <div className="relative px-5 py-5 md:px-6 md:py-6 bg-[rgba(255,255,255,0.02)] rounded-2xl backdrop-blur-sm">
+        <div className="lux-card relative px-5 py-5 md:px-6 md:py-6 rounded-2xl">
           <div className="flex items-start gap-3.5">
             <div className="shrink-0 mt-0.5">
               <div className="w-8 h-8 rounded-xl bg-[rgba(194,120,142,0.12)] flex items-center justify-center">
@@ -104,9 +104,9 @@ export default function LoveNoteWidget() {
               </div>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs text-[#D99AAD] font-medium uppercase tracking-wider mb-2">Petit mot de {partnerProfile.display_name}</p>
-              <p className="text-base md:text-lg font-light leading-relaxed tracking-tight text-[#F0EAE0]/90 italic break-words">« {noteForMe.content} »</p>
-              <p className="text-xs tracking-wide text-[#8A8177] mt-2.5">
+              <p className="text-[11px] text-[#D99AAD] font-medium uppercase tracking-[0.18em] mb-2">Petit mot de {partnerProfile.display_name}</p>
+              <p className="font-display-italic text-xl md:text-[1.45rem] leading-snug text-[#F0EAE0]/92 break-words text-balance">« {noteForMe.content} »</p>
+              <p className="text-xs tracking-wide text-[#9B9287] mt-2.5">
                 {formatDistanceToNow(new Date(noteForMe.created_at), { addSuffix: true, locale: fr })}
               </p>
             </div>
@@ -124,7 +124,7 @@ export default function LoveNoteWidget() {
   return (
     <div className="relative overflow-hidden rounded-2xl group">
       <div className="absolute top-0 left-[15%] right-[15%] h-px bg-gradient-to-r from-transparent via-[rgba(212,165,116,0.12)] to-transparent opacity-60 group-hover:opacity-100 transition-opacity duration-500 z-10" aria-hidden="true" />
-      <div className="relative px-5 py-4 md:px-6 rounded-2xl bg-[#1E1B17] transition-all duration-500 ease-out hover:bg-[#252118]">
+      <div className="lux-card relative px-5 py-4 md:px-6 rounded-2xl transition-all duration-500 ease-out">
         {justSent ? (
           <div className="flex items-center justify-center gap-2 py-1 animate-bounce-in" role="status">
             <span className="text-[#C2788E] text-sm font-medium leading-relaxed">Petit mot envoyé avec amour</span>
@@ -141,13 +141,13 @@ export default function LoveNoteWidget() {
                 <PenLine size={14} className="text-[#C2788E]" aria-hidden="true" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-medium text-[#F0EAE0]/80 leading-relaxed">
+                <p className="font-display text-[16px] text-[#F0EAE0] leading-snug">
                   {noteFromMe ? `Ton mot pour ${partnerProfile.display_name}` : `Envoie un petit mot à ${partnerProfile.display_name}`}
                 </p>
-                {noteFromMe && <p className="text-xs tracking-wide text-[#8A8177] italic truncate">« {noteFromMe.content} »</p>}
+                {noteFromMe && <p className="font-display-italic text-sm text-[#9B9287] truncate">« {noteFromMe.content} »</p>}
               </div>
             </div>
-            <button onClick={() => setShowEditor(true)} className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-[#9B9287] bg-transparent hover:text-[#F0EAE0] hover:bg-[rgba(212,165,116,0.06)] active:scale-[0.98] transition-all duration-300 shrink-0">
+            <button onClick={() => setShowEditor(true)} className="btn-tertiary shrink-0">
               <PenLine size={12} aria-hidden="true" />
               {noteFromMe ? 'Modifier' : 'Écrire'}
             </button>

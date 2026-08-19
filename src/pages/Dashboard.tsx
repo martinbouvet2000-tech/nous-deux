@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
-import { Heart, MapPin, Timer, Send, Lock, MessageCircle, Plus, X, Link2, PartyPopper } from 'lucide-react'
+import { Heart, MapPin, Timer, Send, Lock, Plus, X, Link2, PartyPopper, Moon, Flame, Hourglass } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { differenceInDays, differenceInHours, differenceInMinutes, isPast, format, parseISO } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -13,7 +13,11 @@ import { confirm } from '@/lib/confirm'
 import { run } from '@/lib/db'
 import { toast } from '@/lib/toast'
 import { timezoneDiffLabel, timezoneCity, formatTimeIn } from '@/lib/timezone'
-import { BTN_PRIMARY, BTN_GHOST, INPUT, LABEL } from '@/lib/ui'
+import { BTN_PRIMARY, BTN_GHOST, INPUT, LABEL, EYEBROW } from '@/lib/ui'
+import Ornament from '@/components/ui/Ornament'
+import CountUp from '@/components/ui/CountUp'
+import { shine, unshine } from '@/lib/shine'
+import { utcOffsetMinutes } from '@/lib/timezone'
 
 /* ═══ Helpers ═══ */
 function getGreeting(): string {
@@ -41,6 +45,58 @@ const MOODS = [
 
 const COUNTDOWN_EMOJIS = ['❤️', '✈️', '🏠', '🎉', '🎂', '💍', '🌅', '🎄']
 
+/** Heure locale décimale (0-24) dans un fuseau */
+function hourIn(tz: string): number {
+  const off = utcOffsetMinutes(tz)
+  const d = new Date(Date.now() + off * 60_000)
+  return d.getUTCHours() + d.getUTCMinutes() / 60
+}
+/**
+ * Arc solaire : position du soleil dans la journée locale (approx. lever 6h30 / coucher 20h30).
+ * La nuit : arc éteint + croissant de lune. Aucune API, juste l'heure sur place.
+ */
+function SunArc({ tz }: { tz: string }) {
+  const h = hourIn(tz)
+  const rise = 6.5, set = 20.5
+  const isDay = h >= rise && h <= set
+  const t = isDay ? (h - rise) / (set - rise) : 0
+  // demi-cercle de (4,22) à (40,22), rayon 18
+  const ang = Math.PI * (1 - t)
+  const sx = 22 + 18 * Math.cos(ang), sy = 22 - 18 * Math.sin(ang)
+  return (
+    <svg viewBox="0 0 44 24" className="h-6 w-11" aria-hidden="true">
+      <path d="M4 22 A18 18 0 0 1 40 22" fill="none" stroke="rgba(240,234,224,0.12)" strokeWidth="1.25" />
+      {isDay ? (
+        <>
+          <path d="M4 22 A18 18 0 0 1 40 22" fill="none" stroke="#D4A574" strokeWidth="1.25" strokeLinecap="round" strokeDasharray="56.6" strokeDashoffset={56.6 * (1 - t)} />
+          <circle cx={sx} cy={sy} r="2.6" fill="#F0EAE0" style={{ filter: 'drop-shadow(0 0 5px rgba(212,165,116,0.9))' }} />
+        </>
+      ) : (
+        <path d="M25 6.5a5 5 0 1 1-6.2-6.2 4 4 0 0 0 6.2 6.2z" transform="translate(-1,4)" fill="#9B9CC7" opacity="0.85" />
+      )}
+    </svg>
+  )
+}
+function isNightIn(tz: string) { const h = hourIn(tz); return h < 6.5 || h > 20.5 }
+
+interface BurstHeart { id: number; bx: string; by: string; br: string; size: number; delay: number; hue: string }
+let burstSeq = 0
+function makeBurst(n = 14): BurstHeart[] {
+  return Array.from({ length: n }, (_, i) => {
+    const ang = (i / n) * Math.PI * 2 + (Math.random() - 0.5) * 0.6
+    const dist = 70 + Math.random() * 70
+    return {
+      id: ++burstSeq,
+      bx: `${Math.cos(ang) * dist}px`,
+      by: `${Math.sin(ang) * dist - 30}px`,
+      br: `${(Math.random() - 0.5) * 120}deg`,
+      size: 8 + Math.random() * 10,
+      delay: Math.random() * 120,
+      hue: Math.random() < 0.55 ? '#D4A574' : '#D99AAD',
+    }
+  })
+}
+
 /* ═══ DASHBOARD ═══ */
 export default function Dashboard() {
   const { profile, partnerProfile } = useAuthStore()
@@ -53,6 +109,7 @@ export default function Dashboard() {
   const [partnerTodayCount, setPartnerTodayCount] = useState(0)
   const [receivedTap, setReceivedTap] = useState(false)
   const [streak, setStreak] = useState(0)
+  const [burst, setBurst] = useState<BurstHeart[]>([])
 
   // Countdown
   const [countdown, setCountdown] = useState<Countdown | null>(null)
@@ -203,6 +260,9 @@ export default function Dashboard() {
   const sendTap = async () => {
     if (!profile || !partnerProfile || tapped) return
     setTapped(true)
+    setBurst(makeBurst())
+    setTimeout(() => setBurst([]), 1300)
+    try { navigator.vibrate?.(12) } catch { /* non supporté */ }
     const { ok } = await run(
       supabase.from('taps').insert({ sender_id: profile.id, receiver_id: partnerProfile.id }),
       { errorMessage: "Impossible d'envoyer ta pensée." },
@@ -256,335 +316,347 @@ export default function Dashboard() {
 
   if (!profile) return null
   const timeDiff = partnerProfile ? timezoneDiffLabel(profile.timezone, partnerProfile.timezone) : null
+  const todayLabel = format(new Date(), 'EEEE d MMMM', { locale: fr })
 
-  return (
-    <div className="max-w-2xl mx-auto px-5 py-8 animate-fade-in">
+  const cdPct = countdown
+    ? Math.max(0, Math.min(100, ((Date.now() - new Date(countdown.created_at).getTime()) / Math.max(1, new Date(countdown.target_date).getTime() - new Date(countdown.created_at).getTime())) * 100))
+    : 0
 
-      {/* ════════ SECTION 1: Greeting + Clocks ════════ */}
-      <section className="text-center mb-8 pt-4">
-        <p className="text-xs tracking-[0.25em] uppercase text-text-dim/80 mb-4">{getGreeting()}</p>
-        <h1 className="text-3xl md:text-[2.5rem] font-light tracking-tight mb-7 gradient-text leading-tight">
-          {profile.display_name}
-          {partnerProfile && <span className="text-text-dim/50 mx-2 font-extralight">&</span>}
-          {partnerProfile?.display_name}
-        </h1>
+  /* ─── Blocs ─── */
+  const clockCard = (tz: string, city: string | null, time: string, k: string) => (
+    <div key={k} className={`lux-card rounded-2xl px-4 py-4 text-center transition-colors ${isNightIn(tz) ? 'bg-[#1A1714]' : ''}`} onMouseMove={shine} onMouseLeave={unshine}>
+      <p className="font-display num text-[2rem] md:text-[2.25rem] tracking-tight leading-none text-[#F0EAE0]">{time}</p>
+      <div className="mt-2 flex items-center justify-center gap-2">
+        <SunArc tz={tz} />
+        <span className="text-xs text-[#9B9287] inline-flex items-center gap-1 truncate"><MapPin size={10} aria-hidden="true" />{city || timezoneCity(tz)}</span>
+      </div>
+    </div>
+  )
 
-        <div className="flex items-center justify-center gap-8 text-sm">
-          <div className="text-center">
-            <p className="text-2xl font-light tabular-nums tracking-tight">{time1}</p>
-            <p className="text-xs text-text-dim mt-1 flex items-center justify-center gap-1">
-              <MapPin size={10} aria-hidden="true" />
-              {profile.location_city || timezoneCity(profile.timezone)}
-            </p>
+  const clocks = (
+    <div className={`grid items-center gap-3 w-full ${partnerProfile ? 'grid-cols-[1fr_auto_1fr]' : 'grid-cols-1 max-w-[220px] mx-auto'}`}>
+      {clockCard(profile.timezone, profile.location_city, time1, 'me')}
+      {partnerProfile && (
+        <>
+          <div className="relative flex items-center justify-center min-w-[64px]">
+            <span className="absolute inset-x-0 top-1/2 h-px bg-gradient-to-r from-transparent via-[#D4A574]/30 to-transparent" aria-hidden="true" />
+            <span className="relative num rounded-full bg-[#241F1A] px-2.5 py-1 text-[11px] font-medium text-[#D4A574] shadow-[inset_0_0_0_1px_rgba(212,165,116,0.2)]">{timeDiff ?? '= heure'}</span>
           </div>
-          {partnerProfile && (
-            <>
-              <div className="flex flex-col items-center gap-1">
-                <div className="w-8 h-px bg-gradient-to-r from-transparent via-text-dim/30 to-transparent" />
-                <span className="text-[11px] text-text-dim">{timeDiff ?? 'même heure'}</span>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-light tabular-nums tracking-tight">{time2}</p>
-                <p className="text-xs text-text-dim mt-1 flex items-center justify-center gap-1">
-                  <MapPin size={10} aria-hidden="true" />
-                  {partnerProfile.location_city || timezoneCity(partnerProfile.timezone)}
-                </p>
-              </div>
-            </>
-          )}
-        </div>
-      </section>
-
-      {/* ════════ Onboarding — pas encore de partenaire ════════ */}
-      {!partnerProfile && (
-        <section className="relative overflow-hidden rounded-2xl p-5 md:p-6 bg-[#1E1B17] mb-6 text-center">
-          <div className="absolute inset-0 bg-gradient-to-br from-[rgba(212,165,116,0.05)] to-[rgba(194,120,142,0.04)] pointer-events-none" />
-          <div className="relative">
-            <div className="w-12 h-12 rounded-2xl bg-[rgba(212,165,116,0.12)] flex items-center justify-center mx-auto mb-3">
-              <Link2 size={20} className="text-[#D4A574]" aria-hidden="true" />
-            </div>
-            <p className="text-sm text-[#F0EAE0] font-medium">Il manque quelqu'un ici</p>
-            <p className="text-xs text-[#9B9287] mt-1.5 leading-relaxed max-w-[300px] mx-auto">
-              Ton code d'invitation : <span className="font-mono tracking-widest text-[#F0EAE0]">{profile.partner_code}</span>.
-              Partage-le, ou entre le sien pour vous lier.
-            </p>
-            <Link to="/settings" className={`${BTN_PRIMARY} mt-4`}>Inviter ou lier</Link>
-          </div>
-        </section>
+          {clockCard(partnerProfile.timezone, partnerProfile.location_city, time2, 'partner')}
+        </>
       )}
+    </div>
+  )
 
-      {/* ════════ Love Note ════════ */}
-      <LoveNoteWidget />
+  const hero = (
+    <section className="text-center reveal" aria-labelledby="hero-title">
+      <Ornament className="max-w-[220px] mx-auto mb-5" />
+      <p className={`${EYEBROW} mb-3`}>{getGreeting()} · <span className="first-letter:uppercase inline-block">{todayLabel}</span></p>
+      <h1 id="hero-title" className="font-display-italic text-[2.6rem] md:text-[3.4rem] xl:text-[3.8rem] leading-[1.05] mb-7 gradient-text-live text-balance">
+        {profile.display_name}
+        {partnerProfile && <span className="font-display-italic text-[0.72em] text-[#D4A574]/85 mx-[0.18em] align-baseline">&amp;</span>}
+        {partnerProfile?.display_name}
+      </h1>
+      <div className="max-w-[560px] mx-auto">{clocks}</div>
+    </section>
+  )
 
-      {/* ════════ SECTION 2: Heart ════════ */}
-      <section className="text-center py-16 mb-2 relative">
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
-          <div className="w-64 h-64 rounded-full bg-primary/[0.04] blur-[80px] animate-glow-breath" />
-        </div>
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
-          <div className="w-40 h-40 rounded-full bg-secondary/[0.06] blur-[60px] animate-glow-breath" style={{ animationDelay: '2s' }} />
-        </div>
+  const onboarding = !partnerProfile && (
+    <section className="lux-card relative overflow-hidden rounded-[20px] p-5 md:p-6 text-center reveal" style={{ animationDelay: '50ms' }} onMouseMove={shine} onMouseLeave={unshine} aria-labelledby="onb-title">
+      <div className="w-12 h-12 rounded-full bg-[rgba(212,165,116,0.12)] shadow-[inset_0_0_0_1px_rgba(212,165,116,0.25)] flex items-center justify-center mx-auto mb-3">
+        <Link2 size={20} className="text-[#D4A574]" aria-hidden="true" />
+      </div>
+      <h2 id="onb-title" className="font-display text-xl text-[#F0EAE0]">Il manque quelqu'un ici</h2>
+      <p className="text-[13px] text-[#9B9287] mt-1.5 leading-relaxed max-w-[300px] mx-auto">
+        Ton code d'invitation : <span className="font-mono tracking-widest text-[#F0EAE0]">{profile.partner_code}</span>.
+        Partage-le, ou entre le sien pour vous lier.
+      </p>
+      <Link to="/settings" className={`${BTN_PRIMARY} mt-4`}>Inviter ou lier</Link>
+    </section>
+  )
 
-        <div className="relative inline-flex items-center justify-center mb-8">
-          <div className={`absolute w-36 h-36 rounded-full transition-all duration-1000 ${
-            tapped ? 'bg-secondary/20 scale-125 blur-xl' : receivedTap ? 'bg-secondary/12 scale-115 blur-lg' : 'border border-primary/[0.08] animate-heart-breath'
-          }`} aria-hidden="true" />
-          <div className={`absolute w-28 h-28 rounded-full transition-all duration-700 ${
-            tapped ? 'bg-secondary/15 scale-110' : receivedTap ? 'bg-secondary/10 scale-105' : 'bg-primary/[0.03]'
-          }`} aria-hidden="true" />
-
-          <button
-            onClick={sendTap}
-            disabled={tapped || !partnerProfile}
-            aria-label={partnerProfile ? `Envoyer « je pense à toi » à ${partnerProfile.display_name}` : 'Lie ton/ta partenaire pour envoyer une pensée'}
-            title={partnerProfile ? 'Je pense à toi' : 'Lie ton/ta partenaire d’abord'}
-            className={`relative z-10 w-24 h-24 rounded-full flex items-center justify-center transition-all duration-500 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/50 ${
-              tapped ? 'scale-115' : receivedTap ? 'scale-108' : 'hover:scale-105 active:scale-90'
-            } disabled:cursor-not-allowed`}
-          >
-            <Heart
-              size={46}
-              strokeWidth={1.2}
-              aria-hidden="true"
-              className={`transition-all duration-700 ease-out ${
-                tapped
-                  ? 'text-secondary fill-secondary drop-shadow-[0_0_20px_rgba(194,120,142,0.5)]'
-                  : receivedTap
-                    ? 'text-secondary/90 fill-secondary/90 drop-shadow-[0_0_15px_rgba(194,120,142,0.3)]'
-                    : 'text-primary/50 fill-primary/20 hover:text-primary/80 hover:fill-primary/30 drop-shadow-[0_0_12px_rgba(212,165,116,0.15)]'
-              }`}
-            />
-          </button>
-        </div>
-
-        <p className="text-[15px] font-light tracking-wide mb-2" aria-live="polite">
-          {tapped ? (
-            <span className="text-secondary/90 animate-fade-in">Envoyé avec amour</span>
-          ) : receivedTap ? (
-            <span className="text-secondary/80 animate-fade-in">{partnerProfile?.display_name} pense à toi</span>
-          ) : (
-            <span className="text-text-muted/70">Je pense à toi</span>
-          )}
-        </p>
-
-        <div className="flex items-center justify-center gap-4 text-xs text-text-dim">
-          {streak > 0 && (
-            <span className="flex items-center gap-1.5">
-              <span aria-hidden="true">🔥</span>
-              <span className="tabular-nums">{streak} jour{streak > 1 ? 's' : ''} d'affilée</span>
-            </span>
-          )}
-          {todayCount > 0 && <span>{todayCount} envoyé{todayCount > 1 ? 's' : ''}</span>}
-          {partnerTodayCount > 0 && <span>{partnerTodayCount} reçu{partnerTodayCount > 1 ? 's' : ''}</span>}
-        </div>
-
-        {daysTogether !== null && daysTogether >= 0 && (
-          <p className="text-xs text-text-dim/70 mt-5 tracking-[0.15em] uppercase">
-            Jour {daysTogether + 1} ensemble
+  const countdownBlock = (
+    <section className="lux-card relative overflow-hidden rounded-[20px] px-5 py-7 md:p-8 text-center reveal" style={{ animationDelay: '100ms' }} onMouseMove={shine} onMouseLeave={unshine} aria-labelledby="cd-title">
+      {countdown ? (
+        <>
+          <h2 id="cd-title" className={`${EYEBROW} mb-2 inline-flex items-center gap-1.5`}>
+            <Hourglass size={11} aria-hidden="true" className="text-[#D4A574]" />
+            {remaining.passed ? 'On y est' : 'Prochaines retrouvailles'}
+          </h2>
+          <p className="font-display-italic text-[1.45rem] text-[#F0EAE0] mb-6 text-balance">
+            <span className="emoji mr-2" aria-hidden="true">{countdown.emoji}</span>{countdown.title}
           </p>
-        )}
-      </section>
 
-      {/* ════════ SECTION 3: Countdown ════════ */}
-      <section className="text-center py-8 mb-2 border-t border-b border-white/[0.04] relative group">
-        {countdown ? (
-          <>
-            <p className="text-xs tracking-[0.2em] uppercase text-text-dim mb-1">
-              <Timer size={10} className="inline mr-1 -mt-px" aria-hidden="true" />
-              {remaining.passed ? 'On y est' : 'Prochaines retrouvailles'}
-            </p>
-            <p className="text-sm text-text-muted mb-4">{countdown.emoji} {countdown.title}</p>
-
-            {remaining.passed ? (
-              <div>
-                <p className="text-2xl font-light gradient-text mb-1 inline-flex items-center gap-2"><PartyPopper size={22} aria-hidden="true" /> C'est aujourd'hui !</p>
-              </div>
-            ) : (
-              <div className="flex items-baseline justify-center gap-6">
-                {[
-                  { v: remaining.days, l: remaining.days > 1 ? 'jours' : 'jour' },
-                  { v: remaining.hours, l: remaining.hours > 1 ? 'heures' : 'heure' },
-                  { v: remaining.minutes, l: 'min' },
-                ].map(({ v, l }) => (
-                  <div key={l} className="text-center">
-                    <p className="text-4xl font-extralight tabular-nums tracking-tight">{v}</p>
-                    <p className="text-[11px] tracking-[0.15em] uppercase text-text-dim mt-1">{l}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <p className="text-xs text-text-dim/80 mt-4 first-letter:uppercase">
-              {format(new Date(countdown.target_date), 'EEEE d MMMM yyyy', { locale: fr })}
-            </p>
-
-            <div className="mt-3 flex items-center justify-center gap-3">
-              <button onClick={() => setShowCountdownForm(true)} className="text-xs text-text-dim hover:text-[#D4A574] transition-colors">
-                + Un autre
-              </button>
-              <button onClick={removeCountdown} className="text-xs text-text-dim hover:text-red-300 transition-colors inline-flex items-center gap-1" aria-label="Retirer ce compte à rebours">
-                <X size={11} aria-hidden="true" /> Retirer
-              </button>
-            </div>
-          </>
-        ) : (
-          <button onClick={() => setShowCountdownForm(true)} className="w-full py-2 text-center group/cd">
-            <p className="text-xs tracking-[0.2em] uppercase text-text-dim mb-2">
-              <Timer size={10} className="inline mr-1 -mt-px" aria-hidden="true" />
-              Prochaines retrouvailles
-            </p>
-            <p className="text-sm text-text-muted group-hover/cd:text-[#F0EAE0] transition-colors inline-flex items-center gap-2">
-              <Plus size={14} className="text-[#D4A574]" aria-hidden="true" /> Ajouter une date à attendre ensemble
-            </p>
-          </button>
-        )}
-      </section>
-
-      {/* ════════ SECTION 4: Mood ════════ */}
-      <section className="py-6 mb-2">
-        {showMoodPicker ? (
-          <div className="text-center animate-fade-in">
-            <p className="text-sm text-text-muted mb-4" id="mood-label">Comment te sens-tu ?</p>
-            <div className="flex flex-wrap justify-center gap-2 max-w-xs mx-auto" role="group" aria-labelledby="mood-label">
-              {MOODS.map(({ emoji, label }) => (
-                <button
-                  key={emoji}
-                  onClick={() => selectMood(emoji, label)}
-                  className="w-12 h-12 rounded-xl flex items-center justify-center text-xl hover:bg-white/[0.05] active:scale-90 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/50"
-                  title={label}
-                  aria-label={label}
-                >
-                  {emoji}
-                </button>
+          {remaining.passed ? (
+            <p className="font-display text-3xl gradient-text mb-1 inline-flex items-center gap-2"><PartyPopper size={24} aria-hidden="true" /> C'est aujourd'hui !</p>
+          ) : (
+            <div className="grid grid-cols-3 gap-2 w-full max-w-[340px] mx-auto">
+              {[
+                { v: remaining.days, l: remaining.days > 1 ? 'jours' : 'jour', pad: 0, anim: true },
+                { v: remaining.hours, l: remaining.hours > 1 ? 'heures' : 'heure', pad: 2, anim: false },
+                { v: remaining.minutes, l: 'min', pad: 2, anim: false },
+              ].map(({ v, l, pad, anim }) => (
+                <div key={l} className="flex flex-col items-center">
+                  <span className="font-display num text-[52px] md:text-[60px] leading-[0.95] text-[#F0EAE0]">
+                    {anim ? <CountUp to={v} ms={900} /> : String(v).padStart(pad, '0')}
+                  </span>
+                  <span className="mt-2 text-[10px] tracking-[0.18em] uppercase text-[#9B9287]">{l}</span>
+                </div>
               ))}
             </div>
-            <button onClick={() => setShowMoodPicker(false)} className="text-xs text-text-dim mt-3 hover:text-text-muted">
-              Annuler
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center justify-center gap-6">
-            <button
-              onClick={() => setShowMoodPicker(true)}
-              className="flex items-center gap-2 hover:bg-white/[0.03] px-3 py-2 rounded-xl transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/40"
-              aria-label="Choisir mon humeur"
-            >
-              {myMood ? (
-                <span className="text-2xl" aria-hidden="true">{myMood.emoji}</span>
-              ) : (
-                <span className="w-8 h-8 rounded-full border border-dashed border-white/[0.12] flex items-center justify-center text-text-dim text-xs" aria-hidden="true">?</span>
-              )}
-              <div className="text-left">
-                <p className="text-xs text-text-muted">{profile.display_name}</p>
-                <p className="text-xs text-text-dim">{myMood ? myMood.label : 'Définir mon humeur'}</p>
-              </div>
-            </button>
-
-            {partnerProfile && (
-              <>
-                <div className="w-px h-6 bg-white/[0.06]" aria-hidden="true" />
-                <div className="flex items-center gap-2 px-3 py-2">
-                  {partnerMood ? (
-                    <span className="text-2xl" aria-hidden="true">{partnerMood.emoji}</span>
-                  ) : (
-                    <span className="w-8 h-8 rounded-full border border-dashed border-white/[0.06] flex items-center justify-center" aria-hidden="true">
-                      <Heart size={12} className="text-text-dim/40" />
-                    </span>
-                  )}
-                  <div className="text-left">
-                    <p className="text-xs text-text-muted">{partnerProfile.display_name}</p>
-                    <p className="text-xs text-text-dim">{partnerMood ? partnerMood.label : 'En attente…'}</p>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </section>
-
-      {/* ════════ SECTION 5: Question du jour ════════ */}
-      {question && (
-        <section className="py-8 border-t border-white/[0.04]">
-          <div className="text-center mb-6">
-            <p className="text-xs tracking-[0.2em] uppercase text-text-dim mb-4">
-              <MessageCircle size={10} className="inline mr-1 -mt-px" aria-hidden="true" />
-              Question du jour
-            </p>
-            <p className="text-lg md:text-xl font-light italic leading-relaxed max-w-md mx-auto">
-              {question.question}
-            </p>
-          </div>
-
-          {savedAnswer ? (
-            <div className="max-w-md mx-auto space-y-3">
-              <div className="rounded-xl p-4 bg-white/[0.03]">
-                <p className="text-xs text-primary uppercase tracking-wider mb-1.5">Toi</p>
-                <p className="text-sm leading-relaxed text-text/80 whitespace-pre-wrap">{savedAnswer}</p>
-              </div>
-              {partnerAnswer ? (
-                <div className="rounded-xl p-4 bg-white/[0.03] animate-fade-in">
-                  <p className="text-xs text-secondary uppercase tracking-wider mb-1.5">{partnerProfile?.display_name}</p>
-                  <p className="text-sm leading-relaxed text-text/80 whitespace-pre-wrap">{partnerAnswer}</p>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center gap-2 text-text-dim text-xs py-3">
-                  <Lock size={12} aria-hidden="true" />
-                  <span>{partnerProfile ? `En attente de ${partnerProfile.display_name}` : 'Lie ton/ta partenaire pour comparer vos réponses'}</span>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex gap-2 max-w-md mx-auto">
-              <input
-                type="text"
-                value={myAnswer}
-                onChange={e => setMyAnswer(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && submitAnswer()}
-                placeholder="Ta réponse…"
-                aria-label="Ta réponse à la question du jour"
-                maxLength={2000}
-                className={INPUT}
-              />
-              <button onClick={submitAnswer} disabled={!myAnswer.trim() || answering} className={`${BTN_PRIMARY} px-4`} aria-label="Envoyer ma réponse">
-                <Send size={16} aria-hidden="true" />
-              </button>
-            </div>
           )}
-          <p className="text-center text-xs text-text-dim/70 mt-4">
-            La réponse de l'autre n'apparaît qu'une fois que vous avez répondu tous les deux.
-          </p>
-        </section>
-      )}
 
-      {/* ════════ SECTION 6: Gratitude ════════ */}
-      <div className="border-t border-white/[0.04] pt-6">
-        <GratitudeWidget />
+          <div className="max-w-[300px] mx-auto mt-6">
+            <div className="relative h-[3px] w-full rounded-full bg-[#F0EAE0]/[0.07]" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(cdPct)} aria-label="Chemin parcouru vers les retrouvailles">
+              <div className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#D4A574] to-[#C2788E] transition-[width] duration-1000" style={{ width: `${cdPct}%` }} />
+              <span className="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#F0EAE0] shadow-[0_0_10px_2px_rgba(212,165,116,0.55)] transition-[left] duration-1000" style={{ left: `${cdPct}%` }} aria-hidden="true" />
+            </div>
+            <p className="mt-2 text-[11px] text-[#9B9287] num">{Math.round(cdPct)}% du chemin parcouru · <span className="first-letter:uppercase inline-block">{format(new Date(countdown.target_date), 'EEEE d MMMM yyyy', { locale: fr })}</span></p>
+          </div>
+
+          <div className="mt-5 flex items-center justify-center gap-2">
+            <button onClick={() => setShowCountdownForm(true)} className="btn-tertiary"><Plus size={12} aria-hidden="true" /> Une autre date</button>
+            <button onClick={removeCountdown} className="btn-tertiary" aria-label="Retirer ce compte à rebours"><X size={12} aria-hidden="true" /> Retirer</button>
+          </div>
+        </>
+      ) : (
+        <button onClick={() => setShowCountdownForm(true)} className="w-full py-3 text-center group/cd rounded-xl">
+          <span className={`${EYEBROW} mb-3 inline-flex items-center gap-1.5`}><Timer size={11} aria-hidden="true" className="text-[#D4A574]" /> Prochaines retrouvailles</span>
+          <span className="block font-display-italic text-xl text-[#F0EAE0]/90 group-hover/cd:text-[#F0EAE0] transition-colors">Quand est-ce qu'on se revoit ?</span>
+          <span className="mt-3 inline-flex items-center gap-2 text-[13px] text-[#D4A574]"><Plus size={14} aria-hidden="true" /> Ajouter une date à attendre ensemble</span>
+        </button>
+      )}
+    </section>
+  )
+
+  const heartBlock = (
+    <section className="lux-card rounded-[20px] text-center py-10 xl:py-12 px-4 relative reveal flex flex-col items-center justify-center overflow-hidden" style={{ animationDelay: '150ms' }} aria-label="Je pense à toi">
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
+        <div className="w-72 h-72 rounded-full bg-primary/[0.05] blur-[90px] animate-glow-breath" />
       </div>
 
-      {/* ════════ Modal compte à rebours ════════ */}
+      <div className="relative inline-flex items-center justify-center mb-7 w-56 h-56">
+        {/* Anneau de progression : % du chemin vers les retrouvailles */}
+        <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 200 200" fill="none" aria-hidden="true">
+          <circle cx="100" cy="100" r="92" stroke="rgba(240,234,224,0.07)" strokeWidth="1.5" strokeDasharray="1 6" strokeLinecap="round" />
+          {countdown && !remaining.passed && (
+            <circle cx="100" cy="100" r="92" stroke="url(#ringG)" strokeWidth="2" strokeLinecap="round" strokeDasharray="578" strokeDashoffset={578 * (1 - cdPct / 100)} style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(.22,1,.36,1)' }} />
+          )}
+          <defs><linearGradient id="ringG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#D4A574" /><stop offset="1" stopColor="#C2788E" /></linearGradient></defs>
+        </svg>
+        <svg className="absolute w-40 h-40 animate-orbit-rev opacity-60" viewBox="0 0 200 200" fill="none" aria-hidden="true">
+          <circle cx="100" cy="100" r="96" stroke="#D4A574" strokeOpacity="0.3" strokeWidth="0.8" strokeDasharray="1 14" />
+          <circle cx="100" cy="4" r="2.2" fill="#E8C9A0" />
+        </svg>
+
+        <div className={`absolute w-36 h-36 rounded-full transition-all duration-1000 ${
+          tapped ? 'bg-secondary/20 scale-125 blur-xl' : receivedTap ? 'bg-secondary/12 scale-115 blur-lg' : 'bg-primary/[0.04] animate-heart-breath'
+        }`} aria-hidden="true" />
+
+        {burst.map((b) => (
+          <span key={b.id} className="absolute animate-burst pointer-events-none" style={{ ['--bx' as string]: b.bx, ['--by' as string]: b.by, ['--br' as string]: b.br, animationDelay: `${b.delay}ms`, color: b.hue }} aria-hidden="true">
+            <Heart size={b.size} fill="currentColor" strokeWidth={0} />
+          </span>
+        ))}
+
+        <button
+          onClick={sendTap}
+          aria-disabled={tapped || !partnerProfile}
+          aria-label={partnerProfile ? `Envoyer « je pense à toi » à ${partnerProfile.display_name}` : 'Lie ton/ta partenaire pour envoyer une pensée'}
+          title={partnerProfile ? 'Je pense à toi' : 'Lie ton/ta partenaire d’abord'}
+          className={`relative z-10 w-28 h-28 rounded-full flex items-center justify-center transition-all duration-500 ease-out ${
+            tapped ? 'scale-115' : receivedTap ? 'scale-108' : 'hover:scale-105 active:scale-90'
+          } ${!partnerProfile ? 'cursor-not-allowed' : ''}`}
+        >
+          <svg width="84" height="77" viewBox="0 0 64 58" aria-hidden="true" className={`transition-all duration-700 ${tapped || receivedTap ? '' : 'animate-heart-glow'}`}>
+            <defs>
+              <linearGradient id="heartFill" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stopColor={tapped || receivedTap ? '#E8B4C0' : '#E8C9A0'} />
+                <stop offset="0.55" stopColor={tapped || receivedTap ? '#C2788E' : '#D4A574'} />
+                <stop offset="1" stopColor={tapped || receivedTap ? '#A85C74' : '#C2788E'} />
+              </linearGradient>
+              <radialGradient id="heartLight" cx="0.35" cy="0.3" r="0.6">
+                <stop offset="0" stopColor="#fff" stopOpacity="0.45" />
+                <stop offset="1" stopColor="#fff" stopOpacity="0" />
+              </radialGradient>
+            </defs>
+            <path d="M32 56c-.9 0-1.7-.3-2.4-.9C20 46.9 12 40 12 31.1 12 24.9 16.7 20.5 22.6 20.5c3.7 0 7.1 1.9 9.4 5 2.3-3.1 5.7-5 9.4-5C47.3 20.5 52 24.9 52 31.1c0 8.9-8 15.8-17.6 24-.7.6-1.5.9-2.4.9z" transform="translate(0,-14)" fill="url(#heartFill)" opacity={partnerProfile ? 1 : 0.45} />
+            <path d="M32 56c-.9 0-1.7-.3-2.4-.9C20 46.9 12 40 12 31.1 12 24.9 16.7 20.5 22.6 20.5c3.7 0 7.1 1.9 9.4 5 2.3-3.1 5.7-5 9.4-5C47.3 20.5 52 24.9 52 31.1c0 8.9-8 15.8-17.6 24-.7.6-1.5.9-2.4.9z" transform="translate(0,-14)" fill="url(#heartLight)" />
+          </svg>
+        </button>
+      </div>
+
+      <p className="font-display-italic text-lg tracking-wide mb-3 text-[#F0EAE0]/85">
+        {tapped ? <span className="text-secondary animate-fade-in">Envoyé avec amour</span>
+          : receivedTap ? <span className="text-secondary animate-fade-in">{partnerProfile?.display_name} pense à toi</span>
+          : 'Je pense à toi'}
+      </p>
+      <span className="sr-only" aria-live="polite">{tapped ? 'Pensée envoyée' : receivedTap ? `${partnerProfile?.display_name} pense à toi` : ''}</span>
+
+      <div className="flex items-center justify-center gap-2 text-xs text-[#9B9287]">
+        {streak > 0 && (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[rgba(232,184,109,0.10)] text-[#E8B86D]">
+            <Flame size={12} aria-hidden="true" />
+            <span className="num">{streak} jour{streak > 1 ? 's' : ''} d'affilée</span>
+          </span>
+        )}
+        {todayCount > 0 && <span className="px-2.5 py-1 rounded-full bg-white/[0.04] num">{todayCount} envoyé{todayCount > 1 ? 's' : ''}</span>}
+        {partnerTodayCount > 0 && <span className="px-2.5 py-1 rounded-full bg-white/[0.04] num">{partnerTodayCount} reçu{partnerTodayCount > 1 ? 's' : ''}</span>}
+      </div>
+
+      {daysTogether !== null && daysTogether >= 0 && (
+        <p className="mt-6 flex items-baseline justify-center gap-2 text-[11px] tracking-[0.2em] uppercase text-[#9B9287]">
+          <span>Jour</span>
+          <CountUp to={daysTogether + 1} ms={1400} className="font-display text-[19px] tracking-normal text-[#E0B98A]" />
+          <span>ensemble</span>
+        </p>
+      )}
+    </section>
+  )
+
+  const moodCard = (who: 'me' | 'partner') => {
+    const isMe = who === 'me'
+    const m = isMe ? myMood : partnerMood
+    const name = isMe ? profile.display_name : partnerProfile?.display_name
+    const inner = (
+      <>
+        <span className={`grid size-11 shrink-0 place-items-center rounded-full text-2xl ${m ? 'bg-[#D4A574]/10 shadow-[inset_0_0_0_1px_rgba(212,165,116,0.25)]' : 'bg-white/[0.04] shadow-[inset_0_0_0_1px_rgba(240,234,224,0.08)]'}`} aria-hidden="true">
+          {m ? <span className="emoji">{m.emoji}</span> : isMe ? <Plus size={16} className="text-[#D4A574]" /> : <Moon size={15} className="text-[#9B9287]" />}
+        </span>
+        <span className="min-w-0 text-left">
+          <span className="block truncate text-[12px] text-[#9B9287]">{name}</span>
+          <span className="block truncate text-[13px] text-[#F0EAE0]">{m ? m.label : isMe ? 'Définir mon humeur' : 'En attente…'}</span>
+        </span>
+      </>
+    )
+    return isMe ? (
+      <button onClick={() => setShowMoodPicker(true)} className="lux-card flex items-center gap-3 rounded-2xl p-3.5 text-left hover:bg-[#26221E] transition-colors" aria-label="Choisir mon humeur">{inner}</button>
+    ) : (
+      <div className="lux-card flex items-center gap-3 rounded-2xl p-3.5">{inner}</div>
+    )
+  }
+
+  const moodBlock = (
+    <section className="reveal" style={{ animationDelay: '200ms' }} aria-labelledby="mood-title">
+      <h2 id="mood-title" className={`${EYEBROW} mb-3 text-center xl:text-left`}>Humeur du jour</h2>
+      {showMoodPicker ? (
+        <div className="lux-card rounded-2xl p-4 text-center animate-fade-in">
+          <p className="text-sm text-[#F0EAE0]/90 mb-4" id="mood-label">Comment te sens-tu ?</p>
+          <div className="grid grid-cols-4 gap-2 max-w-[15rem] mx-auto" role="group" aria-labelledby="mood-label">
+            {MOODS.map(({ emoji, label }) => (
+              <button key={emoji} onClick={() => selectMood(emoji, label)} aria-label={label} title={label}
+                className="h-12 rounded-2xl flex items-center justify-center text-2xl bg-white/[0.03] hover:bg-[rgba(212,165,116,0.12)] hover:-translate-y-0.5 active:scale-90 transition-all duration-200">
+                <span className="emoji">{emoji}</span>
+              </button>
+            ))}
+          </div>
+          <button onClick={() => setShowMoodPicker(false)} className="btn-tertiary mt-4">Annuler</button>
+        </div>
+      ) : (
+        <div className={`grid gap-3 ${partnerProfile ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          {moodCard('me')}
+          {partnerProfile && moodCard('partner')}
+        </div>
+      )}
+    </section>
+  )
+
+  const questionBlock = question && (
+    <section className="lux-card rounded-[20px] p-5 md:p-6 text-center reveal" style={{ animationDelay: '250ms' }} onMouseMove={shine} onMouseLeave={unshine} aria-labelledby="q-title">
+      <h2 id="q-title" className={`${EYEBROW} mb-4`}>Question du jour</h2>
+      <span className="block font-display text-5xl leading-[0.6] text-[#D4A574]/40 select-none mb-1" aria-hidden="true">“</span>
+      <p className="font-display-italic text-[1.45rem] md:text-[1.6rem] leading-snug max-w-md mx-auto text-[#F0EAE0] text-balance">
+        {question.question.replace(/\s*\?\s*$/, ' ?')}
+      </p>
+
+      <div className="mt-5">
+        {savedAnswer ? (
+          <div className="space-y-3 text-left">
+            <div className="rounded-xl p-4 bg-white/[0.04]">
+              <p className="text-[11px] text-[#D4A574] uppercase tracking-wider mb-1.5">Toi</p>
+              <p className="text-sm leading-relaxed text-[#F0EAE0]/90 whitespace-pre-wrap">{savedAnswer}</p>
+            </div>
+            {partnerAnswer ? (
+              <div className="rounded-xl p-4 bg-white/[0.04] animate-fade-in">
+                <p className="text-[11px] text-[#D99AAD] uppercase tracking-wider mb-1.5">{partnerProfile?.display_name}</p>
+                <p className="text-sm leading-relaxed text-[#F0EAE0]/90 whitespace-pre-wrap">{partnerAnswer}</p>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center gap-2 text-[#9B9287] text-xs py-2">
+                <Lock size={12} aria-hidden="true" />
+                <span>{partnerProfile ? `En attente de ${partnerProfile.display_name}` : 'Lie ton/ta partenaire pour comparer vos réponses'}</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <input type="text" value={myAnswer} onChange={e => setMyAnswer(e.target.value)} onKeyDown={e => e.key === 'Enter' && submitAnswer()}
+              placeholder="Ta réponse…" aria-label="Ta réponse à la question du jour" maxLength={2000} className={`${INPUT} flex-1`} />
+            <button onClick={submitAnswer} disabled={!myAnswer.trim() || answering} className={`${BTN_PRIMARY} px-4 shrink-0`} aria-label="Envoyer ma réponse">
+              <Send size={16} aria-hidden="true" />
+            </button>
+          </div>
+        )}
+        <p className="text-[11px] text-[#9B9287] mt-4">La réponse de l'autre n'apparaît qu'une fois que vous avez répondu tous les deux.</p>
+      </div>
+    </section>
+  )
+
+  const gratitudeBlock = (
+    <div className="reveal" style={{ animationDelay: '300ms' }}>
+      <GratitudeWidget />
+    </div>
+  )
+
+  const loveNoteBlock = (
+    <div className="reveal" style={{ animationDelay: '50ms' }}><LoveNoteWidget /></div>
+  )
+
+  return (
+    <div className="mx-auto px-5 py-7 md:py-10 max-w-2xl xl:max-w-[1160px] xl:px-10">
+      {/* Mobile / tablette : une colonne ; desktop large : grille asymétrique 7/5 */}
+      <div className="xl:grid xl:grid-cols-12 xl:gap-6 space-y-6 xl:space-y-0">
+        <div className="xl:col-span-12 mb-2 xl:mb-4">{hero}</div>
+        {onboarding && <div className="xl:col-span-12">{onboarding}</div>}
+
+        <div className="xl:col-span-7 space-y-6">
+          {countdownBlock}
+          {heartBlock}
+        </div>
+        <aside className="xl:col-span-5 space-y-6">
+          {loveNoteBlock}
+          {moodBlock}
+          {questionBlock}
+          {gratitudeBlock}
+        </aside>
+      </div>
+
       {showCountdownForm && (
         <Modal title="Prochaines retrouvailles" description="Une date à attendre ensemble — elle s'affichera en haut de votre accueil à tous les deux." onClose={() => setShowCountdownForm(false)}>
           <form onSubmit={saveCountdown} className="space-y-4">
-            <div className="flex gap-2 flex-wrap" role="group" aria-label="Emoji">
-              {COUNTDOWN_EMOJIS.map((e) => (
-                <button type="button" key={e} onClick={() => setCdEmoji(e)} aria-label={`Emoji ${e}`} aria-pressed={cdEmoji === e}
-                  className={`text-xl p-1.5 rounded-lg transition-all duration-300 ${cdEmoji === e ? 'bg-[rgba(212,165,116,0.15)] shadow-[0_0_12px_rgba(212,165,116,0.1)]' : 'hover:bg-[rgba(212,165,116,0.06)]'}`}>
-                  {e}
-                </button>
-              ))}
-            </div>
             <div>
               <label htmlFor="cd-title" className={LABEL}>Quoi ?</label>
               <input id="cd-title" type="text" value={cdTitle} onChange={(e) => setCdTitle(e.target.value)} placeholder="Ex : Week-end au Touquet" maxLength={80} required className={INPUT} />
             </div>
             <div>
               <label htmlFor="cd-date" className={LABEL}>Quand ?</label>
-              <input id="cd-date" type="date" value={cdDate} onChange={(e) => setCdDate(e.target.value)} min={todayISO()} required className={INPUT} />
+              <input id="cd-date" type="date" value={cdDate} onChange={(e) => setCdDate(e.target.value)} min={todayISO()} required className={INPUT} lang="fr-FR" />
             </div>
-            <div className="flex gap-2 pt-1">
+            <div>
+              <span className={LABEL}>Emoji</span>
+              <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Emoji">
+                {COUNTDOWN_EMOJIS.map((e) => (
+                  <button type="button" key={e} onClick={() => setCdEmoji(e)} role="radio" aria-checked={cdEmoji === e} aria-label={`Emoji ${e}`}
+                    className={`h-12 rounded-xl text-xl transition-all duration-200 ${cdEmoji === e ? 'bg-[rgba(212,165,116,0.15)] shadow-[inset_0_0_0_1.5px_#E8C9A0]' : 'bg-white/[0.03] hover:bg-[rgba(212,165,116,0.08)]'}`}>
+                    <span className="emoji">{e}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-2 pt-1 sticky bottom-0">
               <button type="button" onClick={() => setShowCountdownForm(false)} className={`${BTN_GHOST} flex-1`}>Annuler</button>
               <button type="submit" disabled={cdSaving || !cdTitle.trim() || !cdDate} className={`${BTN_PRIMARY} flex-1`}>
-                {cdSaving ? 'Enregistrement…' : 'Lancer le compte à rebours'}
+                {cdSaving ? 'Enregistrement…' : 'Lancer'}
               </button>
             </div>
           </form>

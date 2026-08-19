@@ -8,18 +8,16 @@ export default function ConfirmDialogHost() {
   if (!open) return null
   const { title, message, confirmLabel = 'Confirmer', cancelLabel = 'Annuler', danger = false } = options
   return (
-    <Modal title={title} onClose={() => close(false)}>
-      <div className="flex items-start gap-3">
-        {danger && (
-          <div className="w-9 h-9 rounded-xl bg-[rgba(239,68,68,0.12)] flex items-center justify-center shrink-0">
-            <AlertTriangle size={16} className="text-red-300" aria-hidden="true" />
-          </div>
-        )}
-        <p className="text-sm text-[#F0EAE0]/85 leading-relaxed">{message ?? 'Cette action est définitive.'}</p>
-      </div>
+    <Modal title={title} description={message ?? 'Cette action est définitive.'} onClose={() => close(false)} alert>
+      {danger && (
+        <div className="flex items-center gap-2 text-[13px] text-[#F0A5AD]/90">
+          <AlertTriangle size={15} aria-hidden="true" /> Action irréversible
+        </div>
+      )}
       <div className="flex gap-2 pt-1">
-        <button onClick={() => close(false)} className={`${BTN_GHOST} flex-1`}>{cancelLabel}</button>
-        <button onClick={() => close(true)} className={`${danger ? BTN_DANGER : BTN_PRIMARY} flex-1`} autoFocus>
+        {/* Le focus par défaut est sur l'action sûre */}
+        <button onClick={() => close(false)} className={`${BTN_GHOST} flex-1`} autoFocus>{cancelLabel}</button>
+        <button onClick={() => close(true)} className={`${danger ? BTN_DANGER : BTN_PRIMARY} flex-1`}>
           {confirmLabel}
         </button>
       </div>

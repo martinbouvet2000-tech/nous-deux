@@ -1,4 +1,5 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { CARD_EDGE } from '@/lib/ui'
 
@@ -6,61 +7,89 @@ interface Props {
   title: string
   onClose: () => void
   children: ReactNode
-  /** Description optionnelle sous le titre */
   description?: string
+  /** Dialogue d'alerte (confirmation) */
+  alert?: boolean
 }
 
+let openCount = 0
+
 /**
- * Modale accessible : role=dialog, focus piégé grossièrement (focus initial + Escape),
- * fermeture au clic sur le fond.
+ * Modale accessible rendue dans un portail (au-dessus de la nav mobile) :
+ * role=dialog, aria-labelledby/describedby, piège de focus, fond inerte,
+ * verrouillage du scroll, Escape (seulement la dernière ouverte), clic sur le fond.
  */
-export default function Modal({ title, description, onClose, children }: Props) {
+export default function Modal({ title, description, onClose, children, alert = false }: Props) {
   const ref = useRef<HTMLDivElement>(null)
-  const titleId = `modal-title-${title.replace(/\s+/g, '-').toLowerCase()}`
+  const titleId = useId()
+  const descId = useId()
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    openCount++
+    const myIndex = openCount
+    const prevFocus = document.activeElement as HTMLElement | null
+    const root = document.getElementById('root')
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    if (openCount === 1) root?.setAttribute('inert', '')
+
+    // Focus initial : le conteneur (titre + description annoncés), puis Tab va au premier champ
+    ref.current?.focus()
+
+    const onKey = (e: KeyboardEvent) => {
+      if (myIndex !== openCount) return // une modale plus récente est ouverte
+      if (e.key === 'Escape') { e.stopPropagation(); onClose(); return }
+      if (e.key !== 'Tab') return
+      const f = ref.current?.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')
+      if (!f?.length) { e.preventDefault(); return }
+      const first = f[0], last = f[f.length - 1]
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === ref.current)) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+    }
     document.addEventListener('keydown', onKey)
-    const prev = document.activeElement as HTMLElement | null
-    // Focus sur le premier champ interactif
-    const first = ref.current?.querySelector<HTMLElement>('input, textarea, select, button:not([data-close])')
-    first?.focus()
     return () => {
       document.removeEventListener('keydown', onKey)
-      prev?.focus?.()
+      openCount--
+      if (openCount === 0) { root?.removeAttribute('inert'); document.body.style.overflow = prevOverflow }
+      prevFocus?.focus?.()
     }
   }, [onClose])
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4"
+      className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-[#0A0908]/72 backdrop-blur-md"
+      style={{ animation: 'fadeIn 200ms ease-out' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
         ref={ref}
-        role="dialog"
+        tabIndex={-1}
+        role={alert ? 'alertdialog' : 'dialog'}
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative overflow-hidden rounded-2xl p-5 md:p-6 bg-[#1E1B17] w-full max-w-md space-y-4 max-h-[90dvh] overflow-y-auto"
-        style={{ animation: 'fadeIn 300ms ease-out' }}
+        aria-describedby={description ? descId : undefined}
+        className="lux-card relative overflow-hidden rounded-[28px] sm:rounded-[24px] p-5 md:p-6 w-full max-w-md space-y-4 max-h-[88dvh] overflow-y-auto outline-none shadow-[0_-24px_60px_rgba(0,0,0,0.6)]"
+        style={{ animation: 'sheetIn 420ms cubic-bezier(0.2,0,0,1)' }}
       >
-        <div className={CARD_EDGE} />
+        <div className={CARD_EDGE} aria-hidden="true" />
+        <div className="mx-auto h-1 w-9 rounded-full bg-[#F0EAE0]/15 sm:hidden -mt-1" aria-hidden="true" />
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 id={titleId} className="text-sm font-medium tracking-wide text-[#F0EAE0]">{title}</h3>
-            {description && <p className="text-xs tracking-wide text-[#8A8177] mt-1 leading-relaxed">{description}</p>}
+            <h2 id={titleId} className="font-display text-[22px] leading-tight text-[#F0EAE0]">{title}</h2>
+            {description && <p id={descId} className="text-[13px] text-[#9B9287] mt-1.5 leading-relaxed">{description}</p>}
           </div>
           <button
             data-close
             onClick={onClose}
-            className="text-[#8A8177] hover:text-[#F0EAE0] transition-colors duration-300 shrink-0"
+            className="-m-2 p-2 inline-flex items-center justify-center rounded-full text-[#9B9287] hover:text-[#F0EAE0] hover:bg-white/[0.06] transition-colors duration-200 shrink-0"
             aria-label="Fermer"
           >
-            <X size={18} />
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, type FormEvent } from 'react'
-import { Calendar, Plus, ChevronLeft, ChevronRight, X, Clock, Globe } from 'lucide-react'
+import { Plus, ChevronLeft, ChevronRight, X, Check, CalendarDays } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import type { CalendarEvent } from '@/types/database'
@@ -9,13 +9,26 @@ import {
 } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import Modal from '@/components/ui/Modal'
+import PageHeader from '@/components/ui/PageHeader'
+import EmptyState from '@/components/ui/EmptyState'
 import { confirm } from '@/lib/confirm'
 import { run } from '@/lib/db'
 import { toast } from '@/lib/toast'
 import { formatTimeIn, timezoneCity } from '@/lib/timezone'
+import { shine, unshine } from '@/lib/shine'
 import { BTN_PRIMARY, BTN_GHOST, INPUT, LABEL, CARD, CARD_EDGE, ICON_BTN } from '@/lib/ui'
 
-const COLORS = ['#D4A574', '#C2788E', '#E8B86D', '#10B981', '#3B82F6', '#EF4444']
+const COLORS = ['#D4A574', '#C2788E', '#E8B86D', '#8FA3C4', '#9CB8A0', '#A66B7E']
+const COLOR_NAMES: Record<string, string> = {
+  '#D4A574': 'Or', '#C2788E': 'Rose', '#E8B86D': 'Ambre',
+  '#8FA3C4': 'Bleu', '#9CB8A0': 'Vert', '#A66B7E': 'Prune',
+}
+
+/** Icône native des champs date/heure : éclaircie pour rester lisible sur le thème sombre */
+const DATE_PICKER_FIX =
+  '[&::-webkit-calendar-picker-indicator]:invert-[.8] [&::-webkit-calendar-picker-indicator]:opacity-60'
+
+const WEEKDAYS = ['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di']
 
 export default function CalendarPage() {
   const { profile, partnerProfile } = useAuthStore()
@@ -109,125 +122,132 @@ export default function CalendarPage() {
   const partnerTz = partnerProfile?.timezone
   const showPartnerTime = !!partnerTz && !!profile && partnerTz !== profile.timezone
 
+  const subtitle = showPartnerTime
+    ? `Vos rendez-vous, affichés dans vos deux fuseaux : ${timezoneCity(profile!.timezone)} pour toi, ${timezoneCity(partnerTz!)} pour ${partnerProfile!.display_name}.`
+    : 'Vos rendez-vous, réunis au même endroit.'
+
   return (
-    <div className="px-5 md:px-8 py-6 max-w-3xl mx-auto space-y-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-light tracking-tight flex items-center gap-2.5 text-[#F0EAE0]">
-          <div className="w-8 h-8 rounded-xl bg-[rgba(212,165,116,0.12)] flex items-center justify-center">
-            <Calendar size={16} className="text-[#D4A574]" aria-hidden="true" />
-          </div>
-          Agenda partagé
-        </h2>
-        <button onClick={() => openForm()} className={BTN_PRIMARY}>
-          <Plus size={14} aria-hidden="true" /> Ajouter
-        </button>
-      </div>
-
-      {showPartnerTime && (
-        <p className="text-xs text-[#8A8177] flex items-center gap-1.5">
-          <Globe size={12} aria-hidden="true" />
-          Les heures sont affichées dans ton fuseau ({timezoneCity(profile!.timezone)}) et celui de {partnerProfile!.display_name} ({timezoneCity(partnerTz!)}).
-        </p>
-      )}
-
-      {/* Calendar card */}
-      <div className={CARD}>
-        <div className={CARD_EDGE} aria-hidden="true" />
-        <div className="flex items-center justify-between mb-4">
-          <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className={ICON_BTN} aria-label="Mois précédent">
-            <ChevronLeft size={18} aria-hidden="true" />
+    <div className="px-5 md:px-8 py-6 max-w-3xl lg:max-w-[1080px] mx-auto space-y-5 reveal">
+      <PageHeader
+        eyebrow="Votre temps"
+        title="Agenda"
+        accent="partagé"
+        subtitle={subtitle}
+        action={
+          <button onClick={() => openForm()} className={BTN_PRIMARY}>
+            <Plus size={14} aria-hidden="true" /> Ajouter
           </button>
-          <h3 className="text-sm font-medium tracking-wide text-[#F0EAE0] first-letter:uppercase" aria-live="polite">
-            {format(currentMonth, 'MMMM yyyy', { locale: fr })}
-          </h3>
-          <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className={ICON_BTN} aria-label="Mois suivant">
-            <ChevronRight size={18} aria-hidden="true" />
-          </button>
-        </div>
+        }
+      />
 
-        <div className="grid grid-cols-7 gap-1 mb-1" aria-hidden="true">
-          {['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di'].map((d) => (
-            <div key={d} className="text-center text-xs tracking-wide text-[#8A8177] font-medium py-1">{d}</div>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-7 gap-1" role="grid">
-          {days.map((day) => {
-            const isCurrentMonth = isSameMonth(day, currentMonth)
-            const isToday = isSameDay(day, new Date())
-            const isSelected = selectedDate && isSameDay(day, selectedDate)
-            const dayEvents = eventsForDay(day)
-            return (
-              <button
-                key={day.toISOString()}
-                onClick={() => setSelectedDate(day)}
-                onDoubleClick={() => openForm(day)}
-                aria-label={`${format(day, 'EEEE d MMMM', { locale: fr })}${dayEvents.length ? `, ${dayEvents.length} événement${dayEvents.length > 1 ? 's' : ''}` : ''}`}
-                aria-pressed={!!isSelected}
-                className={`relative p-1.5 min-h-[40px] rounded-xl text-sm transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/50 ${
-                  !isCurrentMonth ? 'text-[#8A8177]/40' : 'text-[#F0EAE0]'
-                } ${isToday ? 'shadow-[0_0_0_1px_rgba(212,165,116,0.3)]' : ''} ${
-                  isSelected ? 'bg-[rgba(212,165,116,0.15)] text-[#D4A574]' : 'hover:bg-[rgba(212,165,116,0.06)]'
-                }`}
-              >
-                {format(day, 'd')}
-                {dayEvents.length > 0 && (
-                  <div className="flex justify-center gap-0.5 mt-0.5" aria-hidden="true">
-                    {dayEvents.slice(0, 3).map((e) => (
-                      <div key={e.id} className="w-1 h-1 rounded-full" style={{ backgroundColor: e.color }} />
-                    ))}
-                  </div>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Selected day */}
-      {selectedDate && (
-        <div className={`${CARD} space-y-3`}>
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-6 lg:items-start space-y-5 lg:space-y-0">
+        {/* ─── Grille du mois ─── */}
+        <div className={CARD} onMouseMove={shine} onMouseLeave={unshine}>
           <div className={CARD_EDGE} aria-hidden="true" />
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-[#F0EAE0] first-letter:uppercase">{format(selectedDate, 'EEEE d MMMM', { locale: fr })}</h3>
-            <button onClick={() => openForm(selectedDate)} className="text-[#D4A574] text-xs tracking-wide flex items-center gap-1 hover:text-[#E8C9A0] transition-colors">
-              <Plus size={12} aria-hidden="true" /> Ajouter
+          <div className="flex items-center justify-between mb-4">
+            <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className={ICON_BTN} aria-label="Mois précédent">
+              <ChevronLeft size={18} aria-hidden="true" />
+            </button>
+            <h2 className="font-display text-[17px] tracking-tight text-[#F0EAE0] first-letter:uppercase" aria-live="polite">
+              {format(currentMonth, 'MMMM yyyy', { locale: fr })}
+            </h2>
+            <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className={ICON_BTN} aria-label="Mois suivant">
+              <ChevronRight size={18} aria-hidden="true" />
             </button>
           </div>
 
-          {selectedDayEvents.length === 0 ? (
-            <p className="text-[#8A8177] text-xs tracking-wide py-4 text-center">Rien de prévu ce jour-là</p>
-          ) : (
-            <ul className="space-y-2">
-              {selectedDayEvents.map((event) => {
-                const start = parseISO(event.start_at)
-                const end = parseISO(event.end_at)
-                return (
-                  <li key={event.id} className="flex items-start gap-3 p-3 rounded-xl bg-[rgba(255,255,255,0.03)]">
-                    <div className="w-1 self-stretch min-h-[2.5rem] rounded-full shrink-0" style={{ backgroundColor: event.color }} aria-hidden="true" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[#F0EAE0]">{event.title}</p>
-                      <p className="text-xs text-[#8A8177] flex items-center gap-1 mt-0.5">
-                        <Clock size={10} aria-hidden="true" />
-                        {format(start, 'HH:mm')} – {format(end, 'HH:mm')}
-                        {showPartnerTime && (
-                          <span className="text-[#C2788E]/80 ml-1">
-                            · {formatTimeIn(partnerTz!, start)} – {formatTimeIn(partnerTz!, end)} pour {partnerProfile!.display_name}
-                          </span>
-                        )}
-                      </p>
-                      {event.description && <p className="text-xs text-[#9B9287] mt-1 whitespace-pre-wrap">{event.description}</p>}
-                    </div>
-                    <button onClick={() => deleteEvent(event)} className="text-[#8A8177] hover:text-red-400 shrink-0 transition-colors duration-300 p-1" aria-label={`Supprimer ${event.title}`}>
-                      <X size={14} aria-hidden="true" />
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
+          <div className="grid grid-cols-7 mb-1.5" aria-hidden="true">
+            {WEEKDAYS.map((d) => (
+              <div key={d} className="text-center text-[11px] tracking-[0.14em] uppercase text-[#9B9287] py-1">{d}</div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-px bg-white/[0.05] rounded-2xl overflow-hidden">
+            {days.map((day) => {
+              const isCurrentMonth = isSameMonth(day, currentMonth)
+              const isToday = isSameDay(day, new Date())
+              const isSelected = !!selectedDate && isSameDay(day, selectedDate)
+              const dow = day.getDay()
+              const isWeekend = dow === 0 || dow === 6
+              const dayEvents = eventsForDay(day)
+              return (
+                <button
+                  key={day.toISOString()}
+                  onClick={() => setSelectedDate(day)}
+                  onDoubleClick={() => openForm(day)}
+                  aria-label={`${format(day, 'EEEE d MMMM', { locale: fr })}${dayEvents.length ? `, ${dayEvents.length} événement${dayEvents.length > 1 ? 's' : ''}` : ''}`}
+                  aria-pressed={isSelected}
+                  className={[
+                    'aspect-square flex flex-col items-center justify-center gap-1 text-[15px] num transition-colors duration-200 focus-visible:outline-offset-[-2px]',
+                    isWeekend ? 'bg-[#171312]' : 'bg-[#151210]',
+                    isSelected
+                      ? 'bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E] font-semibold'
+                      : isToday
+                        ? 'text-[#D4A574] font-medium shadow-[inset_0_0_0_1px_rgba(212,165,116,0.35)] hover:bg-white/[0.04]'
+                        : `${isCurrentMonth ? 'text-[#F0EAE0]/85' : 'text-[#9B9287]/50'} hover:bg-white/[0.04]`,
+                  ].join(' ')}
+                >
+                  <span className="leading-none">{format(day, 'd')}</span>
+                  <span className="flex h-1.5 items-center gap-0.5" aria-hidden="true">
+                    {dayEvents.slice(0, 3).map((e) => (
+                      <span key={e.id} className={`size-1.5 rounded-full ${isSelected ? 'bg-[#110F0E]/60' : 'bg-[#C2788E]'}`} />
+                    ))}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
         </div>
-      )}
+
+        {/* ─── Panneau du jour ─── */}
+        {selectedDate && (
+          <div className={`${CARD} lg:sticky lg:top-6 space-y-4`} onMouseMove={shine} onMouseLeave={unshine}>
+            <div className={CARD_EDGE} aria-hidden="true" />
+            <h2 className="font-display text-[20px] text-[#F0EAE0] first-letter:uppercase">
+              {format(selectedDate, 'EEEE d MMMM', { locale: fr })}
+            </h2>
+
+            {selectedDayEvents.length === 0 ? (
+              <EmptyState
+                icon={CalendarDays}
+                title="Journée libre"
+                text="Rien de prévu — l'occasion rêvée d'inventer quelque chose à deux."
+              />
+            ) : (
+              <ul className="space-y-2">
+                {selectedDayEvents.map((event) => {
+                  const start = parseISO(event.start_at)
+                  const end = parseISO(event.end_at)
+                  return (
+                    <li key={event.id} className="group flex items-start gap-3 rounded-xl bg-white/[0.035] p-3">
+                      <span className="w-1 self-stretch min-h-10 rounded-full shrink-0" style={{ backgroundColor: event.color }} aria-hidden="true" />
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <p className="text-[14px] text-[#F0EAE0] leading-snug">{event.title}</p>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="text-[13px] text-[#F0EAE0]/75 num">{format(start, 'HH:mm')} – {format(end, 'HH:mm')}</span>
+                          {showPartnerTime && (
+                            <span className="px-2 py-0.5 rounded-full bg-[#C2788E]/12 text-[#D99AAD] text-[11px] num">
+                              {formatTimeIn(partnerTz!, start)} – {formatTimeIn(partnerTz!, end)} · {partnerProfile!.display_name}
+                            </span>
+                          )}
+                        </div>
+                        {event.description && <p className="text-[13px] text-[#9B9287] leading-relaxed whitespace-pre-wrap">{event.description}</p>}
+                      </div>
+                      <button
+                        onClick={() => deleteEvent(event)}
+                        className="shrink-0 -mr-1.5 -mt-1.5 grid size-11 place-items-center rounded-full text-[#9B9287] hover:text-[#F0A5AD] hover:bg-white/[0.06] transition-all duration-200 opacity-100 md:opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                        aria-label={`Supprimer ${event.title}`}
+                      >
+                        <X size={15} aria-hidden="true" />
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
 
       {showForm && (
         <Modal title="Nouvel événement" description={showPartnerTime ? `Saisis l'heure dans ton fuseau (${timezoneCity(profile!.timezone)}) ; ${partnerProfile!.display_name} la verra convertie.` : undefined} onClose={() => setShowForm(false)}>
@@ -240,24 +260,24 @@ export default function CalendarPage() {
               <label htmlFor="ev-desc" className={LABEL}>Description (optionnel)</label>
               <textarea id="ev-desc" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={`${INPUT} resize-none`} maxLength={1000} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label htmlFor="ev-start" className={LABEL}>Début</label>
-                <input id="ev-start" type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} className={INPUT} required />
+                <input id="ev-start" type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} className={`${INPUT} ${DATE_PICKER_FIX}`} required />
               </div>
               <div>
                 <label htmlFor="ev-end" className={LABEL}>Fin</label>
-                <input id="ev-end" type="datetime-local" value={endAt} min={startAt} onChange={(e) => setEndAt(e.target.value)} className={INPUT} required />
+                <input id="ev-end" type="datetime-local" value={endAt} min={startAt} onChange={(e) => setEndAt(e.target.value)} className={`${INPUT} ${DATE_PICKER_FIX}`} required />
               </div>
             </div>
             {showPartnerTime && startAt && !Number.isNaN(new Date(startAt).getTime()) && (
-              <p className="text-xs text-[#C2788E]/80">
-                Soit {formatTimeIn(partnerTz!, new Date(startAt))} chez {partnerProfile!.display_name}.
+              <p className="text-[13px] text-[#D99AAD]">
+                Soit <span className="num">{formatTimeIn(partnerTz!, new Date(startAt))}</span> chez {partnerProfile!.display_name}.
               </p>
             )}
             <div>
               <span className={LABEL}>Couleur</span>
-              <div className="flex gap-2" role="radiogroup" aria-label="Couleur">
+              <div className="flex flex-wrap gap-1" role="radiogroup" aria-label="Couleur">
                 {COLORS.map((c) => (
                   <button
                     type="button"
@@ -265,17 +285,24 @@ export default function CalendarPage() {
                     onClick={() => setColor(c)}
                     role="radio"
                     aria-checked={color === c}
-                    aria-label={`Couleur ${c}`}
-                    className={`w-7 h-7 rounded-full transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 ${color === c ? 'scale-110 shadow-[0_0_12px_rgba(212,165,116,0.3)]' : 'opacity-60 hover:opacity-100'}`}
-                    style={{ backgroundColor: c }}
-                  />
+                    aria-label={`Couleur ${COLOR_NAMES[c] ?? c}`}
+                    className="grid size-11 place-items-center rounded-full transition-transform duration-200 hover:scale-105 active:scale-95"
+                  >
+                    <span
+                      className={`grid size-7 place-items-center rounded-full transition-all duration-200 ${color === c ? 'ring-2 ring-[#F0EAE0]' : 'opacity-70'}`}
+                      style={{ backgroundColor: c }}
+                      aria-hidden="true"
+                    >
+                      {color === c && <Check size={14} className="text-[#110F0E]" />}
+                    </span>
+                  </button>
                 ))}
               </div>
             </div>
-            <div aria-live="polite">{formError && <p role="alert" className="text-red-300 text-xs">{formError}</p>}</div>
-            <div className="flex gap-2">
+            <div aria-live="polite">{formError && <p role="alert" className="text-[13px] text-[#F0A5AD]">{formError}</p>}</div>
+            <div className="flex gap-2 pt-1">
               <button type="button" onClick={() => setShowForm(false)} className={`${BTN_GHOST} flex-1`}>Annuler</button>
-              <button type="submit" disabled={saving || !title.trim()} className={`${BTN_PRIMARY} flex-1 py-2.5`}>
+              <button type="submit" disabled={saving || !title.trim()} className={`${BTN_PRIMARY} flex-1`}>
                 {saving ? 'Enregistrement…' : 'Ajouter'}
               </button>
             </div>

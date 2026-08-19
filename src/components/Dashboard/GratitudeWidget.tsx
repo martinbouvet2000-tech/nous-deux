@@ -79,9 +79,9 @@ export default function GratitudeWidget() {
         <div className="w-7 h-7 rounded-lg bg-[rgba(194,120,142,0.12)] flex items-center justify-center">
           <Heart size={15} className="text-[#C2788E]" fill="currentColor" aria-hidden="true" />
         </div>
-        <h3 className="text-sm font-medium tracking-wide uppercase text-[#9B9287]">{title}</h3>
+        <h2 className="font-display text-[17px] text-[#F0EAE0]">{title}</h2>
       </div>
-      <span className="text-xs tracking-wide text-[#8A8177]">{format(new Date(), 'd MMM', { locale: fr })}</span>
+      <span className="text-xs tracking-wide text-[#9B9287]">{format(new Date(), 'd MMM', { locale: fr })}</span>
     </div>
   )
 
@@ -99,13 +99,13 @@ export default function GratitudeWidget() {
             </li>
           ))}
         </ul>
-        <button onClick={openForm} className="text-xs text-[#8A8177] hover:text-[#D4A574] transition-colors inline-flex items-center gap-1 mb-3">
+        <button onClick={openForm} className="btn-tertiary mb-3">
           <PenLine size={11} aria-hidden="true" /> Modifier
         </button>
         <div className="pt-3 border-t border-white/[0.04]">
           {partnerItems.length > 0 ? (
             <>
-              <p className="text-xs text-[#D99AAD] font-medium uppercase tracking-wider mb-2">{partnerProfile.display_name}</p>
+              <p className="text-[11px] text-[#D99AAD] font-medium uppercase tracking-[0.18em] mb-2">{partnerProfile.display_name}</p>
               <ul className="space-y-2">
                 {partnerItems.map((item, i) => (
                   <li key={i} className="flex items-start gap-2.5 text-sm">
@@ -116,7 +116,7 @@ export default function GratitudeWidget() {
               </ul>
             </>
           ) : (
-            <p className="text-xs tracking-wide text-[#8A8177] text-center">{partnerProfile.display_name} n'a pas encore rempli aujourd'hui</p>
+            <p className="text-xs tracking-wide text-[#9B9287] text-center">{partnerProfile.display_name} n'a pas encore rempli aujourd'hui</p>
           )}
         </div>
       </div>
@@ -162,14 +162,14 @@ export default function GratitudeWidget() {
       ) : (
         <button
           onClick={openForm}
-          className="w-full flex items-center justify-center gap-2.5 py-5 rounded-xl bg-[rgba(255,255,255,0.02)] hover:bg-[rgba(212,165,116,0.06)] transition-all duration-300 text-[#9B9287] hover:text-[#F0EAE0] text-sm leading-relaxed"
+          className="w-full flex items-center justify-center gap-2.5 min-h-14 rounded-xl bg-white/[0.03] shadow-[inset_0_0_0_1px_rgba(240,234,224,0.06)] hover:bg-[rgba(212,165,116,0.08)] transition-all duration-200 text-[#F0EAE0]/90 font-display text-[16px]"
         >
           <Plus size={16} className="text-[#C2788E]" aria-hidden="true" />
           <span>Qu'apprécies-tu aujourd'hui ?</span>
         </button>
       )}
       {!showForm && !saved && partnerItems.length > 0 && (
-        <p className="text-xs text-[#8A8177] text-center mt-3">{partnerProfile.display_name} a déjà rempli la sienne — remplis la tienne pour la découvrir.</p>
+        <p className="text-xs text-[#9B9287] text-center mt-3">{partnerProfile.display_name} a déjà rempli la sienne — remplis la tienne pour la découvrir.</p>
       )}
     </div>
   )

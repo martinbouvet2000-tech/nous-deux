@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import type { Thought } from '@/types/database'
 import { run } from '@/lib/db'
-import { INPUT } from '@/lib/ui'
+import { INPUT, EYEBROW } from '@/lib/ui'
 
 const PAGE = 50
 
@@ -87,7 +87,9 @@ export default function Thoughts() {
 
   const lastId = thoughts[thoughts.length - 1]?.id
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = listRef.current
+    if (!el) return
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
   }, [lastId])
 
   const sendThought = async () => {
@@ -133,25 +135,26 @@ export default function Thoughts() {
   const lastMine = [...thoughts].reverse().find((t) => t.sender_id === profile?.id)
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-5rem)] md:h-dvh">
+    <div className="flex flex-col h-[calc(100dvh-7rem)] md:h-[calc(100dvh-1.5rem)]">
       {/* Header */}
-      <div className="px-5 md:px-8 py-4 border-b border-white/[0.04] bg-[#1A1714]/80 backdrop-blur-2xl">
-        <h2 className="text-lg font-light tracking-tight flex items-center gap-2.5 text-[#F0EAE0]">
-          <div className="w-8 h-8 rounded-xl bg-[rgba(194,120,142,0.12)] flex items-center justify-center">
-            <Heart size={16} className="text-[#C2788E]" aria-hidden="true" />
+      <div className="px-5 md:px-8 py-3.5 border-b border-white/[0.06] bg-[#110F0E]/80 backdrop-blur-xl reveal">
+        <div className="max-w-[680px] mx-auto flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#D4A574]/18 to-[#C2788E]/18 shadow-[inset_0_0_0_1px_rgba(212,165,116,0.25)] flex items-center justify-center shrink-0">
+            <Heart size={15} className="text-[#D4A574]" aria-hidden="true" />
           </div>
-          Pensées
-          {partnerProfile && (
-            <span className="text-xs tracking-wide text-[#8A8177] font-normal ml-auto">avec {partnerProfile.display_name}</span>
-          )}
-        </h2>
+          <div className="min-w-0">
+            <h1 className="font-display text-[1.35rem] leading-tight text-[#F0EAE0]">Pensées</h1>
+            {partnerProfile && <p className="text-[12px] text-[#9B9287] leading-tight">avec {partnerProfile.display_name}</p>}
+          </div>
+        </div>
       </div>
 
       {/* Messages */}
-      <div ref={listRef} className="flex-1 overflow-y-auto px-5 md:px-8 py-5 space-y-6" role="log" aria-live="polite" aria-relevant="additions">
+      <div ref={listRef} className="flex-1 overflow-y-auto px-4 md:px-8 py-5 flex flex-col" role="log" aria-live="polite" aria-relevant="additions">
+        <div className="mt-auto mx-auto w-full max-w-[680px] space-y-6">
         {hasMore && (
           <div className="text-center">
-            <button onClick={loadOlder} disabled={loadingMore} className="inline-flex items-center gap-1.5 text-xs text-[#8A8177] hover:text-[#D4A574] transition-colors disabled:opacity-50">
+            <button onClick={loadOlder} disabled={loadingMore} className="btn-tertiary disabled:opacity-50">
               <ChevronUp size={14} aria-hidden="true" /> {loadingMore ? 'Chargement…' : 'Voir les pensées plus anciennes'}
             </button>
           </div>
@@ -159,11 +162,11 @@ export default function Thoughts() {
 
         {thoughts.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="w-16 h-16 rounded-2xl bg-[#1E1B17] flex items-center justify-center mb-4">
-              <Smile size={28} className="text-[#8A8177]" aria-hidden="true" />
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#D4A574]/15 to-[#C2788E]/15 shadow-[inset_0_0_0_1px_rgba(212,165,116,0.22)] flex items-center justify-center mb-4">
+              <Smile size={24} className="text-[#D4A574]/85" aria-hidden="true" />
             </div>
-            <p className="text-[#9B9287] text-sm leading-relaxed">Aucune pensée pour l'instant…</p>
-            <p className="text-[#8A8177] text-xs tracking-wide mt-1.5">
+            <p className="font-display text-[20px] text-[#F0EAE0]">Aucune pensée, pour l'instant</p>
+            <p className="text-[#9B9287] text-[13px] mt-1.5">
               {partnerProfile ? 'Envoie la première' : 'Lie ton/ta partenaire dans les Réglages pour commencer'}
             </p>
           </div>
@@ -172,9 +175,9 @@ export default function Thoughts() {
         {Object.entries(grouped).map(([date, items]) => (
           <div key={date}>
             <div className="flex items-center gap-3 mb-4">
-              <div className="flex-1 h-px bg-white/[0.04]" />
-              <p className="text-xs text-[#8A8177] font-medium uppercase tracking-wider">{dayLabel(date)}</p>
-              <div className="flex-1 h-px bg-white/[0.04]" />
+              <div className="flex-1 h-px bg-white/[0.07]" />
+              <p className={EYEBROW}>{dayLabel(date)}</p>
+              <div className="flex-1 h-px bg-white/[0.07]" />
             </div>
 
             <div className="space-y-2.5">
@@ -184,15 +187,15 @@ export default function Thoughts() {
                 return (
                   <div key={thought.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`} style={{ animation: 'fadeIn 300ms ease-out' }}>
                     <div
-                      className={`max-w-[80%] rounded-2xl px-4 py-3 transition-all duration-300 ${
+                      className={`max-w-[78%] rounded-[18px] px-4 py-2.5 transition-all duration-300 ${
                         isMine
-                          ? 'bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E] rounded-br-lg shadow-[0_2px_20px_rgba(212,165,116,0.15)]'
-                          : 'bg-[#1E1B17] text-[#F0EAE0] rounded-bl-lg'
+                          ? 'rounded-br-[6px] bg-gradient-to-br from-[#D4A574]/22 to-[#C2788E]/22 shadow-[inset_0_0_0_1px_rgba(194,120,142,0.32),inset_0_1px_0_rgba(255,255,255,0.08),0_8px_24px_-12px_rgba(194,120,142,0.5)]'
+                          : 'rounded-bl-[6px] bg-white/[0.055] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07),inset_0_1px_0_rgba(255,255,255,0.05)]'
                       } ${pending ? 'opacity-70' : ''}`}
                     >
                       {thought.image_url && <img src={thought.image_url} alt="" className="rounded-xl mb-2 max-w-full" />}
-                      {thought.content && <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{thought.content}</p>}
-                      <p className={`text-xs mt-1.5 ${isMine ? 'text-[#110F0E]/55' : 'text-[#8A8177]'}`}>
+                      {thought.content && <p className="text-[15px] leading-[1.45] text-[#F0EAE0] whitespace-pre-wrap break-words">{thought.content}</p>}
+                      <p className={`text-[11px] mt-1 num ${isMine ? 'text-[#F0EAE0]/60' : 'text-[#9B9287]'}`}>
                         {format(new Date(thought.created_at), 'HH:mm')}
                         {isMine && lastMine?.id === thought.id && !pending && (
                           <span className="ml-1.5">{thought.is_read ? '· Lu' : '· Envoyé'}</span>
@@ -206,11 +209,12 @@ export default function Thoughts() {
           </div>
         ))}
         <div ref={bottomRef} />
+        </div>
       </div>
 
       {/* Input bar */}
-      <div className="px-5 md:px-8 py-3 border-t border-white/[0.04] bg-[#1A1714]/90 backdrop-blur-2xl">
-        <div className="flex gap-2.5 max-w-lg mx-auto">
+      <div className="px-4 md:px-8 py-3 border-t border-white/[0.07] bg-[#110F0E]/85 backdrop-blur-xl">
+        <div className="flex gap-2.5 max-w-[680px] mx-auto">
           <input
             ref={inputRef}
             type="text"
@@ -221,13 +225,13 @@ export default function Thoughts() {
             disabled={!partnerProfile}
             maxLength={2000}
             aria-label="Écrire une pensée"
-            className={`${INPUT} flex-1`}
+            className={`${INPUT} flex-1 rounded-full px-5`}
           />
           <button
             onClick={sendThought}
             disabled={sending || !message.trim() || !partnerProfile}
             aria-label="Envoyer"
-            className="inline-flex items-center justify-center px-4 rounded-xl text-sm font-medium bg-gradient-to-r from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_2px_20px_rgba(212,165,116,0.2)] hover:shadow-[0_4px_28px_rgba(212,165,116,0.35)] hover:translate-y-[-1px] active:translate-y-0 active:scale-[0.98] transition-all duration-300 ease-out disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60"
+            className="btn-shine inline-flex items-center justify-center size-11 shrink-0 rounded-full bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_10px_30px_-14px_rgba(194,120,142,0.7)] hover:-translate-y-px active:translate-y-0 active:scale-[0.98] transition-all duration-200 disabled:opacity-60 disabled:saturate-50 disabled:cursor-not-allowed"
           >
             <Send size={18} aria-hidden="true" />
           </button>

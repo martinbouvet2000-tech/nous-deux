@@ -4,6 +4,7 @@ import { Heart, KeyRound } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { toast } from '@/lib/toast'
 import { INPUT, BTN_PRIMARY } from '@/lib/ui'
+import Backdrop from '@/components/Backdrop'
 
 /**
  * Page atteinte via le lien "mot de passe oublié". Supabase ouvre une session
@@ -42,11 +43,12 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="min-h-dvh flex items-center justify-center px-6 py-12 bg-[#110F0E]">
-      <div className="w-full max-w-sm">
+    <div className="min-h-dvh flex items-center justify-center px-5 py-12 bg-[#110F0E] grain relative">
+      <Backdrop />
+      <div className="w-full max-w-[420px] lux-card rounded-[24px] p-6 md:p-8 relative z-10">
         <div className="text-center mb-8">
           <Heart size={40} fill="currentColor" className="mx-auto mb-4 text-[#D4A574]/85" aria-hidden="true" />
-          <h1 className="text-2xl font-light tracking-wide text-[#F0EAE0]">Nouveau mot de passe</h1>
+          <h1 className="font-display text-[1.75rem] tracking-tight text-[#F0EAE0]">Nouveau mot de passe</h1>
           <p className="text-sm text-[#9B9287] mt-1.5">Choisis-en un que tu n'utilises nulle part ailleurs.</p>
         </div>
 

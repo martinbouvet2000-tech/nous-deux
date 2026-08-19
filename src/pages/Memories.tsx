@@ -1,18 +1,30 @@
 import { useEffect, useState, useCallback, type FormEvent } from 'react'
-import { Camera, Plus, X, Heart, Clock, Lock, Mail } from 'lucide-react'
+import { Camera, Plus, X, Clock, Lock, Mail, Hourglass } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import type { TimelineEvent, Capsule } from '@/types/database'
 import { format, parseISO, isPast, isToday } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import Modal from '@/components/ui/Modal'
+import PageHeader from '@/components/ui/PageHeader'
+import EmptyState from '@/components/ui/EmptyState'
+import Tabs from '@/components/ui/Tabs'
 import { confirm } from '@/lib/confirm'
 import { run } from '@/lib/db'
 import { toast } from '@/lib/toast'
-import { BTN_PRIMARY, BTN_GHOST, INPUT, LABEL, CARD, CARD_EDGE } from '@/lib/ui'
+import { shine, unshine } from '@/lib/shine'
+import { BTN_PRIMARY, BTN_GHOST, INPUT, LABEL, CARD, CARD_EDGE, EYEBROW } from '@/lib/ui'
 
 type Tab = 'timeline' | 'capsules'
 const TIMELINE_EMOJIS = ['💕', '✈️', '🎉', '🏠', '💍', '🎂', '📸', '🌅', '🎓', '⭐']
+
+/** Icône native des champs date : éclaircie pour rester lisible sur le thème sombre */
+const DATE_PICKER_FIX =
+  '[&::-webkit-calendar-picker-indicator]:invert-[.8] [&::-webkit-calendar-picker-indicator]:opacity-60'
+
+/** Suppression discrète : visible au doigt, révélée au survol/focus sur desktop */
+const DELETE_BTN =
+  'shrink-0 -mr-1.5 -mt-1.5 grid size-11 place-items-center rounded-full text-[#9B9287] hover:text-[#F0A5AD] hover:bg-white/[0.06] transition-all duration-200 opacity-100 md:opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
 
 /** Une capsule est "révélable" à partir de sa date (jour compris) */
 const canReveal = (c: Capsule) => {
@@ -115,88 +127,124 @@ export default function Memories() {
 
   const partnerName = partnerProfile?.display_name ?? 'ton/ta partenaire'
 
-  return (
-    <div className="px-5 md:px-8 py-6 max-w-3xl mx-auto space-y-5">
-      <h2 className="text-lg font-light tracking-tight flex items-center gap-2.5 text-[#F0EAE0]">
-        <div className="w-8 h-8 rounded-xl bg-[rgba(194,120,142,0.12)] flex items-center justify-center">
-          <Camera size={16} className="text-[#C2788E]" aria-hidden="true" />
-        </div>
-        Souvenirs
-      </h2>
+  /* Regroupement de la timeline par année (la requête est déjà triée du plus récent au plus ancien) */
+  const timelineByYear = timelineEvents.reduce<{ year: string; items: TimelineEvent[] }[]>((acc, ev) => {
+    const year = format(parseISO(ev.event_date), 'yyyy')
+    const last = acc[acc.length - 1]
+    if (last && last.year === year) last.items.push(ev)
+    else acc.push({ year, items: [ev] })
+    return acc
+  }, [])
+  /** Deux colonnes sur grand écran seulement quand la timeline a de la matière */
+  const twoCols = timelineEvents.length >= 3
 
-      <div className="flex gap-1 p-1 bg-[#1A1714] rounded-xl" role="tablist" aria-label="Sections">
-        {([['timeline', 'Notre histoire'], ['capsules', 'Capsules temporelles']] as const).map(([key, label]) => (
-          <button
-            key={key}
-            role="tab"
-            aria-selected={tab === key}
-            onClick={() => setTab(key)}
-            className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-medium transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/50 ${
-              tab === key ? 'bg-[rgba(212,165,116,0.12)] text-[#D4A574]' : 'text-[#8A8177] hover:text-[#B5ACA1]'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+  const headerAction =
+    tab === 'timeline' ? (
+      <button onClick={() => setShowTimelineForm(true)} className={BTN_PRIMARY}>
+        <Plus size={14} aria-hidden="true" /> Ajouter un moment
+      </button>
+    ) : (
+      <button onClick={() => setShowCapsuleForm(true)} className={BTN_PRIMARY} disabled={!partnerProfile} title={partnerProfile ? undefined : 'Lie ton/ta partenaire d’abord'}>
+        <Plus size={14} aria-hidden="true" /> Créer une capsule
+      </button>
+    )
+
+  return (
+    <div className="px-5 md:px-8 py-6 max-w-3xl lg:max-w-[1080px] mx-auto space-y-6 reveal">
+      <PageHeader
+        eyebrow="Votre histoire"
+        title="Souvenirs"
+        subtitle="Les moments qui comptent, et les mots gardés pour plus tard."
+        action={headerAction}
+        tabs={
+          <Tabs<Tab>
+            label="Sections"
+            value={tab}
+            onChange={setTab}
+            tabs={[
+              { key: 'timeline', label: 'Notre histoire', icon: Camera },
+              { key: 'capsules', label: 'Capsules', icon: Lock },
+            ]}
+          />
+        }
+      />
 
       {tab === 'timeline' && (
         <>
-          <div className="flex justify-end">
-            <button onClick={() => setShowTimelineForm(true)} className={BTN_PRIMARY}>
-              <Plus size={14} aria-hidden="true" /> Ajouter un moment
-            </button>
-          </div>
+          {timelineEvents.length === 0 ? (
+            <EmptyState
+              icon={Camera}
+              title="Votre histoire commence ici"
+              text="Ajoutez les moments qui vous ont construits : la rencontre, le premier voyage, les retrouvailles…"
+            />
+          ) : (
+            <div className="space-y-8">
+              {timelineByYear.map(({ year, items }) => (
+                <section key={year} aria-label={`Souvenirs de ${year}`}>
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="h-px w-10 bg-gradient-to-r from-transparent to-[#D4A574]/30" aria-hidden="true" />
+                    <span className={`${EYEBROW} num`}>{year}</span>
+                    <span className="h-px flex-1 bg-gradient-to-l from-transparent to-[#D4A574]/30" aria-hidden="true" />
+                  </div>
 
-          {timelineEvents.length === 0 && (
-            <div className={`${CARD} text-center py-12`}>
-              <div className={CARD_EDGE} aria-hidden="true" />
-              <div className="w-14 h-14 rounded-2xl bg-[rgba(194,120,142,0.1)] flex items-center justify-center mx-auto mb-4">
-                <Camera size={24} className="text-[#C2788E]/60" aria-hidden="true" />
-              </div>
-              <p className="text-[#9B9287] text-sm leading-relaxed">Votre histoire commence ici</p>
-              <p className="text-[#8A8177] text-xs tracking-wide mt-1.5">Ajoutez les moments importants de votre couple : rencontre, premier voyage, retrouvailles…</p>
+                  <div className="relative">
+                    <span
+                      className={`absolute left-[21px] top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-[#D4A574]/25 to-transparent ${twoCols ? 'lg:hidden' : ''}`}
+                      aria-hidden="true"
+                    />
+                    <ol className={twoCols ? 'grid gap-4 lg:grid-cols-2' : 'space-y-4'}>
+                      {items.map((event) => (
+                        <li key={event.id} className="grid grid-cols-[44px_1fr] gap-4 items-start">
+                          <span
+                            className="size-11 rounded-full grid place-items-center bg-gradient-to-br from-[#D4A574]/18 to-[#C2788E]/18 shadow-[inset_0_0_0_1px_rgba(212,165,116,0.25),0_0_0_4px_#110F0E]"
+                            aria-hidden="true"
+                          >
+                            <span className="emoji text-lg leading-none">{event.emoji}</span>
+                          </span>
+                          <article className={`${CARD} group`} onMouseMove={shine} onMouseLeave={unshine}>
+                            <div className={CARD_EDGE} aria-hidden="true" />
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <h2 className="text-[15px] text-[#F0EAE0] leading-snug font-normal">{event.title}</h2>
+                                <p className="text-xs text-[#9B9287] num mt-0.5">{format(parseISO(event.event_date), 'd MMMM yyyy', { locale: fr })}</p>
+                              </div>
+                              {event.created_by === profile?.id && (
+                                <button onClick={() => deleteTimelineEvent(event)} className={DELETE_BTN} aria-label={`Supprimer ${event.title}`}>
+                                  <X size={15} aria-hidden="true" />
+                                </button>
+                              )}
+                            </div>
+                            {event.description && <p className="text-[13px] text-[#9B9287] mt-2 leading-relaxed whitespace-pre-wrap">{event.description}</p>}
+                          </article>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                </section>
+              ))}
             </div>
           )}
 
-          <div className="relative">
-            {timelineEvents.length > 0 && <div className="absolute left-5 top-0 bottom-0 w-px bg-white/[0.04]" aria-hidden="true" />}
-            <ol className="space-y-4">
-              {timelineEvents.map((event) => (
-                <li key={event.id} className="flex gap-4 relative">
-                  <div className="w-10 h-10 rounded-full bg-[#1E1B17] flex items-center justify-center shrink-0 z-10 text-lg shadow-[0_0_0_4px_#110F0E]" aria-hidden="true">
-                    {event.emoji}
-                  </div>
-                  <div className={`${CARD} flex-1 group hover:bg-[#252118]`}>
-                    <div className={CARD_EDGE} aria-hidden="true" />
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="font-medium text-sm text-[#F0EAE0]">{event.title}</p>
-                        <p className="text-xs tracking-wide text-[#8A8177] mt-0.5">{format(parseISO(event.event_date), 'd MMMM yyyy', { locale: fr })}</p>
-                      </div>
-                      {event.created_by === profile?.id && (
-                        <button onClick={() => deleteTimelineEvent(event)} className="text-[#8A8177]/50 hover:text-red-400 transition-colors duration-300 p-1 -m-1" aria-label={`Supprimer ${event.title}`}>
-                          <X size={14} aria-hidden="true" />
-                        </button>
-                      )}
-                    </div>
-                    {event.description && <p className="text-xs text-[#9B9287] mt-2 leading-relaxed whitespace-pre-wrap">{event.description}</p>}
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </div>
-
           {showTimelineForm && (
-            <Modal title="Nouveau moment" onClose={() => setShowTimelineForm(false)}>
+            <Modal title="Nouveau moment" description="Un instant à graver dans votre histoire commune." onClose={() => setShowTimelineForm(false)}>
               <form onSubmit={addTimelineEvent} className="space-y-4">
-                <div className="flex gap-2 flex-wrap" role="group" aria-label="Emoji">
-                  {TIMELINE_EMOJIS.map((e) => (
-                    <button type="button" key={e} onClick={() => setTlEmoji(e)} aria-label={`Emoji ${e}`} aria-pressed={tlEmoji === e}
-                      className={`text-xl p-1.5 rounded-lg transition-all duration-300 ${tlEmoji === e ? 'bg-[rgba(212,165,116,0.15)] shadow-[0_0_12px_rgba(212,165,116,0.1)]' : 'hover:bg-[rgba(212,165,116,0.06)]'}`}>
-                      {e}
-                    </button>
-                  ))}
+                <div>
+                  <span className={LABEL}>Emoji</span>
+                  <div className="grid grid-cols-5 gap-2" role="radiogroup" aria-label="Emoji">
+                    {TIMELINE_EMOJIS.map((e) => (
+                      <button
+                        type="button"
+                        key={e}
+                        onClick={() => setTlEmoji(e)}
+                        role="radio"
+                        aria-checked={tlEmoji === e}
+                        aria-label={`Emoji ${e}`}
+                        className={`h-12 rounded-xl text-xl transition-all duration-200 ${tlEmoji === e ? 'bg-[rgba(212,165,116,0.15)] shadow-[inset_0_0_0_1.5px_#E8C9A0]' : 'bg-white/[0.03] hover:bg-[rgba(212,165,116,0.08)]'}`}
+                      >
+                        <span className="emoji" aria-hidden="true">{e}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div>
                   <label htmlFor="tl-title" className={LABEL}>Titre du moment</label>
@@ -208,11 +256,11 @@ export default function Memories() {
                 </div>
                 <div>
                   <label htmlFor="tl-date" className={LABEL}>Date</label>
-                  <input id="tl-date" type="date" value={tlDate} onChange={(e) => setTlDate(e.target.value)} className={INPUT} required />
+                  <input id="tl-date" type="date" value={tlDate} onChange={(e) => setTlDate(e.target.value)} className={`${INPUT} ${DATE_PICKER_FIX}`} required lang="fr-FR" />
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 pt-1">
                   <button type="button" onClick={() => setShowTimelineForm(false)} className={`${BTN_GHOST} flex-1`}>Annuler</button>
-                  <button type="submit" disabled={saving || !tlTitle.trim()} className={`${BTN_PRIMARY} flex-1 py-2.5`}>{saving ? 'Enregistrement…' : 'Ajouter'}</button>
+                  <button type="submit" disabled={saving || !tlTitle.trim()} className={`${BTN_PRIMARY} flex-1`}>{saving ? 'Enregistrement…' : 'Ajouter'}</button>
                 </div>
               </form>
             </Modal>
@@ -222,64 +270,77 @@ export default function Memories() {
 
       {tab === 'capsules' && (
         <>
-          <div className="flex justify-end">
-            <button onClick={() => setShowCapsuleForm(true)} className={BTN_PRIMARY} disabled={!partnerProfile} title={partnerProfile ? undefined : 'Lie ton/ta partenaire d’abord'}>
-              <Plus size={14} aria-hidden="true" /> Créer une capsule
-            </button>
-          </div>
+          {capsules.length === 0 ? (
+            <EmptyState
+              icon={Hourglass}
+              title="Pas encore de capsule"
+              text="Écrivez un mot qui ne s'ouvrira qu'à une date choisie — même le serveur le garde scellé jusque-là."
+            />
+          ) : (
+            <ul className="space-y-3">
+              {capsules.map((capsule) => {
+                const revealable = canReveal(capsule)
+                const isMine = capsule.sender_id === profile?.id
+                const revealDate = format(parseISO(capsule.reveal_date), 'd MMMM yyyy', { locale: fr })
+                const sealed = isMine && !capsule.is_opened && !!capsule.content
+                return (
+                  <li key={capsule.id} className={`${CARD} group`} onMouseMove={shine} onMouseLeave={unshine}>
+                    <div className={CARD_EDGE} aria-hidden="true" />
+                    <div className="flex items-center gap-3">
+                      <span className={`grid size-11 shrink-0 place-items-center rounded-full ${revealable ? 'bg-[#D4A574]/12 text-[#D4A574] shadow-[inset_0_0_0_1px_rgba(212,165,116,0.25)]' : 'bg-white/[0.04] text-[#9B9287]'}`} aria-hidden="true">
+                        {capsule.is_opened ? <Mail size={18} /> : <Lock size={18} />}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[15px] text-[#F0EAE0] truncate">{isMine ? `Pour ${partnerName}` : `De ${partnerName}`}</p>
+                        <p className="text-xs text-[#9B9287] flex items-center gap-1.5 mt-0.5">
+                          <Clock size={11} aria-hidden="true" />
+                          <span className="num">
+                            {revealable
+                              ? capsule.is_opened
+                                ? `Ouverte le ${format(parseISO(capsule.opened_at!), 'd MMM yyyy', { locale: fr })}`
+                                : 'Prête à ouvrir !'
+                              : `Disponible le ${format(parseISO(capsule.reveal_date), 'd MMM yyyy', { locale: fr })}`}
+                          </span>
+                        </p>
+                      </div>
+                      {revealable && !capsule.is_opened && !isMine && (
+                        <button onClick={() => openCapsule(capsule)} className={BTN_PRIMARY}>Ouvrir</button>
+                      )}
+                      {revealable && !capsule.is_opened && isMine && <span className="text-xs text-[#9B9287] shrink-0">En attente</span>}
+                      {isMine && !capsule.is_opened && (
+                        <button onClick={() => deleteCapsule(capsule)} className={DELETE_BTN} aria-label="Détruire la capsule">
+                          <X size={15} aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
 
-          {capsules.length === 0 && (
-            <div className={`${CARD} text-center py-12`}>
-              <div className={CARD_EDGE} aria-hidden="true" />
-              <div className="w-14 h-14 rounded-2xl bg-[rgba(212,165,116,0.1)] flex items-center justify-center mx-auto mb-4">
-                <Heart size={24} className="text-[#D4A574]/60" aria-hidden="true" />
-              </div>
-              <p className="text-[#9B9287] text-sm leading-relaxed">Pas encore de capsule</p>
-              <p className="text-[#8A8177] text-xs tracking-wide mt-1.5">Écris un message qui ne pourra être lu qu'à une date future — même le serveur le garde fermé jusque-là.</p>
-            </div>
+                    {/* Message scellé : mon texte reste flouté jusqu'à l'ouverture */}
+                    {sealed && (
+                      <div className="relative mt-3 rounded-xl bg-white/[0.03] p-4 overflow-hidden min-h-[104px]">
+                        <p className="text-sm text-[#F0EAE0] leading-relaxed whitespace-pre-wrap blur-[6px] select-none pointer-events-none line-clamp-3" aria-hidden="true">
+                          {capsule.content}
+                        </p>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#1E1B17]/45 px-4 text-center">
+                          <span className="grid size-10 place-items-center rounded-full bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_6px_18px_-8px_rgba(212,165,116,0.9)]" aria-hidden="true">
+                            <Lock size={16} />
+                          </span>
+                          <span className="font-display text-[15px] text-[#F0EAE0]">
+                            {revealable ? `En attente de ${partnerName}` : <>Scellée jusqu'au <span className="num">{revealDate}</span></>}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {capsule.is_opened && capsule.content && (
+                      <div className="mt-3 rounded-xl bg-white/[0.03] p-4">
+                        <p className="text-sm text-[#F0EAE0] leading-relaxed whitespace-pre-wrap">{capsule.content}</p>
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
           )}
-
-          <ul className="space-y-3">
-            {capsules.map((capsule) => {
-              const revealable = canReveal(capsule)
-              const isMine = capsule.sender_id === profile?.id
-              return (
-                <li key={capsule.id} className={`${CARD} hover:bg-[#252118] group`}>
-                  <div className={CARD_EDGE} aria-hidden="true" />
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${revealable ? 'bg-[rgba(212,165,116,0.12)] text-[#D4A574]' : 'bg-[rgba(255,255,255,0.03)] text-[#8A8177]'}`} aria-hidden="true">
-                      {capsule.is_opened ? <Mail size={18} /> : <Lock size={18} />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[#F0EAE0]">{isMine ? `Pour ${partnerName}` : `De ${partnerName}`}</p>
-                      <p className="text-xs text-[#8A8177] flex items-center gap-1 mt-0.5">
-                        <Clock size={10} aria-hidden="true" />
-                        {revealable
-                          ? capsule.is_opened
-                            ? `Ouverte le ${format(parseISO(capsule.opened_at!), 'd MMM yyyy', { locale: fr })}`
-                            : 'Prête à ouvrir !'
-                          : `Disponible le ${format(parseISO(capsule.reveal_date), 'd MMM yyyy', { locale: fr })}`}
-                      </p>
-                    </div>
-                    {revealable && !capsule.is_opened && !isMine && (
-                      <button onClick={() => openCapsule(capsule)} className={BTN_PRIMARY}>Ouvrir</button>
-                    )}
-                    {revealable && !capsule.is_opened && isMine && <span className="text-xs tracking-wide text-[#8A8177]">En attente</span>}
-                    {isMine && !capsule.is_opened && (
-                      <button onClick={() => deleteCapsule(capsule)} className="text-[#8A8177]/50 hover:text-red-400 transition-colors p-1" aria-label="Détruire la capsule">
-                        <X size={14} aria-hidden="true" />
-                      </button>
-                    )}
-                  </div>
-                  {(capsule.is_opened || isMine) && capsule.content && (
-                    <div className="mt-3 p-3 bg-[rgba(255,255,255,0.03)] rounded-xl">
-                      <p className="text-sm text-[#F0EAE0] leading-relaxed whitespace-pre-wrap">{capsule.content}</p>
-                    </div>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
 
           {showCapsuleForm && (
             <Modal title="Nouvelle capsule temporelle" description={`Écris un message pour ${partnerName} — il/elle pourra le lire uniquement à la date choisie.`} onClose={() => setShowCapsuleForm(false)}>
@@ -290,11 +351,11 @@ export default function Memories() {
                 </div>
                 <div>
                   <label htmlFor="cap-date" className={LABEL}>Date de révélation</label>
-                  <input id="cap-date" type="date" value={capRevealDate} onChange={(e) => setCapRevealDate(e.target.value)} min={format(new Date(), 'yyyy-MM-dd')} className={INPUT} required />
+                  <input id="cap-date" type="date" value={capRevealDate} onChange={(e) => setCapRevealDate(e.target.value)} min={format(new Date(), 'yyyy-MM-dd')} className={`${INPUT} ${DATE_PICKER_FIX}`} required lang="fr-FR" />
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 pt-1">
                   <button type="button" onClick={() => setShowCapsuleForm(false)} className={`${BTN_GHOST} flex-1`}>Annuler</button>
-                  <button type="submit" disabled={saving || !capContent.trim() || !capRevealDate} className={`${BTN_PRIMARY} flex-1 py-2.5`}>{saving ? 'Scellage…' : 'Sceller la capsule'}</button>
+                  <button type="submit" disabled={saving || !capContent.trim() || !capRevealDate} className={`${BTN_PRIMARY} flex-1`}>{saving ? 'Scellage…' : 'Sceller la capsule'}</button>
                 </div>
               </form>
             </Modal>

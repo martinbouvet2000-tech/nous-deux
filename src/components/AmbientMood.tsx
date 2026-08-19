@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import Backdrop from '@/components/Backdrop'
 import { format } from 'date-fns'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
@@ -74,8 +75,8 @@ const MOOD_THEMES: Record<string, {
 
 const DEFAULT_THEME = {
   gradient: 'from-primary/5 via-transparent to-secondary/3',
-  particle: '💜',
-  glow: 'rgba(139, 92, 246, 0.04)',
+  particle: '✨',
+  glow: 'rgba(212, 165, 116, 0.10)',
   accent: 'default',
 }
 
@@ -89,23 +90,10 @@ function blendThemes(
   return theme1
 }
 
-interface FloatingParticle {
-  id: number
-  emoji: string
-  x: number
-  y: number
-  duration: number
-  delay: number
-  size: number
-}
-
-let particleCounter = 0
-
 export default function AmbientMood({ children }: { children: React.ReactNode }) {
   const { profile, partnerProfile } = useAuthStore()
   const [myEmoji, setMyEmoji] = useState<string | null>(null)
   const [partnerEmoji, setPartnerEmoji] = useState<string | null>(null)
-  const [particles, setParticles] = useState<FloatingParticle[]>([])
 
   const loadCurrentMoods = useCallback(async () => {
     if (!profile) return
@@ -145,72 +133,14 @@ export default function AmbientMood({ children }: { children: React.ReactNode })
   const partnerTheme = partnerEmoji ? (MOOD_THEMES[partnerEmoji] ?? null) : null
   const theme = useMemo(() => blendThemes(myTheme, partnerTheme), [myTheme, partnerTheme])
 
-  // Generate floating particles based on mood
-  useEffect(() => {
-    if (!myEmoji && !partnerEmoji) {
-      setParticles([])
-      return
-    }
-
-    const emojis = [
-      ...(myEmoji && MOOD_THEMES[myEmoji] ? [MOOD_THEMES[myEmoji].particle] : []),
-      ...(partnerEmoji && MOOD_THEMES[partnerEmoji] ? [MOOD_THEMES[partnerEmoji].particle] : []),
-    ]
-    if (emojis.length === 0) return
-
-    const newParticles: FloatingParticle[] = Array.from({ length: 3 }, (_, i) => ({
-      id: ++particleCounter,
-      emoji: emojis[i % emojis.length],
-      x: 15 + (i * 25),
-      y: 100 + (i * 15),
-      duration: 18 + (i * 4),
-      delay: i * 4,
-      size: 10,
-    }))
-
-    setParticles(newParticles)
-  }, [myEmoji, partnerEmoji])
-
   return (
     <div className="relative min-h-full">
-      {/* Ambient gradient overlay */}
+      <Backdrop glowA={theme.glow.replace(/[\d.]+\)$/, '0.22)')} glowB={(partnerTheme?.glow ?? 'rgba(194,120,142,0.12)').replace(/[\d.]+\)$/, '0.16)')} />
+      {/* Teinte d'ambiance liée à l'humeur */}
       <div
         className={`fixed inset-0 bg-gradient-to-br ${theme.gradient} pointer-events-none transition-all duration-[3000ms] ease-in-out z-0`}
+        aria-hidden="true"
       />
-
-      {/* Ambient glow orbs */}
-      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-        <div
-          className="absolute top-1/4 -left-20 w-96 h-96 rounded-full blur-[150px] animate-float transition-all duration-[3000ms]"
-          style={{ background: theme.glow }}
-        />
-        <div
-          className="absolute bottom-1/4 -right-20 w-80 h-80 rounded-full blur-[130px] animate-float transition-all duration-[3000ms]"
-          style={{
-            background: partnerTheme?.glow ?? theme.glow,
-            animationDelay: '3s',
-          }}
-        />
-      </div>
-
-      {/* Floating mood particles */}
-      {particles.map((p) => (
-        <div
-          key={p.id}
-          className="fixed pointer-events-none z-0 animate-float opacity-[0.08]"
-          style={{
-            left: `${p.x}%`,
-            top: `-${p.size}px`,
-            fontSize: `${p.size}px`,
-            animationDuration: `${p.duration}s`,
-            animationDelay: `${p.delay}s`,
-          }}
-        >
-          {p.emoji}
-        </div>
-      ))}
-
-      {/* Content */}
       <div className="relative z-10">
         {children}
       </div>

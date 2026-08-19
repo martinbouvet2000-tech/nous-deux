@@ -2,10 +2,12 @@ import { useState, type FormEvent } from 'react'
 import { Heart, ArrowRight, ArrowLeft, MailCheck } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { INPUT } from '@/lib/ui'
+import Backdrop from '@/components/Backdrop'
+import Ornament from '@/components/ui/Ornament'
 
 type Mode = 'signin' | 'signup' | 'forgot' | 'check-email' | 'reset-sent'
 
-const LABEL = 'block text-xs font-medium tracking-[0.08em] uppercase text-[#9B9287] mb-1.5'
+const LABEL = 'block text-[11px] font-medium tracking-[0.12em] uppercase text-[#9B9287] mb-1.5'
 
 export default function Login() {
   const [mode, setMode] = useState<Mode>('signin')
@@ -55,9 +57,10 @@ export default function Login() {
     : 'Connecte-toi pour retrouver ton/ta partenaire'
 
   return (
-    <div className="min-h-dvh flex" style={{ fontFamily: "'Instrument Sans', 'Inter', system-ui, -apple-system, sans-serif" }}>
+    <div className="min-h-dvh grid lg:grid-cols-[1.1fr_1fr] grain relative">
+      <Backdrop />
       {/* ─── Left panel — branding (desktop) ─── */}
-      <div className="hidden lg:flex flex-1 items-center justify-center relative overflow-hidden bg-[#110F0E]">
+      <div className="hidden lg:flex items-center justify-center relative overflow-hidden z-10 border-r border-white/[0.06]">
         <div className="absolute rounded-full" style={{ top: '10%', left: '10%', width: 500, height: 500, background: 'rgba(212,165,116,0.08)', filter: 'blur(140px)', animation: 'loginOrbDrift1 12s ease-in-out infinite' }} aria-hidden="true" />
         <div className="absolute rounded-full" style={{ bottom: '5%', right: '10%', width: 450, height: 450, background: 'rgba(194,120,142,0.06)', filter: 'blur(120px)', animation: 'loginOrbDrift2 14s ease-in-out infinite' }} aria-hidden="true" />
         <div className="relative z-10 text-center px-12 max-w-md">
@@ -65,28 +68,29 @@ export default function Login() {
             <div className="absolute rounded-full" style={{ top: '50%', left: '50%', transform: 'translate(-50%,-40%)', width: 120, height: 80, background: 'rgba(212,165,116,0.12)', filter: 'blur(40px)', animation: 'loginGlowPulse 4s ease-in-out infinite' }} aria-hidden="true" />
             <Heart size={72} className="relative" fill="currentColor" style={{ color: '#D4A574', opacity: 0.85, filter: 'drop-shadow(0 4px 24px rgba(212,165,116,0.2))' }} aria-hidden="true" />
           </div>
-          <h1 className="mb-5 text-[3rem] font-light leading-[1.1] tracking-[0.06em] text-[#F0EAE0]">Nous Deux</h1>
-          <p className="text-base leading-relaxed text-[#9B9287] max-w-[320px] mx-auto">
-            Votre espace intime pour cultiver votre amour, peu importe la distance.
+          <h1 className="mb-5 font-display-italic text-[3.6rem] leading-[1.05] gradient-text-live">Nous Deux</h1>
+          <p className="text-base leading-relaxed text-[#9B9287] max-w-[34ch] mx-auto text-balance">
+            Votre espace intime, privé et chaleureux — peu importe la distance.
           </p>
         </div>
       </div>
 
       {/* ─── Right panel — form ─── */}
-      <div className="flex-1 flex items-center justify-center px-6 py-12 bg-[#110F0E]">
-        <div className="w-full max-w-sm">
+      <main className="flex items-center justify-center px-5 py-10 relative z-10 min-h-dvh">
+        <div className="w-full max-w-[420px] lux-card rounded-[24px] p-6 md:p-8">
           {/* Mobile branding */}
-          <div className="text-center mb-10 lg:hidden animate-fade-in">
+          <div className="text-center mb-8 lg:hidden animate-fade-in">
             <div className="relative inline-block mb-6">
               <div className="absolute rounded-full" style={{ top: '50%', left: '50%', transform: 'translate(-50%,-40%)', width: 80, height: 60, background: 'rgba(212,165,116,0.15)', filter: 'blur(30px)', animation: 'loginGlowPulse 4s ease-in-out infinite' }} aria-hidden="true" />
               <Heart size={48} className="relative" fill="currentColor" style={{ color: '#D4A574', opacity: 0.85, filter: 'drop-shadow(0 4px 20px rgba(212,165,116,0.2))' }} aria-hidden="true" />
             </div>
-            <h1 className="text-[1.875rem] font-light leading-[1.2] tracking-[0.05em] text-[#F0EAE0]">Nous Deux</h1>
-            <p className="text-[#9B9287] text-sm mt-2">Votre espace intime, privé et chaleureux</p>
+            <h1 className="font-display-italic text-[2.4rem] leading-[1.1] gradient-text-live">Nous Deux</h1>
+            <p className="text-[#9B9287] text-sm mt-2 text-balance">Votre espace intime, privé et chaleureux — peu importe la distance.</p>
           </div>
 
-          <div className="mb-8 animate-slide-up">
-            <h2 className="text-2xl font-light tracking-[0.02em] text-[#F0EAE0]">{heading}</h2>
+          <div className="mb-7 animate-slide-up">
+            <Ornament className="max-w-[160px] mb-4" />
+            <h2 className="font-display text-[1.9rem] leading-[1.1] tracking-tight text-[#F0EAE0]">{heading}</h2>
             <p className="text-[#9B9287] text-sm mt-1.5 leading-relaxed">{subheading}</p>
           </div>
 
@@ -120,7 +124,7 @@ export default function Login() {
                   <div className="flex items-baseline justify-between">
                     <label htmlFor="login-password" className={LABEL}>Mot de passe</label>
                     {mode === 'signin' && (
-                      <button type="button" onClick={() => switchMode('forgot')} className="text-xs text-[#9B9287] hover:text-[#D4A574] transition-colors mb-1.5">
+                      <button type="button" onClick={() => switchMode('forgot')} className="text-xs text-[#9B9287] hover:text-[#D4A574] transition-colors mb-1.5 min-h-6 px-1">
                         Oublié ?
                       </button>
                     )}
@@ -128,7 +132,7 @@ export default function Login() {
                   <input id="login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••" required minLength={mode === 'signup' ? 8 : 6}
                     autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} className={INPUT} />
-                  {mode === 'signup' && <p className="text-xs text-[#8A8177] mt-1.5">8 caractères minimum.</p>}
+                  {mode === 'signup' && <p className="text-xs text-[#9B9287] mt-1.5">8 caractères minimum.</p>}
                 </div>
               )}
 
@@ -143,7 +147,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="group w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl text-[0.9375rem] font-medium bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_2px_20px_rgba(212,165,116,0.2)] hover:shadow-[0_4px_28px_rgba(212,165,116,0.35)] hover:-translate-y-px active:translate-y-0 active:scale-[0.98] transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60"
+                className="btn-shine group w-full inline-flex items-center justify-center gap-2 min-h-12 px-5 rounded-full text-[0.9375rem] font-medium bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_10px_30px_-14px_rgba(194,120,142,0.7)] hover:-translate-y-px active:translate-y-0 active:scale-[0.98] transition-all duration-200 disabled:opacity-60 disabled:saturate-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <span className="w-5 h-5 rounded-full border-2 border-[#110F0E]/30 border-t-[#110F0E] animate-spin" aria-label="Chargement" />
@@ -172,7 +176,7 @@ export default function Login() {
             </form>
           )}
         </div>
-      </div>
+      </main>
 
       <style>{`
         @keyframes loginOrbDrift1 { 0%,100%{transform:translate(0,0) scale(1);opacity:.7} 33%{transform:translate(30px,-20px) scale(1.05);opacity:1} 66%{transform:translate(-15px,15px) scale(.95);opacity:.8} }
