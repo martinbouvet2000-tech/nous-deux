@@ -86,7 +86,7 @@ function FilterChips<K extends string>({ options, value, onChange, label }: {
     <div
       role="group"
       aria-label={label}
-      className="flex items-center gap-1 p-1 rounded-full bg-white/[0.04] shadow-[inset_0_0_0_1px_rgba(240,234,224,0.06)] h-10"
+      className="inline-flex w-fit max-w-full overflow-x-auto items-center gap-1 p-1 rounded-full bg-white/[0.04] shadow-[inset_0_0_0_1px_rgba(240,234,224,0.06)] h-10"
     >
       {options.map((o) => {
         const active = value === o.key
@@ -134,8 +134,7 @@ export default function Activities() {
         action={
           <button onClick={openFromHeader} className={BTN_PRIMARY}>
             <Plus size={16} aria-hidden="true" />
-            <span className="hidden sm:inline">{ACTION_LABELS[mainTab]}</span>
-            <span className="sr-only sm:hidden">{ACTION_LABELS[mainTab]}</span>
+            <span>{ACTION_LABELS[mainTab]}</span>
           </button>
         }
         tabs={<Tabs tabs={TABS} value={mainTab} onChange={setMainTab} label="Sections" />}
@@ -251,15 +250,16 @@ function WatchSection({ open, onClose }: { open: boolean; onClose: () => void })
                 {item.notes && <p className="text-[13px] leading-relaxed text-[#9B9287]">{item.notes}</p>}
 
                 <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
-                  <div className="flex -ml-1.5" role="group" aria-label={`Note de ${item.title}`}>
+                  <div className="flex items-center -ml-1.5" role="group" aria-label={`Note de ${item.title}`}>
+                    {!item.rating && <span className="text-[11px] tracking-[0.12em] uppercase text-[#9B9287] ml-1.5 mr-1">Noter</span>}
                     {[1, 2, 3, 4, 5].map((star) => (
                       <button
                         key={star}
                         onClick={() => updateRating(item, star)}
-                        className="p-1.5 rounded-full transition-colors duration-200 hover:bg-white/[0.05]"
+                        className="p-1 rounded-full transition-colors duration-200 hover:bg-white/[0.05] hover:[&_svg]:text-[#D4A574]"
                         aria-label={`Noter ${star} sur 5`}
                       >
-                        <Star size={20} className={`size-5 ${item.rating && star <= item.rating ? 'fill-[#D4A574] text-[#D4A574]' : 'text-[#F0EAE0]/25'}`} aria-hidden="true" />
+                        <Star size={18} strokeWidth={1.5} className={`size-[18px] transition-colors ${item.rating && star <= item.rating ? 'fill-[#D4A574] text-[#D4A574]' : item.rating ? 'text-[#F0EAE0]/20' : 'text-[#9B9287]/50 group-hover/stars:text-[#D4A574]/50'}`} aria-hidden="true" />
                       </button>
                     ))}
                   </div>

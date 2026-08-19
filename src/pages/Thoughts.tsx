@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import type { Thought } from '@/types/database'
 import { run } from '@/lib/db'
-import { INPUT, EYEBROW } from '@/lib/ui'
+import { EYEBROW } from '@/lib/ui'
 
 const PAGE = 50
 
@@ -135,7 +135,7 @@ export default function Thoughts() {
   const lastMine = [...thoughts].reverse().find((t) => t.sender_id === profile?.id)
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-7rem)] md:h-[calc(100dvh-1.5rem)]">
+    <div className="flex flex-col h-[calc(100dvh-7rem)] md:h-dvh md:-mb-6">
       {/* Header */}
       <div className="px-5 md:px-8 py-3.5 border-b border-white/[0.06] bg-[#110F0E]/80 backdrop-blur-xl reveal">
         <div className="max-w-[680px] mx-auto flex items-center gap-3">
@@ -161,7 +161,7 @@ export default function Thoughts() {
         )}
 
         {thoughts.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center">
+          <div className="flex flex-col items-center justify-center min-h-[40vh] text-center">
             <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#D4A574]/15 to-[#C2788E]/15 shadow-[inset_0_0_0_1px_rgba(212,165,116,0.22)] flex items-center justify-center mb-4">
               <Smile size={24} className="text-[#D4A574]/85" aria-hidden="true" />
             </div>
@@ -198,7 +198,7 @@ export default function Thoughts() {
                       <p className={`text-[11px] mt-1 num ${isMine ? 'text-[#F0EAE0]/60' : 'text-[#9B9287]'}`}>
                         {format(new Date(thought.created_at), 'HH:mm')}
                         {isMine && lastMine?.id === thought.id && !pending && (
-                          <span className="ml-1.5">{thought.is_read ? '· Lu' : '· Envoyé'}</span>
+                          <span className="inline-flex items-center gap-1.5 ml-1.5"><span aria-hidden="true">·</span>{thought.is_read ? 'Lu' : 'Envoyé'}</span>
                         )}
                       </p>
                     </div>
@@ -213,8 +213,8 @@ export default function Thoughts() {
       </div>
 
       {/* Input bar */}
-      <div className="px-4 md:px-8 py-3 border-t border-white/[0.07] bg-[#110F0E]/85 backdrop-blur-xl">
-        <div className="flex gap-2.5 max-w-[680px] mx-auto">
+      <div className="px-4 md:px-8 py-3 md:py-4 border-t border-white/[0.06] bg-[#110F0E]/80 backdrop-blur-xl">
+        <div className="flex gap-2 max-w-[680px] mx-auto rounded-full bg-white/[0.04] p-1.5 shadow-[inset_0_0_0_1px_rgba(240,234,224,0.07)] focus-within:shadow-[inset_0_0_0_1px_rgba(232,201,160,0.5)] transition-shadow">
           <input
             ref={inputRef}
             type="text"
@@ -225,15 +225,15 @@ export default function Thoughts() {
             disabled={!partnerProfile}
             maxLength={2000}
             aria-label="Écrire une pensée"
-            className={`${INPUT} flex-1 rounded-full px-5`}
+            className="flex-1 min-w-0 min-h-11 bg-transparent px-4 text-[15px] text-[#F0EAE0] placeholder-[#9B9287] outline-none disabled:opacity-60"
           />
           <button
             onClick={sendThought}
             disabled={sending || !message.trim() || !partnerProfile}
             aria-label="Envoyer"
-            className="btn-shine inline-flex items-center justify-center size-11 shrink-0 rounded-full bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_10px_30px_-14px_rgba(194,120,142,0.7)] hover:-translate-y-px active:translate-y-0 active:scale-[0.98] transition-all duration-200 disabled:opacity-60 disabled:saturate-50 disabled:cursor-not-allowed"
+            className="btn-shine inline-flex items-center justify-center size-11 shrink-0 rounded-full bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_10px_30px_-14px_rgba(194,120,142,0.7)] active:scale-[0.96] transition-all duration-200 disabled:bg-none disabled:bg-[#2A2523] disabled:text-[#6B635B] disabled:shadow-none disabled:cursor-not-allowed"
           >
-            <Send size={18} aria-hidden="true" />
+            <Send size={17} aria-hidden="true" />
           </button>
         </div>
       </div>

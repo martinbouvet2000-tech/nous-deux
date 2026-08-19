@@ -16,7 +16,7 @@ import { run } from '@/lib/db'
 import { toast } from '@/lib/toast'
 import { formatTimeIn, timezoneCity } from '@/lib/timezone'
 import { shine, unshine } from '@/lib/shine'
-import { BTN_PRIMARY, BTN_GHOST, INPUT, LABEL, CARD, CARD_EDGE, ICON_BTN } from '@/lib/ui'
+import { BTN_PRIMARY, BTN_GHOST, INPUT, LABEL, CARD, CARD_EDGE, ICON_BTN, EYEBROW } from '@/lib/ui'
 
 const COLORS = ['#D4A574', '#C2788E', '#E8B86D', '#8FA3C4', '#9CB8A0', '#A66B7E']
 const COLOR_NAMES: Record<string, string> = {
@@ -25,9 +25,6 @@ const COLOR_NAMES: Record<string, string> = {
 }
 
 /** Icône native des champs date/heure : éclaircie pour rester lisible sur le thème sombre */
-const DATE_PICKER_FIX =
-  '[&::-webkit-calendar-picker-indicator]:invert-[.8] [&::-webkit-calendar-picker-indicator]:opacity-60'
-
 const WEEKDAYS = ['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di']
 
 export default function CalendarPage() {
@@ -72,6 +69,11 @@ export default function CalendarPage() {
 
   const eventsForDay = (day: Date) => events.filter((e) => isSameDay(parseISO(e.start_at), day))
   const selectedDayEvents = selectedDate ? eventsForDay(selectedDate) : []
+  const upcoming = (() => {
+    const now = new Date(); const horizon = new Date(now.getTime() + 7 * 86400000)
+    return [...events].filter((e) => { const d = parseISO(e.start_at); return d >= now && d <= horizon && !(selectedDate && isSameDay(d, selectedDate)) })
+      .sort((a, b) => a.start_at.localeCompare(b.start_at)).slice(0, 6)
+  })()
 
   const openForm = (date?: Date) => {
     const d = date ?? selectedDate ?? new Date()
@@ -162,7 +164,7 @@ export default function CalendarPage() {
             ))}
           </div>
 
-          <div className="grid grid-cols-7 gap-px bg-white/[0.05] rounded-2xl overflow-hidden">
+          <div className="grid grid-cols-7 gap-1">
             {days.map((day) => {
               const isCurrentMonth = isSameMonth(day, currentMonth)
               const isToday = isSameDay(day, new Date())
@@ -178,10 +180,10 @@ export default function CalendarPage() {
                   aria-label={`${format(day, 'EEEE d MMMM', { locale: fr })}${dayEvents.length ? `, ${dayEvents.length} événement${dayEvents.length > 1 ? 's' : ''}` : ''}`}
                   aria-pressed={isSelected}
                   className={[
-                    'aspect-square flex flex-col items-center justify-center gap-1 text-[15px] num transition-colors duration-200 focus-visible:outline-offset-[-2px]',
-                    isWeekend ? 'bg-[#171312]' : 'bg-[#151210]',
+                    'aspect-square rounded-xl flex flex-col items-center justify-center gap-1 text-[15px] num transition-all duration-200 focus-visible:outline-offset-[-2px]',
+                    isWeekend ? 'bg-white/[0.035]' : 'bg-white/[0.02]',
                     isSelected
-                      ? 'bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E] font-semibold'
+                      ? 'bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E] font-semibold shadow-[0_8px_20px_-10px_rgba(212,165,116,0.6)]'
                       : isToday
                         ? 'text-[#D4A574] font-medium shadow-[inset_0_0_0_1px_rgba(212,165,116,0.35)] hover:bg-white/[0.04]'
                         : `${isCurrentMonth ? 'text-[#F0EAE0]/85' : 'text-[#9B9287]/50'} hover:bg-white/[0.04]`,
@@ -245,6 +247,26 @@ export default function CalendarPage() {
                 })}
               </ul>
             )}
+
+            {upcoming.length > 0 && (
+              <div className="pt-4 border-t border-white/[0.06]">
+                <h3 className={`${EYEBROW} mb-3`}>Les 7 prochains jours</h3>
+                <ul className="space-y-1.5">
+                  {upcoming.map((event) => {
+                    const start = parseISO(event.start_at)
+                    return (
+                      <li key={event.id}>
+                        <button onClick={() => { setSelectedDate(start); setCurrentMonth(start) }} className="w-full flex items-center gap-3 rounded-xl px-2.5 py-2 text-left hover:bg-white/[0.04] transition-colors">
+                          <span className="size-2 rounded-full shrink-0" style={{ backgroundColor: event.color }} aria-hidden="true" />
+                          <span className="flex-1 min-w-0 truncate text-[13px] text-[#F0EAE0]/90">{event.title}</span>
+                          <span className="text-[12px] text-[#9B9287] num first-letter:uppercase shrink-0">{format(start, 'EEE d · HH:mm', { locale: fr })}</span>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -263,11 +285,11 @@ export default function CalendarPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label htmlFor="ev-start" className={LABEL}>Début</label>
-                <input id="ev-start" type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} className={`${INPUT} ${DATE_PICKER_FIX}`} required />
+                <input id="ev-start" type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} className={`${INPUT}`} required />
               </div>
               <div>
                 <label htmlFor="ev-end" className={LABEL}>Fin</label>
-                <input id="ev-end" type="datetime-local" value={endAt} min={startAt} onChange={(e) => setEndAt(e.target.value)} className={`${INPUT} ${DATE_PICKER_FIX}`} required />
+                <input id="ev-end" type="datetime-local" value={endAt} min={startAt} onChange={(e) => setEndAt(e.target.value)} className={`${INPUT}`} required />
               </div>
             </div>
             {showPartnerTime && startAt && !Number.isNaN(new Date(startAt).getTime()) && (

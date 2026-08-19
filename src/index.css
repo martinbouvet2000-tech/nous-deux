@@ -118,9 +118,31 @@
   }
 
   input[type="date"],
+  input[type="time"],
   input[type="datetime-local"] {
     color-scheme: dark;
+    min-width: 0;
   }
+  input::-webkit-datetime-edit,
+  input::-webkit-datetime-edit-fields-wrapper,
+  input::-webkit-datetime-edit-text,
+  input::-webkit-datetime-edit-day-field,
+  input::-webkit-datetime-edit-month-field,
+  input::-webkit-datetime-edit-year-field,
+  input::-webkit-datetime-edit-hour-field,
+  input::-webkit-datetime-edit-minute-field {
+    color: #F0EAE0;
+    padding: 0;
+  }
+  input::-webkit-datetime-edit-text { color: #9B9287; }
+  input::-webkit-calendar-picker-indicator {
+    filter: invert(0.85) sepia(0.2);
+    opacity: 0.55;
+    cursor: pointer;
+    border-radius: 6px;
+  }
+  input::-webkit-calendar-picker-indicator:hover { opacity: 0.9; }
+  select option { background: #1E1B17; color: #F0EAE0; }
 
   ::selection {
     background: rgba(212, 165, 116, 0.3);

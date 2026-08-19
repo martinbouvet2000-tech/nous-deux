@@ -25,14 +25,14 @@ export default function PageHeader({ eyebrow, title, accent, subtitle, action, t
           <span className="h-px flex-1 max-w-[80px] bg-gradient-to-l from-transparent to-[#D4A574]/35" />
         </div>
       )}
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between md:gap-6">
         <div className="min-w-0">
           <h1 className="font-display text-[2rem] md:text-[2.4rem] leading-[1.05] text-[#F0EAE0] text-balance">
             {title}{accent && <> <em className="font-display-italic text-[#D4A574]">{accent}</em></>}
           </h1>
           {subtitle && <p className="mt-2 text-[13px] text-[#9B9287] max-w-[46ch] leading-relaxed">{subtitle}</p>}
         </div>
-        {action && <div className="shrink-0">{action}</div>}
+        {action && <div className="shrink-0 md:pt-1.5 [&>*]:w-full md:[&>*]:w-auto">{action}</div>}
       </div>
       {tabs && <div className="mt-5">{tabs}</div>}
     </header>

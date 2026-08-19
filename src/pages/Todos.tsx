@@ -173,7 +173,7 @@ export default function TodosSection({ openSignal }: Props) {
           {activeItems.length > 0 ? (
             <ul className="mt-4 divide-y divide-[#F0EAE0]/[0.05]">
               {activeItems.map((item) => (
-                <li key={item.id} className="group flex items-center gap-2 py-1">
+                <li key={item.id} className="group flex items-center gap-2 py-1.5">
                   <button
                     onClick={() => toggleItem(item)}
                     role="checkbox"
@@ -181,7 +181,7 @@ export default function TodosSection({ openSignal }: Props) {
                     aria-label={item.title}
                     className="size-11 -ml-1.5 shrink-0 grid place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/50"
                   >
-                    <span className={`grid size-5 place-items-center rounded-md transition-all duration-200 ${
+                    <span className={`grid size-[22px] place-items-center rounded-[7px] transition-all duration-200 ${
                       item.is_done ? 'bg-[#D4A574] text-[#110F0E]' : 'text-transparent shadow-[inset_0_0_0_2px_rgba(155,146,135,0.35)] group-hover:shadow-[inset_0_0_0_2px_rgba(212,165,116,0.5)]'
                     }`} aria-hidden="true">
                       <Check size={13} strokeWidth={3} />

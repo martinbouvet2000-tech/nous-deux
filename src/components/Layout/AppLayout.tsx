@@ -39,7 +39,7 @@ export default function AppLayout() {
                 `group relative flex items-center gap-3 px-3.5 py-2.5 min-h-11 rounded-xl text-[13.5px] tracking-wide transition-all duration-200 ease-out ${
                   isActive
                     ? 'text-[#F0EAE0] bg-[#D4A574]/[0.08] shadow-[inset_0_0_0_1px_rgba(212,165,116,0.15)]'
-                    : 'text-[#9B9287] hover:text-[#F0EAE0] hover:bg-[#F0EAE0]/[0.04]'
+                    : 'text-[#9B9287] hover:text-[#F0EAE0]/90 hover:bg-[#F0EAE0]/[0.025]'
                 }`
               }
             >

@@ -60,7 +60,8 @@ export default function Login() {
     <div className="min-h-dvh grid lg:grid-cols-[1.1fr_1fr] grain relative">
       <Backdrop />
       {/* ─── Left panel — branding (desktop) ─── */}
-      <div className="hidden lg:flex items-center justify-center relative overflow-hidden z-10 border-r border-white/[0.06]">
+      <div className="hidden lg:flex items-center justify-center relative overflow-hidden z-10">
+        <span className="absolute right-0 inset-y-[12%] w-px bg-gradient-to-b from-transparent via-[#D4A574]/25 to-transparent" aria-hidden="true" />
         <div className="absolute rounded-full" style={{ top: '10%', left: '10%', width: 500, height: 500, background: 'rgba(212,165,116,0.08)', filter: 'blur(140px)', animation: 'loginOrbDrift1 12s ease-in-out infinite' }} aria-hidden="true" />
         <div className="absolute rounded-full" style={{ bottom: '5%', right: '10%', width: 450, height: 450, background: 'rgba(194,120,142,0.06)', filter: 'blur(120px)', animation: 'loginOrbDrift2 14s ease-in-out infinite' }} aria-hidden="true" />
         <div className="relative z-10 text-center px-12 max-w-md">
@@ -68,6 +69,7 @@ export default function Login() {
             <div className="absolute rounded-full" style={{ top: '50%', left: '50%', transform: 'translate(-50%,-40%)', width: 120, height: 80, background: 'rgba(212,165,116,0.12)', filter: 'blur(40px)', animation: 'loginGlowPulse 4s ease-in-out infinite' }} aria-hidden="true" />
             <Heart size={72} className="relative" fill="currentColor" style={{ color: '#D4A574', opacity: 0.85, filter: 'drop-shadow(0 4px 24px rgba(212,165,116,0.2))' }} aria-hidden="true" />
           </div>
+          <Ornament className="max-w-[200px] mx-auto mb-6" />
           <h1 className="mb-5 font-display-italic text-[3.6rem] leading-[1.05] gradient-text-live">Nous Deux</h1>
           <p className="text-base leading-relaxed text-[#9B9287] max-w-[34ch] mx-auto text-balance">
             Votre espace intime, privé et chaleureux — peu importe la distance.

@@ -6,7 +6,7 @@ import { run } from '@/lib/db'
 import { toast } from '@/lib/toast'
 import { confirm } from '@/lib/confirm'
 import { getAllTimezones, detectTimezone, timezoneCity } from '@/lib/timezone'
-import { BTN_PRIMARY, BTN_GHOST, INPUT, LABEL, CARD, CARD_EDGE, ICON_BTN, CARD_TITLE } from '@/lib/ui'
+import { SELECT, BTN_PRIMARY, BTN_GHOST, INPUT, LABEL, CARD, CARD_EDGE, ICON_BTN, CARD_TITLE } from '@/lib/ui'
 import PageHeader from '@/components/ui/PageHeader'
 
 export default function SettingsPage() {
@@ -285,7 +285,7 @@ export default function SettingsPage() {
               </button>
             )}
           </div>
-          <select id="pf-tz" value={timezone} onChange={(e) => setTimezone(e.target.value)} className={`${INPUT} appearance-none`}>
+          <select id="pf-tz" value={timezone} onChange={(e) => setTimezone(e.target.value)} className={`${INPUT} ${SELECT}`}>
             {!timezones.includes(timezone) && <option value={timezone}>{timezone}</option>}
             {timezones.map((tz) => (
               <option key={tz} value={tz} className="bg-[#1E1B17] text-[#F0EAE0]">{tz.replace(/_/g, ' ')}</option>
@@ -350,7 +350,7 @@ export default function SettingsPage() {
         </button>
       </section>
 
-      <p className="text-center text-xs text-[#9B9287] pb-2">Nous Deux · v{__APP_VERSION__}</p>
+      <p className="lg:col-span-2 text-center text-[11px] tracking-[0.18em] uppercase text-[#9B9287] pt-2 pb-4">Nous Deux · v{__APP_VERSION__}</p>
       </div>
       </div>
     </div>

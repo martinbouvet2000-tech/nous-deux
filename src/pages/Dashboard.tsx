@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
-import { Heart, MapPin, Timer, Send, Lock, Plus, X, Link2, PartyPopper, Moon, Flame, Hourglass } from 'lucide-react'
+import { Heart, MapPin, Timer, Send, Lock, Plus, X, Link2, PartyPopper, Moon, Flame, Hourglass, Smile } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { differenceInDays, differenceInHours, differenceInMinutes, isPast, format, parseISO } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -64,12 +64,12 @@ function SunArc({ tz }: { tz: string }) {
   const ang = Math.PI * (1 - t)
   const sx = 22 + 18 * Math.cos(ang), sy = 22 - 18 * Math.sin(ang)
   return (
-    <svg viewBox="0 0 44 24" className="h-6 w-11" aria-hidden="true">
-      <path d="M4 22 A18 18 0 0 1 40 22" fill="none" stroke="rgba(240,234,224,0.12)" strokeWidth="1.25" />
+    <svg viewBox="0 0 44 24" className="h-7 w-[52px] shrink-0" aria-hidden="true">
+      <path d="M4 22 A18 18 0 0 1 40 22" fill="none" stroke="rgba(240,234,224,0.16)" strokeWidth="1.75" />
       {isDay ? (
         <>
-          <path d="M4 22 A18 18 0 0 1 40 22" fill="none" stroke="#D4A574" strokeWidth="1.25" strokeLinecap="round" strokeDasharray="56.6" strokeDashoffset={56.6 * (1 - t)} />
-          <circle cx={sx} cy={sy} r="2.6" fill="#F0EAE0" style={{ filter: 'drop-shadow(0 0 5px rgba(212,165,116,0.9))' }} />
+          <path d="M4 22 A18 18 0 0 1 40 22" fill="none" stroke="#D4A574" strokeWidth="1.75" strokeLinecap="round" strokeDasharray="56.6" strokeDashoffset={56.6 * (1 - t)} />
+          <circle cx={sx} cy={sy} r="3" fill="#F0EAE0" style={{ filter: 'drop-shadow(0 0 5px rgba(212,165,116,0.9))' }} />
         </>
       ) : (
         <path d="M25 6.5a5 5 0 1 1-6.2-6.2 4 4 0 0 0 6.2 6.2z" transform="translate(-1,4)" fill="#9B9CC7" opacity="0.85" />
@@ -324,21 +324,21 @@ export default function Dashboard() {
 
   /* ─── Blocs ─── */
   const clockCard = (tz: string, city: string | null, time: string, k: string) => (
-    <div key={k} className={`lux-card rounded-2xl px-4 py-4 text-center transition-colors ${isNightIn(tz) ? 'bg-[#1A1714]' : ''}`} onMouseMove={shine} onMouseLeave={unshine}>
+    <div key={k} className={`lux-card min-w-0 h-full flex flex-col justify-center rounded-2xl px-3 py-4 text-center transition-colors ${isNightIn(tz) ? 'bg-[#1A1714]' : ''}`} onMouseMove={shine} onMouseLeave={unshine}>
       <p className="font-display num text-[2rem] md:text-[2.25rem] tracking-tight leading-none text-[#F0EAE0]">{time}</p>
-      <div className="mt-2 flex items-center justify-center gap-2">
+      <div className="mt-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 min-w-0">
         <SunArc tz={tz} />
-        <span className="text-xs text-[#9B9287] inline-flex items-center gap-1 truncate"><MapPin size={10} aria-hidden="true" />{city || timezoneCity(tz)}</span>
+        <span className="text-xs text-[#9B9287] inline-flex items-center gap-1 min-w-0 max-w-full"><span className="truncate"><MapPin size={10} aria-hidden="true" />{city || timezoneCity(tz)}</span></span>
       </div>
     </div>
   )
 
   const clocks = (
-    <div className={`grid items-center gap-3 w-full ${partnerProfile ? 'grid-cols-[1fr_auto_1fr]' : 'grid-cols-1 max-w-[220px] mx-auto'}`}>
+    <div className={`grid items-stretch gap-3 w-full ${partnerProfile ? 'grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]' : 'grid-cols-1 max-w-[220px] mx-auto'}`}>
       {clockCard(profile.timezone, profile.location_city, time1, 'me')}
       {partnerProfile && (
         <>
-          <div className="relative flex items-center justify-center min-w-[64px]">
+          <div className="relative flex items-center justify-center min-w-[56px] sm:min-w-[64px]">
             <span className="absolute inset-x-0 top-1/2 h-px bg-gradient-to-r from-transparent via-[#D4A574]/30 to-transparent" aria-hidden="true" />
             <span className="relative num rounded-full bg-[#241F1A] px-2.5 py-1 text-[11px] font-medium text-[#D4A574] shadow-[inset_0_0_0_1px_rgba(212,165,116,0.2)]">{timeDiff ?? '= heure'}</span>
           </div>
@@ -383,8 +383,9 @@ export default function Dashboard() {
             <Hourglass size={11} aria-hidden="true" className="text-[#D4A574]" />
             {remaining.passed ? 'On y est' : 'Prochaines retrouvailles'}
           </h2>
-          <p className="font-display-italic text-[1.45rem] text-[#F0EAE0] mb-6 text-balance">
-            <span className="emoji mr-2" aria-hidden="true">{countdown.emoji}</span>{countdown.title}
+          <p className="font-display-italic text-[1.5rem] text-[#F0EAE0] mb-6 text-balance flex items-center justify-center gap-2.5 max-w-full">
+            {countdown.emoji && <span className="emoji grid size-9 shrink-0 place-items-center rounded-full bg-[#D4A574]/10 text-[18px] not-italic shadow-[inset_0_0_0_1px_rgba(212,165,116,0.22)]" aria-hidden="true">{countdown.emoji}</span>}
+            <span className="min-w-0">{countdown.title}</span>
           </p>
 
           {remaining.passed ? (
@@ -430,7 +431,7 @@ export default function Dashboard() {
   )
 
   const heartBlock = (
-    <section className="lux-card rounded-[20px] text-center py-10 xl:py-12 px-4 relative reveal flex flex-col items-center justify-center overflow-hidden" style={{ animationDelay: '150ms' }} aria-label="Je pense à toi">
+    <section className="lux-card rounded-[20px] text-center py-10 xl:py-12 px-4 relative reveal flex flex-col items-center justify-center overflow-hidden min-h-[480px] xl:min-h-[520px]" style={{ animationDelay: '150ms' }} aria-label="Je pense à toi">
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
         <div className="w-72 h-72 rounded-full bg-primary/[0.05] blur-[90px] animate-glow-breath" />
       </div>
@@ -525,22 +526,22 @@ export default function Dashboard() {
         </span>
         <span className="min-w-0 text-left">
           <span className="block truncate text-[12px] text-[#9B9287]">{name}</span>
-          <span className="block truncate text-[13px] text-[#F0EAE0]">{m ? m.label : isMe ? 'Définir mon humeur' : 'En attente…'}</span>
+          <span className="block text-[13px] leading-snug text-[#F0EAE0] line-clamp-2">{m ? m.label : isMe ? 'Choisir mon humeur' : 'En attente…'}</span>
         </span>
       </>
     )
     return isMe ? (
-      <button onClick={() => setShowMoodPicker(true)} className="lux-card flex items-center gap-3 rounded-2xl p-3.5 text-left hover:bg-[#26221E] transition-colors" aria-label="Choisir mon humeur">{inner}</button>
+      <button onClick={() => setShowMoodPicker(true)} className="flex items-center gap-3 rounded-2xl p-3.5 text-left bg-white/[0.035] shadow-[inset_0_0_0_1px_rgba(240,234,224,0.07)] hover:bg-white/[0.06] hover:shadow-[inset_0_0_0_1px_rgba(212,165,116,0.3)] transition-all duration-200" aria-label="Choisir mon humeur">{inner}</button>
     ) : (
-      <div className="lux-card flex items-center gap-3 rounded-2xl p-3.5">{inner}</div>
+      <div className="flex items-center gap-3 rounded-2xl p-3.5 bg-white/[0.035] shadow-[inset_0_0_0_1px_rgba(240,234,224,0.07)]">{inner}</div>
     )
   }
 
   const moodBlock = (
-    <section className="reveal" style={{ animationDelay: '200ms' }} aria-labelledby="mood-title">
-      <h2 id="mood-title" className={`${EYEBROW} mb-3 text-center xl:text-left`}>Humeur du jour</h2>
+    <section className="lux-card relative overflow-hidden rounded-[20px] p-5 md:p-6 reveal" style={{ animationDelay: '200ms' }} onMouseMove={shine} onMouseLeave={unshine} aria-labelledby="mood-title">
+      <h2 id="mood-title" className={`${EYEBROW} mb-4 inline-flex items-center gap-1.5`}><Smile size={11} aria-hidden="true" className="text-[#D4A574]" /> Humeur du jour</h2>
       {showMoodPicker ? (
-        <div className="lux-card rounded-2xl p-4 text-center animate-fade-in">
+        <div className="text-center animate-fade-in">
           <p className="text-sm text-[#F0EAE0]/90 mb-4" id="mood-label">Comment te sens-tu ?</p>
           <div className="grid grid-cols-4 gap-2 max-w-[15rem] mx-auto" role="group" aria-labelledby="mood-label">
             {MOODS.map(({ emoji, label }) => (
@@ -553,7 +554,7 @@ export default function Dashboard() {
           <button onClick={() => setShowMoodPicker(false)} className="btn-tertiary mt-4">Annuler</button>
         </div>
       ) : (
-        <div className={`grid gap-3 ${partnerProfile ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <div className={`grid gap-3 ${partnerProfile ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
           {moodCard('me')}
           {partnerProfile && moodCard('partner')}
         </div>

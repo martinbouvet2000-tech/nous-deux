@@ -14,7 +14,7 @@ export default function ConfirmDialogHost() {
           <AlertTriangle size={15} aria-hidden="true" /> Action irréversible
         </div>
       )}
-      <div className="flex gap-2 pt-1">
+      <div className="flex flex-col-reverse sm:flex-row gap-2 pt-1">
         {/* Le focus par défaut est sur l'action sûre */}
         <button onClick={() => close(false)} className={`${BTN_GHOST} flex-1`} autoFocus>{cancelLabel}</button>
         <button onClick={() => close(true)} className={`${danger ? BTN_DANGER : BTN_PRIMARY} flex-1`}>

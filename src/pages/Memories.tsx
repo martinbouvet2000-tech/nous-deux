@@ -19,9 +19,6 @@ type Tab = 'timeline' | 'capsules'
 const TIMELINE_EMOJIS = ['💕', '✈️', '🎉', '🏠', '💍', '🎂', '📸', '🌅', '🎓', '⭐']
 
 /** Icône native des champs date : éclaircie pour rester lisible sur le thème sombre */
-const DATE_PICKER_FIX =
-  '[&::-webkit-calendar-picker-indicator]:invert-[.8] [&::-webkit-calendar-picker-indicator]:opacity-60'
-
 /** Suppression discrète : visible au doigt, révélée au survol/focus sur desktop */
 const DELETE_BTN =
   'shrink-0 -mr-1.5 -mt-1.5 grid size-11 place-items-center rounded-full text-[#9B9287] hover:text-[#F0A5AD] hover:bg-white/[0.06] transition-all duration-200 opacity-100 md:opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
@@ -256,7 +253,7 @@ export default function Memories() {
                 </div>
                 <div>
                   <label htmlFor="tl-date" className={LABEL}>Date</label>
-                  <input id="tl-date" type="date" value={tlDate} onChange={(e) => setTlDate(e.target.value)} className={`${INPUT} ${DATE_PICKER_FIX}`} required lang="fr-FR" />
+                  <input id="tl-date" type="date" value={tlDate} onChange={(e) => setTlDate(e.target.value)} className={`${INPUT}`} required lang="fr-FR" />
                 </div>
                 <div className="flex gap-2 pt-1">
                   <button type="button" onClick={() => setShowTimelineForm(false)} className={`${BTN_GHOST} flex-1`}>Annuler</button>
@@ -351,7 +348,7 @@ export default function Memories() {
                 </div>
                 <div>
                   <label htmlFor="cap-date" className={LABEL}>Date de révélation</label>
-                  <input id="cap-date" type="date" value={capRevealDate} onChange={(e) => setCapRevealDate(e.target.value)} min={format(new Date(), 'yyyy-MM-dd')} className={`${INPUT} ${DATE_PICKER_FIX}`} required lang="fr-FR" />
+                  <input id="cap-date" type="date" value={capRevealDate} onChange={(e) => setCapRevealDate(e.target.value)} min={format(new Date(), 'yyyy-MM-dd')} className={`${INPUT}`} required lang="fr-FR" />
                 </div>
                 <div className="flex gap-2 pt-1">
                   <button type="button" onClick={() => setShowCapsuleForm(false)} className={`${BTN_GHOST} flex-1`}>Annuler</button>
