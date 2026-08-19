@@ -348,3 +348,10 @@
   }
 
 }
+
+@layer components {
+  /* Mascotte : petit rebond quand l'humeur de l'autre arrive */
+  .animate-hamster-pop { animation: hamsterPop 700ms cubic-bezier(0.34, 1.56, 0.64, 1) both; transform-origin: 50% 90%; }
+  @keyframes hamsterPop { 0% { transform: scale(0.85); opacity: 0; } 60% { transform: scale(1.06); opacity: 1; } 100% { transform: scale(1); } }
+  @media (prefers-reduced-motion: reduce) { .animate-hamster-pop { animation: none; } }
+}

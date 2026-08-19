@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { Home, Calendar, Camera, Sparkles, Settings, Heart, MapPin } from 'lucide-react'
 import AmbientMood from '@/components/AmbientMood'
+import { useLocationSharing } from '@/hooks/useLocationSharing'
 
 /**
  * 6 destinations. Sur mobile : 5 + Réglages ("Plus") — tout est atteignable au pouce.
@@ -14,6 +15,7 @@ const NAV_ITEMS = [
 ]
 
 export default function AppLayout() {
+  useLocationSharing()
   return (
     <div className="flex min-h-dvh bg-[#110F0E] grain">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-full focus:bg-[#D4A574] focus:text-[#110F0E] focus:text-sm">

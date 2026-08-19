@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, type FormEvent } from 'react'
-import { Camera, Plus, X, Clock, Lock, Mail, Hourglass } from 'lucide-react'
+import { Camera, Plus, X, Clock, Lock, Mail, Hourglass, Clapperboard } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import type { TimelineEvent, Capsule } from '@/types/database'
@@ -9,13 +9,14 @@ import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
 import EmptyState from '@/components/ui/EmptyState'
 import Tabs from '@/components/ui/Tabs'
+import VlogFeed from '@/components/vlog/VlogFeed'
 import { confirm } from '@/lib/confirm'
 import { run } from '@/lib/db'
 import { toast } from '@/lib/toast'
 import { shine, unshine } from '@/lib/shine'
 import { BTN_PRIMARY, BTN_GHOST, INPUT, LABEL, CARD, CARD_EDGE, EYEBROW } from '@/lib/ui'
 
-type Tab = 'timeline' | 'capsules'
+type Tab = 'vlog' | 'timeline' | 'capsules'
 const TIMELINE_EMOJIS = ['💕', '✈️', '🎉', '🏠', '💍', '🎂', '📸', '🌅', '🎓', '⭐']
 
 /** Icône native des champs date : éclaircie pour rester lisible sur le thème sombre */
@@ -31,11 +32,12 @@ const canReveal = (c: Capsule) => {
 
 export default function Memories() {
   const { profile, partnerProfile } = useAuthStore()
-  const [tab, setTab] = useState<Tab>('timeline')
+  const [tab, setTab] = useState<Tab>('vlog')
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([])
   const [capsules, setCapsules] = useState<Capsule[]>([])
   const [showTimelineForm, setShowTimelineForm] = useState(false)
   const [showCapsuleForm, setShowCapsuleForm] = useState(false)
+  const [showVlogComposer, setShowVlogComposer] = useState(false)
 
   const [tlTitle, setTlTitle] = useState('')
   const [tlDescription, setTlDescription] = useState('')
@@ -136,7 +138,11 @@ export default function Memories() {
   const twoCols = timelineEvents.length >= 3
 
   const headerAction =
-    tab === 'timeline' ? (
+    tab === 'vlog' ? (
+      <button onClick={() => setShowVlogComposer(true)} className={BTN_PRIMARY}>
+        <Clapperboard size={14} aria-hidden="true" /> Ajouter un vlog
+      </button>
+    ) : tab === 'timeline' ? (
       <button onClick={() => setShowTimelineForm(true)} className={BTN_PRIMARY}>
         <Plus size={14} aria-hidden="true" /> Ajouter un moment
       </button>
@@ -151,7 +157,11 @@ export default function Memories() {
       <PageHeader
         eyebrow="Votre histoire"
         title="Souvenirs"
-        subtitle="Les moments qui comptent, et les mots gardés pour plus tard."
+        subtitle={
+          tab === 'vlog'
+            ? 'Votre quotidien en images, partagé en direct.'
+            : 'Les moments qui comptent, et les mots gardés pour plus tard.'
+        }
         action={headerAction}
         tabs={
           <Tabs<Tab>
@@ -159,12 +169,17 @@ export default function Memories() {
             value={tab}
             onChange={setTab}
             tabs={[
+              { key: 'vlog', label: 'Vlog', icon: Clapperboard },
               { key: 'timeline', label: 'Notre histoire', icon: Camera },
               { key: 'capsules', label: 'Capsules', icon: Lock },
             ]}
           />
         }
       />
+
+      {tab === 'vlog' && (
+        <VlogFeed composerOpen={showVlogComposer} onOpenComposer={() => setShowVlogComposer(true)} onCloseComposer={() => setShowVlogComposer(false)} />
+      )}
 
       {tab === 'timeline' && (
         <>

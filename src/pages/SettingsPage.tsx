@@ -8,6 +8,7 @@ import { confirm } from '@/lib/confirm'
 import { getAllTimezones, detectTimezone, timezoneCity } from '@/lib/timezone'
 import { SELECT, BTN_PRIMARY, BTN_GHOST, INPUT, LABEL, CARD, CARD_EDGE, ICON_BTN, CARD_TITLE } from '@/lib/ui'
 import PageHeader from '@/components/ui/PageHeader'
+import ShareLocationToggle from '@/components/map/ShareLocationToggle'
 
 export default function SettingsPage() {
   const { profile, partnerProfile, user, signOut, fetchProfile, linkPartner, unlinkPartner, deleteAccount, requestPasswordReset } = useAuthStore()
@@ -299,6 +300,8 @@ export default function SettingsPage() {
           </label>
           <input id="pf-city" type="text" value={city} onChange={(e) => setCity(e.target.value)} className={INPUT} placeholder="Ex : Paris" maxLength={60} autoComplete="address-level2" />
         </div>
+
+        <ShareLocationToggle />
 
         <div>
           <label htmlFor="pf-since" className={LABEL}>Ensemble depuis</label>

@@ -1,12 +1,15 @@
 import { useState, useEffect, useCallback, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
-import { Heart, MapPin, Timer, Send, Lock, Plus, X, Link2, PartyPopper, Moon, Flame, Hourglass, Smile } from 'lucide-react'
+import { Heart, MapPin, Timer, Send, Lock, Plus, X, Link2, PartyPopper, Flame, Hourglass } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { differenceInDays, differenceInHours, differenceInMinutes, isPast, format, parseISO } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import type { Countdown, Mood, DailyQuestion } from '@/types/database'
+import type { Countdown, DailyQuestion } from '@/types/database'
 import LoveNoteWidget from '@/components/Dashboard/LoveNoteWidget'
+import HamsterMoodWidget from '@/components/Dashboard/HamsterMoodWidget'
+import AvailabilityWidget from '@/components/Dashboard/AvailabilityWidget'
+import CurrentActivityBanner from '@/components/schedule/CurrentActivityBanner'
 import GratitudeWidget from '@/components/Dashboard/GratitudeWidget'
 import Modal from '@/components/ui/Modal'
 import { confirm } from '@/lib/confirm'
@@ -31,17 +34,6 @@ function getGreeting(): string {
 function todayISO() {
   return format(new Date(), 'yyyy-MM-dd')
 }
-
-const MOODS = [
-  { emoji: '😊', label: 'Joie' },
-  { emoji: '🥰', label: 'Amour' },
-  { emoji: '😌', label: 'Sérénité' },
-  { emoji: '😴', label: 'Fatigue' },
-  { emoji: '😔', label: 'Tristesse' },
-  { emoji: '😤', label: 'Frustration' },
-  { emoji: '🤩', label: 'Excitation' },
-  { emoji: '🥳', label: 'Fête' },
-]
 
 const COUNTDOWN_EMOJIS = ['❤️', '✈️', '🏠', '🎉', '🎂', '💍', '🌅', '🎄']
 
@@ -121,9 +113,6 @@ export default function Dashboard() {
   const [cdSaving, setCdSaving] = useState(false)
 
   // Mood
-  const [myMood, setMyMood] = useState<Mood | null>(null)
-  const [partnerMood, setPartnerMood] = useState<Mood | null>(null)
-  const [showMoodPicker, setShowMoodPicker] = useState(false)
 
   // Question
   const [question, setQuestion] = useState<DailyQuestion | null>(null)
@@ -214,19 +203,6 @@ export default function Dashboard() {
       setCountdown(null)
     }
 
-    // Moods
-    const { data: mm } = await supabase.from('moods').select('*')
-      .eq('user_id', profile.id).gte('created_at', today)
-      .order('created_at', { ascending: false }).limit(1)
-    setMyMood(mm?.[0] ?? null)
-
-    if (partnerProfile) {
-      const { data: pm } = await supabase.from('moods').select('*')
-        .eq('user_id', partnerProfile.id).gte('created_at', today)
-        .order('created_at', { ascending: false }).limit(1)
-      setPartnerMood(pm?.[0] ?? null)
-    }
-
     // Question du jour — tirée côté serveur, par couple, sans répétition
     const { data: q } = await run(supabase.rpc('get_daily_question'), { silent: true })
     const dq = (q ?? null) as DailyQuestion | null
@@ -250,7 +226,6 @@ export default function Dashboard() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'taps', filter: `receiver_id=eq.${profile.id}` }, () => {
         setReceivedTap(true); setTimeout(() => setReceivedTap(false), 3000); loadAll()
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'moods', filter: partnerProfile ? `user_id=eq.${partnerProfile.id}` : `user_id=eq.${profile.id}` }, () => loadAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'countdowns' }, () => loadAll())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'question_answers' }, () => loadAll())
       .subscribe()
@@ -269,12 +244,6 @@ export default function Dashboard() {
     )
     if (ok) setTodayCount(c => c + 1)
     setTimeout(() => setTapped(false), 2000)
-  }
-
-  const selectMood = async (emoji: string, label: string) => {
-    if (!profile) return
-    const { ok } = await run(supabase.from('moods').insert({ user_id: profile.id, emoji, label }))
-    if (ok) { setShowMoodPicker(false); loadAll() }
   }
 
   const submitAnswer = async () => {
@@ -431,7 +400,7 @@ export default function Dashboard() {
   )
 
   const heartBlock = (
-    <section className="lux-card rounded-[20px] text-center py-10 xl:py-12 px-4 relative reveal flex flex-col items-center justify-center overflow-hidden min-h-[480px] xl:min-h-[520px] xl:flex-1" style={{ animationDelay: '150ms' }} aria-label="Je pense à toi">
+    <section className="lux-card rounded-[20px] text-center py-10 xl:py-12 px-4 relative reveal flex flex-col items-center justify-center overflow-hidden min-h-[480px] xl:min-h-[520px]" style={{ animationDelay: '150ms' }} aria-label="Je pense à toi">
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
         <div className="w-[22rem] h-[22rem] rounded-full animate-glow-breath" style={{ background: 'radial-gradient(closest-side, rgba(212,165,116,0.10), rgba(212,165,116,0.03) 50%, transparent 72%)' }} />
       </div>
@@ -515,53 +484,6 @@ export default function Dashboard() {
     </section>
   )
 
-  const moodCard = (who: 'me' | 'partner') => {
-    const isMe = who === 'me'
-    const m = isMe ? myMood : partnerMood
-    const name = isMe ? profile.display_name : partnerProfile?.display_name
-    const inner = (
-      <>
-        <span className={`grid size-11 shrink-0 place-items-center rounded-full text-2xl ${m ? 'bg-[#D4A574]/10 shadow-[inset_0_0_0_1px_rgba(212,165,116,0.25)]' : 'bg-white/[0.04] shadow-[inset_0_0_0_1px_rgba(240,234,224,0.08)]'}`} aria-hidden="true">
-          {m ? <span className="emoji">{m.emoji}</span> : isMe ? <Plus size={16} className="text-[#D4A574]" /> : <Moon size={15} className="text-[#9B9287]" />}
-        </span>
-        <span className="min-w-0 text-left">
-          <span className="block truncate text-[12px] text-[#9B9287]">{name}</span>
-          <span className="block text-[13px] leading-snug text-[#F0EAE0] line-clamp-2">{m ? m.label : isMe ? 'Comment ça va ?' : 'En attente…'}</span>
-        </span>
-      </>
-    )
-    return isMe ? (
-      <button onClick={() => setShowMoodPicker(true)} className="flex items-center gap-3 rounded-2xl p-3.5 text-left bg-white/[0.035] shadow-[inset_0_0_0_1px_rgba(240,234,224,0.07)] hover:bg-white/[0.06] hover:shadow-[inset_0_0_0_1px_rgba(212,165,116,0.3)] transition-all duration-200" aria-label="Choisir mon humeur">{inner}</button>
-    ) : (
-      <div className="flex items-center gap-3 rounded-2xl p-3.5 bg-white/[0.035] shadow-[inset_0_0_0_1px_rgba(240,234,224,0.07)]">{inner}</div>
-    )
-  }
-
-  const moodBlock = (
-    <section className="lux-card relative overflow-hidden rounded-[20px] p-5 md:p-6 reveal" style={{ animationDelay: '200ms' }} onMouseMove={shine} onMouseLeave={unshine} aria-labelledby="mood-title">
-      <h2 id="mood-title" className={`${EYEBROW} mb-4 inline-flex items-center gap-1.5`}><Smile size={11} aria-hidden="true" className="text-[#D4A574]" /> Humeur du jour</h2>
-      {showMoodPicker ? (
-        <div className="text-center animate-fade-in">
-          <p className="text-sm text-[#F0EAE0]/90 mb-4" id="mood-label">Comment te sens-tu ?</p>
-          <div className="grid grid-cols-4 gap-2 max-w-[15rem] mx-auto" role="group" aria-labelledby="mood-label">
-            {MOODS.map(({ emoji, label }) => (
-              <button key={emoji} onClick={() => selectMood(emoji, label)} aria-label={label} title={label}
-                className="h-12 rounded-2xl flex items-center justify-center text-2xl bg-white/[0.03] hover:bg-[rgba(212,165,116,0.12)] hover:-translate-y-0.5 active:scale-90 transition-all duration-200">
-                <span className="emoji">{emoji}</span>
-              </button>
-            ))}
-          </div>
-          <button onClick={() => setShowMoodPicker(false)} className="btn-tertiary mt-4">Annuler</button>
-        </div>
-      ) : (
-        <div className={`grid gap-3 ${partnerProfile ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
-          {moodCard('me')}
-          {partnerProfile && moodCard('partner')}
-        </div>
-      )}
-    </section>
-  )
-
   const questionBlock = question && (
     <section className="lux-card rounded-[20px] p-5 md:p-6 text-center reveal" style={{ animationDelay: '250ms' }} onMouseMove={shine} onMouseLeave={unshine} aria-labelledby="q-title">
       <h2 id="q-title" className={`${EYEBROW} mb-4`}>Question du jour</h2>
@@ -618,16 +540,18 @@ export default function Dashboard() {
       {/* Mobile / tablette : une colonne ; desktop large : grille asymétrique 7/5 */}
       <div className="xl:grid xl:grid-cols-12 xl:gap-6 space-y-6 xl:space-y-0">
         <div className="xl:col-span-12 mb-2 xl:mb-4">{hero}</div>
+        <div className="xl:col-span-12 empty:hidden"><CurrentActivityBanner className="reveal" /></div>
         {onboarding && <div className="xl:col-span-12">{onboarding}</div>}
 
-        <div className="xl:col-span-7 space-y-6 xl:flex xl:flex-col">
+        <div className="xl:col-span-7 space-y-6">
           {countdownBlock}
           {heartBlock}
+          {questionBlock}
         </div>
         <aside className="xl:col-span-5 space-y-6">
           {loveNoteBlock}
-          {moodBlock}
-          {questionBlock}
+          <div className="reveal" style={{ animationDelay: '150ms' }}><AvailabilityWidget /></div>
+          <div className="reveal" style={{ animationDelay: '200ms' }}><HamsterMoodWidget /></div>
           {gratitudeBlock}
         </aside>
       </div>

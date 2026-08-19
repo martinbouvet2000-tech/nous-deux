@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, type FormEvent } from 'react'
-import { Plus, ChevronLeft, ChevronRight, X, Check, CalendarDays } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { Plus, ChevronLeft, ChevronRight, X, Check, CalendarDays, CalendarClock, Users, User } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import type { CalendarEvent } from '@/types/database'
@@ -10,6 +11,8 @@ import {
 import { fr } from 'date-fns/locale'
 import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
+import Tabs from '@/components/ui/Tabs'
+import ScheduleView from '@/components/schedule/ScheduleView'
 import EmptyState from '@/components/ui/EmptyState'
 import { confirm } from '@/lib/confirm'
 import { run } from '@/lib/db'
@@ -24,11 +27,40 @@ const COLOR_NAMES: Record<string, string> = {
   '#8FA3C4': 'Bleu', '#9CB8A0': 'Vert', '#A66B7E': 'Prune',
 }
 
-/** Icône native des champs date/heure : éclaircie pour rester lisible sur le thème sombre */
 const WEEKDAYS = ['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di']
+
+type PageTab = 'agenda' | 'schedule'
+type Kind = CalendarEvent['kind']
+const PAGE_TABS: { key: PageTab; label: string; icon: typeof CalendarDays }[] = [
+  { key: 'agenda', label: 'Agenda', icon: CalendarDays },
+  { key: 'schedule', label: 'Emploi du temps', icon: CalendarClock },
+]
+
+/** Valeur d'un input datetime-local à partir d'une date — en heure locale (jamais toISOString, qui décale d'un fuseau) */
+const toLocalInput = (d: Date) => format(d, "yyyy-MM-dd'T'HH:mm")
+
+/** Chip « À deux » (or) / « Seul·e · Prénom » (neutre) */
+function KindChip({ event, authorName, compact = false }: { event: CalendarEvent; authorName: string; compact?: boolean }) {
+  const together = event.kind !== 'solo'
+  const Icon = together ? Users : User
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] whitespace-nowrap shrink-0 ${
+        together ? 'bg-[#D4A574]/12 text-[#D4A574]' : 'bg-white/[0.05] text-[#9B9287]'
+      }`}
+    >
+      <Icon size={11} aria-hidden="true" />
+      {together ? 'À deux' : compact ? 'Seul·e' : `Seul·e · ${authorName}`}
+    </span>
+  )
+}
 
 export default function CalendarPage() {
   const { profile, partnerProfile } = useAuthStore()
+  const [params, setParams] = useSearchParams()
+  const tab: PageTab = params.get('tab') === 'schedule' ? 'schedule' : 'agenda'
+  const setTab = (t: PageTab) => setParams(t === 'agenda' ? {} : { tab: t }, { replace: true })
+  const [scheduleAddSignal, setScheduleAddSignal] = useState(0)
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date())
@@ -38,6 +70,7 @@ export default function CalendarPage() {
   const [startAt, setStartAt] = useState('')
   const [endAt, setEndAt] = useState('')
   const [color, setColor] = useState(COLORS[0])
+  const [kind, setKind] = useState<Kind | null>(null)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
 
@@ -77,16 +110,20 @@ export default function CalendarPage() {
 
   const openForm = (date?: Date) => {
     const d = date ?? selectedDate ?? new Date()
-    const dateStr = format(d, 'yyyy-MM-dd')
-    setStartAt(`${dateStr}T20:00`)
-    setEndAt(`${dateStr}T21:00`)
-    setTitle(''); setDescription(''); setColor(COLORS[0]); setFormError('')
+    // Pré-remplissage 18:00–19:00 ce jour-là, en heure locale
+    const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 18, 0, 0, 0)
+    const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 19, 0, 0, 0)
+    setStartAt(toLocalInput(start))
+    setEndAt(toLocalInput(end))
+    setTitle(''); setDescription(''); setColor(COLORS[0]); setKind(null); setFormError('')
     setShowForm(true)
   }
 
   const saveEvent = async (e: FormEvent) => {
     e.preventDefault()
     if (!profile || !title.trim() || !startAt || !endAt) return
+    if (!kind) return setFormError('Choisis si cet événement est à deux ou seul·e.')
+    // `new Date('yyyy-MM-ddTHH:mm')` (sans Z) est interprété en heure locale : c'est voulu
     const start = new Date(startAt)
     const end = new Date(endAt)
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return setFormError('Date invalide.')
@@ -101,6 +138,8 @@ export default function CalendarPage() {
         start_at: start.toISOString(),
         end_at: end.toISOString(),
         color,
+        kind,
+        is_shared: kind === 'together',
       }),
       { errorMessage: "L'événement n'a pas pu être créé." },
     )
@@ -121,6 +160,9 @@ export default function CalendarPage() {
     if (ok) fetchEvents()
   }
 
+  const authorName = (e: CalendarEvent) =>
+    e.created_by === profile?.id ? (profile?.display_name ?? 'Moi') : (partnerProfile?.display_name ?? 'Partenaire')
+
   const partnerTz = partnerProfile?.timezone
   const showPartnerTime = !!partnerTz && !!profile && partnerTz !== profile.timezone
 
@@ -132,17 +174,26 @@ export default function CalendarPage() {
     <div className="px-5 md:px-8 py-6 max-w-3xl lg:max-w-[1080px] mx-auto space-y-5 reveal">
       <PageHeader
         eyebrow="Votre temps"
-        title="Agenda"
-        accent="partagé"
-        subtitle={subtitle}
+        title={tab === 'agenda' ? 'Agenda' : 'Emploi du'}
+        accent={tab === 'agenda' ? 'partagé' : 'temps'}
+        subtitle={tab === 'agenda' ? subtitle : `Vos semaines type, côte à côte : ${partnerProfile ? `${partnerProfile.display_name} sait` : 'l’autre saura'} toujours où tu en es de ta journée.`}
+        tabs={<Tabs tabs={PAGE_TABS} value={tab} onChange={setTab} label="Sections" />}
         action={
-          <button onClick={() => openForm()} className={BTN_PRIMARY}>
-            <Plus size={14} aria-hidden="true" /> Ajouter
-          </button>
+          tab === 'agenda' ? (
+            <button onClick={() => openForm()} className={BTN_PRIMARY}>
+              <Plus size={14} aria-hidden="true" /> Ajouter
+            </button>
+          ) : (
+            <button onClick={() => setScheduleAddSignal((n) => n + 1)} className={BTN_PRIMARY}>
+              <Plus size={14} aria-hidden="true" /> Ajouter un créneau
+            </button>
+          )
         }
       />
 
-      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-6 lg:items-start space-y-5 lg:space-y-0">
+      {tab === 'schedule' && <ScheduleView addSignal={scheduleAddSignal} />}
+
+      {tab === 'agenda' && <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-6 lg:items-start space-y-5 lg:space-y-0">
         {/* ─── Grille du mois ─── */}
         <div className={CARD} onMouseMove={shine} onMouseLeave={unshine}>
           <div className={CARD_EDGE} aria-hidden="true" />
@@ -192,7 +243,14 @@ export default function CalendarPage() {
                   <span className="leading-none">{format(day, 'd')}</span>
                   <span className="flex h-1.5 items-center gap-0.5" aria-hidden="true">
                     {dayEvents.slice(0, 3).map((e) => (
-                      <span key={e.id} className={`size-1.5 rounded-full ${isSelected ? 'bg-[#110F0E]/60' : 'bg-[#C2788E]'}`} />
+                      <span
+                        key={e.id}
+                        className={`size-1.5 rounded-full ${
+                          e.kind === 'solo'
+                            ? isSelected ? 'ring-1 ring-[#110F0E]/60' : 'ring-1 ring-[#9B9287]'
+                            : isSelected ? 'bg-[#110F0E]/60' : 'bg-[#C2788E]'
+                        }`}
+                      />
                     ))}
                   </span>
                 </button>
@@ -226,7 +284,8 @@ export default function CalendarPage() {
                       <div className="flex-1 min-w-0 space-y-1">
                         <p className="text-[14px] text-[#F0EAE0] leading-snug">{event.title}</p>
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                          <span className="text-[13px] text-[#F0EAE0]/75 num">{format(start, 'HH:mm')} – {format(end, 'HH:mm')}</span>
+                          <KindChip event={event} authorName={authorName(event)} />
+                          <span className="text-[13px] text-[#F0EAE0]/75 num">{format(start, 'HH:mm')} – {format(end, 'HH:mm')}{!isSameDay(start, end) && <span className="text-[#9B9287]"> (+1 j)</span>}</span>
                           {showPartnerTime && (
                             <span className="px-2 py-0.5 rounded-full bg-[#C2788E]/12 text-[#D99AAD] text-[11px] num">
                               {formatTimeIn(partnerTz!, start)} – {formatTimeIn(partnerTz!, end)} · {partnerProfile!.display_name}
@@ -259,6 +318,7 @@ export default function CalendarPage() {
                         <button onClick={() => { setSelectedDate(start); setCurrentMonth(start) }} className="w-full flex items-center gap-3 rounded-xl px-2.5 py-2 text-left hover:bg-white/[0.04] transition-colors">
                           <span className="size-2 rounded-full shrink-0" style={{ backgroundColor: event.color }} aria-hidden="true" />
                           <span className="flex-1 min-w-0 truncate text-[13px] text-[#F0EAE0]/90">{event.title}</span>
+                          <KindChip event={event} authorName={authorName(event)} compact />
                           <span className="text-[12px] text-[#9B9287] num first-letter:uppercase shrink-0">{format(start, 'EEE d · HH:mm', { locale: fr })}</span>
                         </button>
                       </li>
@@ -269,11 +329,43 @@ export default function CalendarPage() {
             )}
           </div>
         )}
-      </div>
+      </div>}
 
       {showForm && (
         <Modal title="Nouvel événement" description={showPartnerTime ? `Saisis l'heure dans ton fuseau (${timezoneCity(profile!.timezone)}) ; ${partnerProfile!.display_name} la verra convertie.` : undefined} onClose={() => setShowForm(false)}>
           <form onSubmit={saveEvent} className="space-y-4" noValidate>
+            <div>
+              <span className={LABEL} id="ev-kind-label">Type d'événement</span>
+              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-labelledby="ev-kind-label" aria-required="true">
+                {([
+                  { key: 'together', label: 'À deux', hint: 'Un moment partagé', icon: Users },
+                  { key: 'solo', label: 'Seul·e', hint: `Pour prévenir ${partnerProfile?.display_name ?? "l'autre"}`, icon: User },
+                ] as { key: Kind; label: string; hint: string; icon: typeof Users }[]).map(({ key, label, hint, icon: Icon }) => {
+                  const on = kind === key
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => { setKind(key); setFormError('') }}
+                      className={`min-h-[72px] rounded-xl px-3 py-3 flex flex-col items-start gap-1.5 text-left transition-all duration-200 ${
+                        on
+                          ? 'bg-[#D4A574]/12 shadow-[inset_0_0_0_1px_rgba(212,165,116,0.6)]'
+                          : 'bg-white/[0.04] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07)] hover:bg-white/[0.06]'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Icon size={16} className={on ? 'text-[#D4A574]' : 'text-[#9B9287]'} aria-hidden="true" />
+                        <span className={`text-[14px] font-medium ${on ? 'text-[#F0EAE0]' : 'text-[#F0EAE0]/85'}`}>{label}</span>
+                      </span>
+                      <span className="text-[12px] text-[#9B9287] leading-snug">{hint}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              {!kind && <p className="mt-2 text-[12px] text-[#9B9287]">Choisis d'abord un type pour pouvoir ajouter l'événement.</p>}
+            </div>
             <div>
               <label htmlFor="ev-title" className={LABEL}>Titre</label>
               <input id="ev-title" type="text" placeholder="Ex : Appel du soir, Ciné en ligne…" value={title} onChange={(e) => setTitle(e.target.value)} className={INPUT} maxLength={120} required />
@@ -324,7 +416,7 @@ export default function CalendarPage() {
             <div aria-live="polite">{formError && <p role="alert" className="text-[13px] text-[#F0A5AD]">{formError}</p>}</div>
             <div className="flex gap-2 pt-1">
               <button type="button" onClick={() => setShowForm(false)} className={`${BTN_GHOST} flex-1`}>Annuler</button>
-              <button type="submit" disabled={saving || !title.trim()} className={`${BTN_PRIMARY} flex-1`}>
+              <button type="submit" disabled={saving || !title.trim() || !kind} className={`${BTN_PRIMARY} flex-1`}>
                 {saving ? 'Enregistrement…' : 'Ajouter'}
               </button>
             </div>

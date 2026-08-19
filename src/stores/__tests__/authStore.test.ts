@@ -47,7 +47,7 @@ const fakeProfile = {
   location_lng: null,
   partner_id: null,
   partner_code: 'ABCD1234',
-  relationship_start: null,
+  relationship_start: null, share_location: false,
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
 }
