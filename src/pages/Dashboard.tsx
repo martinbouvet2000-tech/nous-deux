@@ -326,9 +326,9 @@ export default function Dashboard() {
   const clockCard = (tz: string, city: string | null, time: string, k: string) => (
     <div key={k} className={`lux-card min-w-0 h-full flex flex-col justify-center rounded-2xl px-3 py-4 text-center transition-colors ${isNightIn(tz) ? 'bg-[#1A1714]' : ''}`} onMouseMove={shine} onMouseLeave={unshine}>
       <p className="font-display num text-[2rem] md:text-[2.25rem] tracking-tight leading-none text-[#F0EAE0]">{time}</p>
-      <div className="mt-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 min-w-0">
+      <div className="mt-2 flex flex-col sm:flex-row items-center justify-center gap-x-2 gap-y-0.5 min-w-0">
         <SunArc tz={tz} />
-        <span className="text-xs text-[#9B9287] whitespace-nowrap"><MapPin size={10} aria-hidden="true" className="inline -mt-0.5 mr-1" />{city || timezoneCity(tz)}</span>
+        <span className="text-xs text-[#9B9287] whitespace-nowrap max-w-full truncate"><MapPin size={10} aria-hidden="true" className="inline -mt-0.5 mr-1" />{city || timezoneCity(tz)}</span>
       </div>
     </div>
   )
