@@ -120,7 +120,7 @@ export default function VlogComposer({ onClose, onPublished }: Props) {
   }
 
   return (
-    <Modal title="Nouveau vlog" description="Une photo ou une courte vidéo, un mot — l'autre le voit en direct." onClose={onClose}>
+    <Modal title="Nouveau vlog" description="Une photo ou une courte vidéo, un mot — l'autre le voit en direct." onClose={busy ? () => {} : onClose}>
       <form onSubmit={publish} className="space-y-4">
         {/* Média */}
         <div>

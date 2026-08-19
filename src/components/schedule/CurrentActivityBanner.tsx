@@ -63,13 +63,13 @@ export default function CurrentActivityBanner({ className = '' }: { className?: 
       </span>
 
       {current ? (
-        <p className="flex-1 min-w-0 truncate text-[14px] text-[#F0EAE0] leading-snug">
+        <p className="flex-1 min-w-0 line-clamp-2 sm:truncate text-[13px] sm:text-[14px] text-[#F0EAE0] leading-snug">
           <span className="font-medium">{currentSlotPhrase(name, current.title)}</span>
           <span className="text-[#9B9287]"> · jusqu'à <span className="num">{shortTime(current.end_time)}</span></span>
           {current.location && <span className="text-[#9B9287]"> · {current.location}</span>}
         </p>
       ) : (
-        <p className="flex-1 min-w-0 truncate text-[14px] text-[#F0EAE0] leading-snug">
+        <p className="flex-1 min-w-0 line-clamp-2 sm:truncate text-[13px] sm:text-[14px] text-[#F0EAE0] leading-snug">
           <span className="font-medium">{name} est libre</span>
           <span className="text-[#9B9287]"> · prochain : {next!.title} à <span className="num">{shortTime(next!.start_time)}</span></span>
         </p>
@@ -81,7 +81,7 @@ export default function CurrentActivityBanner({ className = '' }: { className?: 
             <span className="absolute inline-flex h-full w-full rounded-full bg-[#8FB3A9] opacity-60 motion-safe:animate-ping" />
             <span className="relative inline-flex size-2 rounded-full bg-[#8FB3A9]" />
           </span>
-          En cours
+          <span className="hidden sm:inline">En cours</span>
         </span>
       )}
     </div>

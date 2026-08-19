@@ -15,12 +15,12 @@ export interface MoodDef {
 }
 
 export const MOODS: MoodDef[] = [
-  { key: 'joyful',   label: 'Joyeux·se',      hint: 'Satisfait·e, de bonne humeur',            emoji: '😊', glow: 'rgba(232,184,109,0.22)', tint: '#E8B86D' },
-  { key: 'proud',    label: 'Fier·ère',        hint: 'Énergique, optimiste',                   emoji: '🤩', glow: 'rgba(240,160,90,0.22)',  tint: '#F0A05A' },
-  { key: 'peaceful', label: 'Serein·e',        hint: 'Bien-être, peaceful',                     emoji: '😌', glow: 'rgba(143,179,169,0.22)', tint: '#8FB3A9' },
-  { key: 'tired',    label: 'Fatigué·e',       hint: 'Ou un peu malade',                        emoji: '😴', glow: 'rgba(155,156,199,0.22)', tint: '#9B9CC7' },
-  { key: 'stressed', label: 'Stressé·e',       hint: 'Débordé·e',                               emoji: '😰', glow: 'rgba(194,120,142,0.22)', tint: '#C2788E' },
-  { key: 'focused',  label: 'Concentré·e',     hint: 'Dans la routine, au travail',             emoji: '🧐', glow: 'rgba(212,165,116,0.18)', tint: '#D4A574' },
+  { key: 'joyful',   label: 'Joie',            hint: 'Joyeux·se, satisfait·e',            emoji: '😊', glow: 'rgba(232,184,109,0.22)', tint: '#E8B86D' },
+  { key: 'proud',    label: 'Fierté',          hint: 'Fier·ère, énergique, optimiste',                   emoji: '🤩', glow: 'rgba(240,160,90,0.22)',  tint: '#F0A05A' },
+  { key: 'peaceful', label: 'Sérénité',        hint: 'Serein·e, bien-être',                     emoji: '😌', glow: 'rgba(143,179,169,0.22)', tint: '#8FB3A9' },
+  { key: 'tired',    label: 'Fatigue',         hint: 'Fatigué·e ou un peu malade',                        emoji: '😴', glow: 'rgba(155,156,199,0.22)', tint: '#9B9CC7' },
+  { key: 'stressed', label: 'Stress',          hint: 'Stressé·e, débordé·e',                               emoji: '😰', glow: 'rgba(194,120,142,0.22)', tint: '#C2788E' },
+  { key: 'focused',  label: 'Concentration',   hint: 'Dans la routine, au travail',             emoji: '🧐', glow: 'rgba(212,165,116,0.18)', tint: '#D4A574' },
   { key: 'down',     label: 'Pas au top',      hint: 'Triste, en manque, en colère, soulé·e',   emoji: '😔', glow: 'rgba(130,140,170,0.2)',  tint: '#8A94B0' },
 ]
 

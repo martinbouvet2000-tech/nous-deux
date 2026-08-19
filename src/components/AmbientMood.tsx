@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import Backdrop from '@/components/Backdrop'
-import { format } from 'date-fns'
+import { startOfDay } from 'date-fns'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import { moodFromRow } from '@/lib/moods'
@@ -12,7 +12,7 @@ export default function AmbientMood({ children }: { children: React.ReactNode })
 
   const loadCurrentMoods = useCallback(async () => {
     if (!profile) return
-    const today = format(new Date(), 'yyyy-MM-dd')
+    const today = startOfDay(new Date()).toISOString()
 
     const { data: myData } = await supabase
       .from('moods').select('emoji,state').eq('user_id', profile.id).gte('created_at', today)

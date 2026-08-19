@@ -51,7 +51,7 @@ export default function ShareLocationToggle({ compact = false }: { compact?: boo
         <span
           aria-hidden="true"
           className={`relative shrink-0 w-11 h-6 rounded-full transition-colors duration-200 ease-out ${
-            on ? 'bg-gradient-to-r from-[#D4A574] to-[#C2788E]' : 'bg-[#2C2724] shadow-[inset_0_0_0_1px_rgba(240,234,224,0.10)]'
+            on ? 'bg-gradient-to-r from-[#D4A574] to-[#C2788E]' : 'bg-white/[0.10] shadow-[inset_0_0_0_1px_rgba(240,234,224,0.14)]'
           }`}
         >
           <span

@@ -67,6 +67,7 @@ create policy "availability update own" on public.availability for update to aut
 
 -- ─── Position & parcours ─────────────────────────────────────────────────
 alter table public.profiles add column if not exists share_location boolean not null default false;
+grant update (share_location) on table public.profiles to authenticated;
 
 create table if not exists public.locations (
   id bigint generated always as identity primary key,

@@ -60,6 +60,13 @@ export default function VlogFeed({ composerOpen, onOpenComposer, onCloseComposer
       return next
     })
   }, [])
+  // Les URLs signées expirent (~1 h) : on les renouvelle périodiquement et au retour sur l'onglet
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState !== 'hidden') void signFor(vlogsRef.current) }
+    const t = setInterval(refresh, 10 * 60_000)
+    document.addEventListener('visibilitychange', refresh)
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', refresh) }
+  }, [signFor])
 
   /** Ajoute sans doublon, en conservant l'ordre chronologique */
   const upsert = useCallback((incoming: Vlog[]) => {
@@ -211,7 +218,7 @@ export default function VlogFeed({ composerOpen, onOpenComposer, onCloseComposer
                 <h2 className="font-display text-[17px] tracking-tight text-[#F0EAE0] num">{label}</h2>
                 <span className="h-px flex-1 bg-gradient-to-l from-transparent to-[#D4A574]/30" aria-hidden="true" />
               </div>
-              <ul role="list" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              <ul role="list" className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
                 {items.map((v) => (
                   <li key={v.id}>
                     <VlogCard vlog={v} url={urls.get(v.media_path)} isMine={v.author_id === profile?.id} authorName={v.author_id === profile?.id ? myName : partnerName} onOpen={() => setSelected(v)} />
@@ -286,7 +293,7 @@ function VlogCard({ vlog, url, isMine, authorName, onOpen }: { vlog: Vlog; url?:
         className="block w-full text-left rounded-[20px] outline-none"
         aria-label={`Ouvrir le vlog de ${authorName} du ${dateLabel}${vlog.caption ? ` : ${vlog.caption}` : ''}`}
       >
-        <div className="relative aspect-[4/5] overflow-hidden bg-white/[0.03]">
+        <div className="relative aspect-[3/4] overflow-hidden bg-white/[0.03]">
           {url ? (
             vlog.media_type === 'video' ? (
               <video src={url} preload="metadata" playsInline muted className="h-full w-full object-cover" tabIndex={-1} />
@@ -337,7 +344,7 @@ function Lightbox({ vlog, url, isMine, authorName, deleting, onDelete, onClose }
             <img src={url} alt={vlog.caption ?? `Vlog de ${authorName}`} className="w-full max-h-[60dvh] object-contain" />
           )
         ) : (
-          <div className="aspect-[4/5] w-full animate-pulse bg-white/[0.04]" />
+          <div className="aspect-[3/4] w-full animate-pulse bg-white/[0.04]" />
         )}
       </div>
       {vlog.caption && <p className="text-sm text-[#F0EAE0] leading-relaxed whitespace-pre-wrap">{vlog.caption}</p>}
@@ -363,10 +370,10 @@ function Skeleton() {
         <span className={`${EYEBROW} h-3 w-24 rounded bg-white/[0.04] animate-pulse`} />
         <span className="h-px flex-1 bg-white/[0.06]" />
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="rounded-[20px] overflow-hidden bg-white/[0.03]">
-            <div className="aspect-[4/5] bg-white/[0.04] animate-pulse" />
+            <div className="aspect-[3/4] bg-white/[0.04] animate-pulse" />
             <div className="p-4 space-y-3">
               <div className="h-3.5 w-4/5 rounded bg-white/[0.04] animate-pulse" />
               <div className="h-3.5 w-3/5 rounded bg-white/[0.04] animate-pulse" />

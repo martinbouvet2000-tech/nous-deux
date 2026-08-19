@@ -8,7 +8,7 @@ export const SLOT_COLOR_NAMES: Record<string, string> = {
 }
 
 /** Jours de semaine : 1 = lundi … 7 = dimanche */
-export const WEEKDAY_SHORT = ['L', 'M', 'M', 'J', 'V', 'S', 'D'] as const
+export const WEEKDAY_SHORT = ['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di'] as const
 export const WEEKDAY_LABELS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'] as const
 export const WEEKDAY_ABBR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const
 

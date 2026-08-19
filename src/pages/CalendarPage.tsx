@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Plus, ChevronLeft, ChevronRight, X, Check, CalendarDays, CalendarClock, Users, User } from 'lucide-react'
+import { Plus, ChevronLeft, ChevronRight, X, Check, CalendarDays, CalendarClock, Users, User, Clock } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import type { CalendarEvent } from '@/types/database'
@@ -13,6 +13,7 @@ import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
 import Tabs from '@/components/ui/Tabs'
 import ScheduleView from '@/components/schedule/ScheduleView'
+import { SLOT_COLORS, SLOT_COLOR_NAMES } from '@/lib/schedule'
 import EmptyState from '@/components/ui/EmptyState'
 import { confirm } from '@/lib/confirm'
 import { run } from '@/lib/db'
@@ -21,11 +22,7 @@ import { formatTimeIn, timezoneCity } from '@/lib/timezone'
 import { shine, unshine } from '@/lib/shine'
 import { BTN_PRIMARY, BTN_GHOST, INPUT, LABEL, CARD, CARD_EDGE, ICON_BTN, EYEBROW } from '@/lib/ui'
 
-const COLORS = ['#D4A574', '#C2788E', '#E8B86D', '#8FA3C4', '#9CB8A0', '#A66B7E']
-const COLOR_NAMES: Record<string, string> = {
-  '#D4A574': 'Or', '#C2788E': 'Rose', '#E8B86D': 'Ambre',
-  '#8FA3C4': 'Bleu', '#9CB8A0': 'Vert', '#A66B7E': 'Prune',
-}
+const COLORS = [...SLOT_COLORS]
 
 const WEEKDAYS = ['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di']
 
@@ -385,7 +382,7 @@ export default function CalendarPage() {
               </div>
             </div>
             {showPartnerTime && startAt && !Number.isNaN(new Date(startAt).getTime()) && (
-              <p className="text-[13px] text-[#D99AAD]">
+              <p className="text-[12px] text-[#D4A574]/90 inline-flex items-center gap-1.5"><Clock size={12} aria-hidden="true" /> 
                 Soit <span className="num">{formatTimeIn(partnerTz!, new Date(startAt))}</span> chez {partnerProfile!.display_name}.
               </p>
             )}
@@ -399,7 +396,7 @@ export default function CalendarPage() {
                     onClick={() => setColor(c)}
                     role="radio"
                     aria-checked={color === c}
-                    aria-label={`Couleur ${COLOR_NAMES[c] ?? c}`}
+                    aria-label={`Couleur ${SLOT_COLOR_NAMES[c] ?? c}`}
                     className="grid size-11 place-items-center rounded-full transition-transform duration-200 hover:scale-105 active:scale-95"
                   >
                     <span

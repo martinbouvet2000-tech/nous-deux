@@ -112,11 +112,11 @@ export default function MapPage() {
   const myId = profile?.id ?? null
   const partnerId = partnerProfile?.id ?? null
   const partnerName = partnerProfile?.display_name ?? 'ton/ta partenaire'
-  const partnerShares = !!partnerProfile?.share_location
 
   const [points, setPoints] = useState<LocationPoint[]>([])
   const [lastMe, setLastMe] = useState<LocationPoint | null>(null)
   const [lastPartner, setLastPartner] = useState<LocationPoint | null>(null)
+  const partnerShares = !!partnerProfile?.share_location || !!lastPartner
   const [loaded, setLoaded] = useState(false)
   const [now, setNow] = useState(() => Date.now())
 
@@ -135,13 +135,13 @@ export default function MapPage() {
     const since = startOfToday().toISOString()
     const [today, me, partner] = await Promise.all([
       run(
-        supabase.from('locations').select('*').in('user_id', [myId, partnerId]).gte('recorded_at', since).order('recorded_at', { ascending: true }).limit(2000),
+        supabase.from('locations').select('*').in('user_id', [myId, partnerId]).gte('recorded_at', since).order('recorded_at', { ascending: false }).limit(2000),
         { errorMessage: 'Impossible de charger la carte.' },
       ),
       run(supabase.from('locations').select('*').eq('user_id', myId).order('recorded_at', { ascending: false }).limit(1).maybeSingle(), { silent: true }),
       run(supabase.from('locations').select('*').eq('user_id', partnerId).order('recorded_at', { ascending: false }).limit(1).maybeSingle(), { silent: true }),
     ])
-    if (today.data) setPoints(today.data as LocationPoint[])
+    if (today.data) setPoints([...(today.data as LocationPoint[])].reverse())
     setLastMe((me.data as LocationPoint | null) ?? null)
     setLastPartner((partner.data as LocationPoint | null) ?? null)
     setLoaded(true)

@@ -70,10 +70,10 @@ export default function AvailabilityWidget({ className = '' }: { className?: str
     const def = a ? STATUS_BY_KEY[a.status] : null
     const stale = isStale(a)
     return (
-      <div className={`flex flex-col items-center text-center rounded-2xl px-3 pt-3 pb-3 shadow-[inset_0_0_0_1px_rgba(240,234,224,0.07)] ${def && !stale ? 'bg-white/[0.035]' : 'bg-white/[0.02]'}`}>
+      <div className={`flex flex-col items-center justify-center text-center rounded-2xl px-3 pt-3 pb-3 shadow-[inset_0_0_0_1px_rgba(240,234,224,0.07)] ${def && !stale ? 'bg-white/[0.035]' : 'bg-white/[0.02]'}`}>
         <CallFlag status={def ? def.key : null} size={64} wave={wave && !!def && !stale} dim={!def || stale} />
         <span className="mt-1 text-[12px] text-[#9B9287] truncate max-w-full">{name}</span>
-        <span className="text-[14px] leading-snug font-medium text-[#F0EAE0] inline-flex items-center gap-1.5">
+        <span className="text-[13px] leading-snug font-medium text-[#F0EAE0] inline-flex items-center gap-1.5">
           {def && <span className="size-2 rounded-full shrink-0" style={{ background: def.color, boxShadow: stale ? 'none' : `0 0 8px ${def.color}` }} aria-hidden="true" />}
           {def ? def.label : isMe ? 'Indique ta dispo' : 'Pas encore indiqué'}
         </span>

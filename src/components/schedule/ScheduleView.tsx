@@ -340,7 +340,7 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
           <form onSubmit={save} className="space-y-4" noValidate>
             <div>
               <label htmlFor="slot-title" className={LABEL}>Titre</label>
-              <input id="slot-title" type="text" placeholder="Ex : Cours de maths, Boulot, Sport…" value={title} onChange={(e) => setTitle(e.target.value)} className={INPUT} maxLength={80} required />
+              <input id="slot-title" type="text" placeholder="Ex : Cours de maths, Boulot, Sport…" value={title} onChange={(e) => setTitle(e.target.value)} className={INPUT} maxLength={60} required />
             </div>
             <div>
               <span className={LABEL} id="slot-days-label">Jours</span>
@@ -377,7 +377,7 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
             </div>
             <div>
               <label htmlFor="slot-location" className={LABEL}>Lieu (optionnel)</label>
-              <input id="slot-location" type="text" placeholder="Ex : Campus, Bureau, Salle de sport…" value={location} onChange={(e) => setLocation(e.target.value)} className={INPUT} maxLength={80} />
+              <input id="slot-location" type="text" placeholder="Ex : Campus, Bureau, Salle de sport…" value={location} onChange={(e) => setLocation(e.target.value)} className={INPUT} maxLength={60} />
             </div>
             <div>
               <span className={LABEL}>Couleur</span>
