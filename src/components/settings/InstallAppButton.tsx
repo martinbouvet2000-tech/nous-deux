@@ -1,16 +1,30 @@
 ﻿import { useState } from 'react'
-import { Download, Shield, Lock, Zap, X } from 'lucide-react'
+import { Download, Shield, Lock, Zap, X, Share2 } from 'lucide-react'
 import { useInstallPrompt } from '@/hooks/useInstallPrompt'
 import { toast } from '@/lib/toast'
 import { BTN_PRIMARY, BTN_GHOST } from '@/lib/ui'
 
 export default function InstallAppButton() {
-  const { canInstall, isInstalled, install } = useInstallPrompt()
+  const { canInstall, isInstalled, install, isIOS } = useInstallPrompt()
   const [showModal, setShowModal] = useState(false)
 
   if (isInstalled || !canInstall) return null
 
   const handleInstall = async () => {
+    if (isIOS) {
+      // For iOS, guide user to use Share Sheet
+      toast.info('Utilisez le partage pour ajouter à l''écran d''accueil.')
+      setShowModal(false)
+      // Try to trigger the share sheet if Web Share API is available
+      if (navigator.share) {
+        navigator.share({
+          title: 'Awy',
+          text: 'Installez Awy sur votre écran d''accueil pour un accès rapide et sécurisé.',
+        }).catch(() => {}) // User cancelled share
+      }
+      return
+    }
+
     const success = await install()
     if (success) {
       toast.success("Awy est installee ! Ouvrez-la depuis votre ecran d'accueil.")
@@ -59,8 +73,26 @@ export default function InstallAppButton() {
             {/* Content */}
             <div className="px-6 py-5 space-y-5">
               <p className="text-sm text-[#F0EAE0]/90 leading-relaxed">
-                Installez Awy directement sur votre ecran d'accueil pour un acces instantane, sans passer par le navigateur.
+                {isIOS
+                  ? "Ajoute Awy sur ton écran d'accueil pour un accès instantané. Appuie sur le bouton ci-dessous pour commencer."
+                  : "Installez Awy directement sur votre ecran d'accueil pour un acces instantane, sans passer par le navigateur."
+                }
               </p>
+
+              {/* iOS-specific instructions */}
+              {isIOS && (
+                <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 space-y-3">
+                  <p className="text-sm font-medium text-[#F0EAE0] flex items-center gap-2">
+                    <Share2 size={16} className="text-[#D4A574]" aria-hidden="true" />
+                    Comment faire sur iPhone/iPad :
+                  </p>
+                  <ol className="space-y-2 text-xs text-[#B8A793] leading-relaxed">
+                    <li><span className="text-[#F0EAE0] font-medium">1.</span> Appuie sur le bouton partage (carré avec flèche)</li>
+                    <li><span className="text-[#F0EAE0] font-medium">2.</span> Fais défiler et sélectionne « Ajouter à l'écran d'accueil »</li>
+                    <li><span className="text-[#F0EAE0] font-medium">3.</span> Confirme le nom et appuie sur « Ajouter »</li>
+                  </ol>
+                </div>
+              )}
 
               {/* Benefits */}
               <div className="space-y-3">
@@ -114,8 +146,17 @@ export default function InstallAppButton() {
                 Plus tard
               </button>
               <button onClick={handleInstall} className={`${BTN_PRIMARY} flex-1 py-3 flex items-center justify-center gap-2`}>
-                <Download size={18} aria-hidden="true" />
-                Installer
+                {isIOS ? (
+                  <>
+                    <Share2 size={18} aria-hidden="true" />
+                    Partager
+                  </>
+                ) : (
+                  <>
+                    <Download size={18} aria-hidden="true" />
+                    Installer
+                  </>
+                )}
               </button>
             </div>
           </div>
