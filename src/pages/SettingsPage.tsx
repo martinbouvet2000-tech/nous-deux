@@ -328,6 +328,7 @@ export default function SettingsPage() {
           <ShieldCheck size={16} className="text-[#D4A574]" aria-hidden="true" /> Compte & donnÃ©es
         </h2>
         <p className="text-xs text-[#9B9287]">ConnectÃ©Â·e en tant que <span className="text-[#F0EAE0]/80">{user?.email}</span></p>
+        <InstallAppButton />
         <ul className="divide-y divide-white/[0.06] -mx-1">
           {[
             { icon: KeyRound, label: 'Changer mon mot de passe', onClick: handleChangePassword },
