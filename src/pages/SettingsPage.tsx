@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Heart, LogOut, User, MapPin, Link2, Copy, Check, Share2, Unlink, Trash2, ShieldCheck, Download, Locate, KeyRound } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { supabase } from '@/lib/supabase'
