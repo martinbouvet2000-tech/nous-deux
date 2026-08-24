@@ -1,8 +1,5 @@
-name: Deploy to GitHub Pages (nous-deux-app)
+name: Deploy to GitHub Pages
 
-# Le site public vit sur le dépôt martinbouvet2000-tech/nous-deux-app (branche gh-pages).
-# Ce workflow build ici et pousse le résultat là-bas. Il a besoin d'un secret DEPLOY_TOKEN
-# (Personal Access Token avec le scope "repo" / "contents: write" sur nous-deux-app).
 on:
   push:
     branches: ['master', 'main']
@@ -12,15 +9,23 @@ concurrency:
   group: 'pages-deploy'
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
+          node-version: '22'
+          cache: 'npm'
       - run: npm ci
       - run: npm run type-check
       - run: npm test
@@ -28,12 +33,10 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-      - name: Deploy dist → nous-deux-app/gh-pages
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Upload to GitHub Pages
+        uses: actions/upload-pages-artifact@v3
         with:
-          personal_token: ${{ secrets.DEPLOY_TOKEN }}
-          external_repository: martinbouvet2000-tech/nous-deux-app
-          publish_branch: gh-pages
-          publish_dir: ./dist
-          force_orphan: true
-          commit_message: 'deploy: Nous Deux ${{ github.sha }}'
+          path: './dist'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
