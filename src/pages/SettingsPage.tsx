@@ -28,7 +28,7 @@ export default function SettingsPage() {
   const timezones = useMemo(() => getAllTimezones(), [])
   const detected = useMemo(() => detectTimezone(), [])
 
-  // Si le profil arrive aprÃ¨s le montage
+  // Si le profil arrive après le montage
   useEffect(() => {
     if (!profile) return
     setDisplayName(profile.display_name)
@@ -48,7 +48,7 @@ export default function SettingsPage() {
     e.preventDefault()
     if (!profile) return
     const name = displayName.trim()
-    if (!name) return toast.error('Ton prÃ©nom ne peut pas Ãªtre vide.')
+    if (!name) return toast.error('Ton prénom ne peut pas être vide.')
     setSaving(true)
     const { ok } = await run(
       supabase.from('profiles').update({
@@ -57,7 +57,7 @@ export default function SettingsPage() {
         location_city: city.trim() || null,
         relationship_start: relationshipStart || null,
       }).eq('id', profile.id),
-      { errorMessage: "Le profil n'a pas pu Ãªtre enregistrÃ©." },
+      { errorMessage: "Le profil n'a pas pu être enregistré." },
     )
     if (ok) {
       await fetchProfile()
@@ -73,7 +73,7 @@ export default function SettingsPage() {
     setLinking(true)
     try {
       await linkPartner(partnerCode)
-      toast.success('Vous Ãªtes liÃ©s ! ðŸ’›')
+      toast.success('Vous êtes liés ! 💛')
       setPartnerCode('')
     } catch (err) {
       setLinkError(err instanceof Error ? err.message : 'Impossible de lier ce code.')
@@ -89,7 +89,7 @@ export default function SettingsPage() {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      toast.error('Copie impossible â€” sÃ©lectionne le code manuellement.')
+      toast.error('Copie impossible — sélectionne le code manuellement.')
     }
   }
 
@@ -104,23 +104,23 @@ export default function SettingsPage() {
         setCopied(true)
         setTimeout(() => setCopied(false), 2000)
       }
-    } catch { /* partage annulÃ© */ }
+    } catch { /* partage annulé */ }
   }
 
   const handleUnlink = async () => {
     if (!partnerProfile) return
     const yes = await confirm({
-      title: `Te dÃ©lier de ${partnerProfile.display_name} ?`,
-      message: 'Vous ne verrez plus les donnÃ©es lâ€™un de lâ€™autre. Rien nâ€™est supprimÃ© : vous pourrez vous relier avec vos codes.',
-      confirmLabel: 'Me dÃ©lier', danger: true,
+      title: `Te délier de ${partnerProfile.display_name} ?`,
+      message: 'Vous ne verrez plus les données l’un de l’autre. Rien n’est supprimé : vous pourrez vous relier avec vos codes.',
+      confirmLabel: 'Me délier', danger: true,
     })
     if (!yes) return
     setBusy(true)
     try {
       await unlinkPartner()
-      toast.info('Vous Ãªtes dÃ©liÃ©s.')
+      toast.info('Vous êtes déliés.')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Impossible de te dÃ©lier.')
+      toast.error(err instanceof Error ? err.message : 'Impossible de te délier.')
     } finally {
       setBusy(false)
     }
@@ -131,7 +131,7 @@ export default function SettingsPage() {
     setBusy(true)
     try {
       await requestPasswordReset(user.email)
-      toast.success(`Un lien pour changer ton mot de passe a Ã©tÃ© envoyÃ© Ã  ${user.email}.`)
+      toast.success(`Un lien pour changer ton mot de passe a été envoyé à ${user.email}.`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Impossible d'envoyer l'email.")
     } finally {
@@ -156,9 +156,9 @@ export default function SettingsPage() {
       a.download = `awy-export-${new Date().toISOString().slice(0, 10)}.json`
       a.click()
       URL.revokeObjectURL(url)
-      toast.success('Export tÃ©lÃ©chargÃ©.')
+      toast.success('Export téléchargé.')
     } catch {
-      toast.error("L'export a Ã©chouÃ©.")
+      toast.error("L'export a échoué.")
     } finally {
       setBusy(false)
     }
@@ -166,17 +166,17 @@ export default function SettingsPage() {
 
   const handleDelete = async () => {
     const yes = await confirm({
-      title: 'Supprimer dÃ©finitivement ton compte ?',
-      message: 'Toutes tes donnÃ©es (pensÃ©es, souvenirs, capsulesâ€¦) seront effacÃ©es. Cette action est irrÃ©versible. Pense Ã  exporter avant.',
+      title: 'Supprimer définitivement ton compte ?',
+      message: 'Toutes tes données (pensées, souvenirs, capsules…) seront effacées. Cette action est irréversible. Pense à exporter avant.',
       confirmLabel: 'Supprimer mon compte', danger: true,
     })
     if (!yes) return
-    const really = await confirm({ title: 'Vraiment sÃ»rÂ·e ?', message: 'DerniÃ¨re confirmation avant suppression.', confirmLabel: 'Oui, supprimer', danger: true })
+    const really = await confirm({ title: 'Vraiment sûr·e ?', message: 'Dernière confirmation avant suppression.', confirmLabel: 'Oui, supprimer', danger: true })
     if (!really) return
     setBusy(true)
     try {
       await deleteAccount()
-      toast.info('Compte supprimÃ©. Prends soin de toi.')
+      toast.info('Compte supprimé. Prends soin de toi.')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Suppression impossible.')
     } finally {
@@ -186,11 +186,11 @@ export default function SettingsPage() {
 
   return (
     <div className="px-5 md:px-8 py-6 max-w-3xl lg:max-w-[1000px] mx-auto reveal">
-      <PageHeader eyebrow="Votre espace" title="RÃ©glages" subtitle="Profil, partenaire, sÃ©curitÃ© et donnÃ©es." />
+      <PageHeader eyebrow="Votre espace" title="Réglages" subtitle="Profil, partenaire, sécurité et données." />
       <div className="grid gap-5 lg:grid-cols-2 lg:items-start mt-4">
       <div className="space-y-5">
 
-      {/* â”€â”€â”€ Partenaire : invitation â”€â”€â”€ */}
+      {/* ─── Partenaire : invitation ─── */}
       {!partnerProfile && (
         <section className={`${CARD} space-y-4`} aria-labelledby="invite-title">
           <div className={CARD_EDGE} aria-hidden="true" />
@@ -204,7 +204,7 @@ export default function SettingsPage() {
             <p className={LABEL}>Ton code d'invitation</p>
             <div className="flex gap-2">
               <div className="flex-1 bg-[rgba(255,255,255,0.03)] rounded-xl px-4 py-3 font-mono text-lg tracking-widest text-center text-[#F0EAE0] select-all" aria-label="Code d'invitation">
-                {profile?.partner_code ?? 'â€¦'}
+                {profile?.partner_code ?? '…'}
               </div>
               <button onClick={copyCode} className={ICON_BTN} aria-label="Copier le code" title="Copier">
                 {copied ? <Check size={18} className="text-emerald-400" aria-hidden="true" /> : <Copy size={18} aria-hidden="true" />}
@@ -214,7 +214,7 @@ export default function SettingsPage() {
               </button>
             </div>
             <p className="text-xs tracking-wide text-[#9B9287] mt-2 leading-relaxed">
-              Envoie ce code Ã  ton/ta partenaire. Il/elle crÃ©e un compte, puis l'entre ici-mÃªme dans ses RÃ©glages.
+              Envoie ce code à ton/ta partenaire. Il/elle crée un compte, puis l'entre ici-même dans ses Réglages.
             </p>
           </div>
 
@@ -242,14 +242,14 @@ export default function SettingsPage() {
         </section>
       )}
 
-      {/* â”€â”€â”€ Partenaire : liÃ© â”€â”€â”€ */}
+      {/* ─── Partenaire : lié ─── */}
       {partnerProfile && (
         <section className={CARD} aria-labelledby="partner-title">
           <div className={CARD_EDGE} aria-hidden="true" />
           <div className="absolute inset-0 bg-gradient-to-br from-[rgba(212,165,116,0.04)] to-[rgba(194,120,142,0.03)] pointer-events-none" aria-hidden="true" />
           <h2 id="partner-title" className={`${CARD_TITLE} mb-3 relative`}>
             <Link2 size={16} className="text-[#D4A574]" aria-hidden="true" />
-            Partenaire liÃ©Â·e
+            Partenaire lié·e
           </h2>
           <div className="flex items-center gap-4 relative">
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#D4A574]/15 to-[#C2788E]/15 shadow-[inset_0_0_0_1px_rgba(212,165,116,0.22)] flex items-center justify-center" aria-hidden="true">
@@ -259,14 +259,14 @@ export default function SettingsPage() {
               <p className="font-medium text-sm text-[#F0EAE0]">{partnerProfile.display_name}</p>
               <p className="text-xs tracking-wide text-[#9B9287]">{partnerProfile.location_city ?? timezoneCity(partnerProfile.timezone)}</p>
             </div>
-            <button onClick={handleUnlink} disabled={busy} className={`${BTN_GHOST} text-xs`} aria-label="Me dÃ©lier">
-              <Unlink size={14} aria-hidden="true" /> DÃ©lier
+            <button onClick={handleUnlink} disabled={busy} className={`${BTN_GHOST} text-xs`} aria-label="Me délier">
+              <Unlink size={14} aria-hidden="true" /> Délier
             </button>
           </div>
         </section>
       )}
 
-      {/* â”€â”€â”€ Profil â”€â”€â”€ */}
+      {/* ─── Profil ─── */}
       <form onSubmit={saveProfile} className={`${CARD} space-y-4`} aria-labelledby="profile-title">
         <div className={CARD_EDGE} aria-hidden="true" />
         <h2 id="profile-title" className={CARD_TITLE}>
@@ -274,7 +274,7 @@ export default function SettingsPage() {
         </h2>
 
         <div>
-          <label htmlFor="pf-name" className={LABEL}>PrÃ©nom</label>
+          <label htmlFor="pf-name" className={LABEL}>Prénom</label>
           <input id="pf-name" type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className={INPUT} maxLength={40} required autoComplete="given-name" />
         </div>
 
@@ -283,7 +283,7 @@ export default function SettingsPage() {
             <label htmlFor="pf-tz" className={LABEL}>Fuseau horaire</label>
             {detected !== timezone && (
               <button type="button" onClick={() => setTimezone(detected)} className="text-xs text-[#D4A574] hover:text-[#E8C9A0] inline-flex items-center gap-1 mb-1.5">
-                <Locate size={11} aria-hidden="true" /> DÃ©tecter ({timezoneCity(detected)})
+                <Locate size={11} aria-hidden="true" /> Détecter ({timezoneCity(detected)})
               </button>
             )}
           </div>
@@ -307,57 +307,57 @@ export default function SettingsPage() {
         <div>
           <label htmlFor="pf-since" className={LABEL}>Ensemble depuis</label>
           <input id="pf-since" type="date" value={relationshipStart} onChange={(e) => setRelationshipStart(e.target.value)} max={new Date().toISOString().slice(0, 10)} className={INPUT} />
-          <p className="text-xs text-[#9B9287] mt-1.5">Sert au compteur Â« Jour N ensemble Â» sur l'accueil.</p>
+          <p className="text-xs text-[#9B9287] mt-1.5">Sert au compteur « Jour N ensemble » sur l'accueil.</p>
         </div>
 
         <button type="submit" disabled={saving || !dirty} className={`${BTN_PRIMARY} w-full py-3`}>
           {saving ? (
             <span className="w-4 h-4 rounded-full border-2 border-[#110F0E]/30 border-t-[#110F0E] animate-spin" aria-label="Enregistrement" />
           ) : saved ? (
-            <span className="flex items-center gap-2"><Check size={16} aria-hidden="true" /> EnregistrÃ©</span>
+            <span className="flex items-center gap-2"><Check size={16} aria-hidden="true" /> Enregistré</span>
           ) : 'Enregistrer'}
         </button>
       </form>
       </div>
 
       <div className="space-y-5">
-      {/* â”€â”€â”€ Compte & sÃ©curitÃ© â”€â”€â”€ */}
+      {/* ─── Compte & sécurité ─── */}
       <section className={`${CARD} space-y-3`} aria-labelledby="account-title">
         <div className={CARD_EDGE} aria-hidden="true" />
         <h2 id="account-title" className={CARD_TITLE}>
-          <ShieldCheck size={16} className="text-[#D4A574]" aria-hidden="true" /> Compte & donnÃ©es
+          <ShieldCheck size={16} className="text-[#D4A574]" aria-hidden="true" /> Compte & données
         </h2>
-        <p className="text-xs text-[#9B9287]">ConnectÃ©Â·e en tant que <span className="text-[#F0EAE0]/80">{user?.email}</span></p>
+        <p className="text-xs text-[#9B9287]">Connecté·e en tant que <span className="text-[#F0EAE0]/80">{user?.email}</span></p>
         <InstallAppButton />
         <ul className="divide-y divide-white/[0.06] -mx-1">
           {[
             { icon: KeyRound, label: 'Changer mon mot de passe', onClick: handleChangePassword },
-            { icon: Download, label: 'Exporter mes donnÃ©es (JSON)', onClick: handleExport },
-            { icon: LogOut, label: 'Se dÃ©connecter', onClick: signOut },
+            { icon: Download, label: 'Exporter mes données (JSON)', onClick: handleExport },
+            { icon: LogOut, label: 'Se déconnecter', onClick: signOut },
           ].map(({ icon: Icon, label, onClick }) => (
             <li key={label}>
               <button onClick={onClick} disabled={busy} className="w-full min-h-12 px-1 flex items-center gap-3 text-sm text-[#F0EAE0]/90 hover:text-[#F0EAE0] disabled:opacity-60 transition-colors group">
                 <Icon size={16} className="text-[#D4A574]/85" aria-hidden="true" />
                 <span className="flex-1 text-left">{label}</span>
-                <span className="text-[#9B9287] group-hover:text-[#F0EAE0] transition-colors" aria-hidden="true">â€º</span>
+                <span className="text-[#9B9287] group-hover:text-[#F0EAE0] transition-colors" aria-hidden="true">›</span>
               </button>
             </li>
           ))}
         </ul>
       </section>
 
-      {/* â”€â”€â”€ Zone de danger â”€â”€â”€ */}
+      {/* ─── Zone de danger ─── */}
       <section className="rounded-[20px] p-5 shadow-[inset_0_0_0_1px_rgba(224,108,117,0.22)] bg-[rgba(224,108,117,0.04)]" aria-labelledby="danger-title">
         <h2 id="danger-title" className="font-display text-[17px] text-[#F0A5AD] flex items-center gap-2"><Trash2 size={15} aria-hidden="true" /> Zone sensible</h2>
-        <p className="text-[13px] text-[#9B9287] mt-1.5 leading-relaxed">La suppression efface dÃ©finitivement toutes vos donnÃ©es. Exporte-les avant si tu veux les garder.</p>
+        <p className="text-[13px] text-[#9B9287] mt-1.5 leading-relaxed">La suppression efface définitivement toutes vos données. Exporte-les avant si tu veux les garder.</p>
         <button onClick={handleDelete} disabled={busy} className="mt-3 text-[13px] text-[#F0A5AD]/90 underline underline-offset-4 decoration-[#F0A5AD]/40 hover:decoration-[#F0A5AD] min-h-11 disabled:opacity-60">
-          Supprimer dÃ©finitivement mon compte
+          Supprimer définitivement mon compte
         </button>
       </section>
 
       </div>
       </div>
-      <p className="text-center text-[11px] tracking-[0.18em] uppercase text-[#9B9287] pt-8 pb-4">Awy Â· v{__APP_VERSION__}</p>
+      <p className="text-center text-[11px] tracking-[0.18em] uppercase text-[#9B9287] pt-8 pb-4">Awy · v{__APP_VERSION__}</p>
     </div>
   )
 }
