@@ -12,7 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest --watch",
     "preview": "vite preview",
-    "build:pages": "VITE_BASE=/nous-deux/ vite build && cp dist/index.html dist/404.html && touch dist/.nojekyll",
+    "build:pages": "node scripts/gen-icons.mjs && VITE_BASE=/nous-deux/ vite build && cp dist/index.html dist/404.html && touch dist/.nojekyll",
     "deploy:pages": "npm run build:pages && gh-pages -d dist -b gh-pages -r https://github.com/martinbouvet2000-tech/nous-deux.git --dotfiles -m \"deploy: Nous Deux $(date -u +%Y-%m-%dT%H:%MZ)\"",
     "icons": "node scripts/gen-icons.mjs",
     "prebuild": "node scripts/gen-icons.mjs"
