@@ -30,9 +30,6 @@ jobs:
       - run: npm run type-check
       - run: npm test
       - run: npm run build:pages
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
       - name: Upload to GitHub Pages
         uses: actions/upload-pages-artifact@v3
         with:
