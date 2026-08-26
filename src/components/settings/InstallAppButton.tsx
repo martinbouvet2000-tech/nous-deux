@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
 import { Download, Shield, Lock, Zap, X, Share2 } from 'lucide-react'
 import { useInstallPrompt } from '@/hooks/useInstallPrompt'
 import { toast } from '@/lib/toast'
@@ -36,7 +36,7 @@ export default function InstallAppButton() {
     <>
       <button
         onClick={() => setShowModal(true)}
-        className={${BTN_PRIMARY} w-full py-3 flex items-center justify-center gap-2}
+        className={`${BTN_PRIMARY} w-full py-3 flex items-center justify-center gap-2`}
         aria-label='Installer l application Awy'
       >
         <Download size={18} aria-hidden='true' />
@@ -101,7 +101,7 @@ export default function InstallAppButton() {
                   <Lock size={18} className='text-[#D4A574] shrink-0 mt-0.5' aria-hidden='true' />
                   <div>
                     <p className='text-sm font-medium text-[#F0EAE0]'>Chiffre de bout en bout</p>
-                    <p className='text-xs text-[#B8A793] leading-relaxed'>Vos donnees privees, vos cles — personne d autre ne peut lire.</p>
+                    <p className='text-xs text-[#B8A793] leading-relaxed'>Vos donnees privees, vos cles - personne d autre ne peut lire.</p>
                   </div>
                 </div>
                 <div className='flex gap-3'>
@@ -133,10 +133,10 @@ export default function InstallAppButton() {
             </div>
 
             <div className='px-6 py-4 border-t border-white/[0.06] flex gap-3'>
-              <button onClick={() => setShowModal(false)} className={${BTN_GHOST} flex-1 py-3}>
+              <button onClick={() => setShowModal(false)} className={`${BTN_GHOST} flex-1 py-3`}>
                 Plus tard
               </button>
-              <button onClick={handleInstall} className={${BTN_PRIMARY} flex-1 py-3 flex items-center justify-center gap-2}>
+              <button onClick={handleInstall} className={`${BTN_PRIMARY} flex-1 py-3 flex items-center justify-center gap-2`}>
                 {isIOS ? (
                   <>
                     <Share2 size={18} aria-hidden='true' />
@@ -156,4 +156,3 @@ export default function InstallAppButton() {
     </>
   )
 }
-
