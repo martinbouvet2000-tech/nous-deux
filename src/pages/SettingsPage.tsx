@@ -165,7 +165,7 @@ export default function SettingsPage() {
     if (!profile) return
     setBusy(true)
     try {
-      const tables = ['love_notes', 'vlogs', 'availability', 'schedule_slots', 'locations', 'moods', 'gratitudes', 'taps', 'countdowns', 'calendar_events', 'timeline_events', 'capsules', 'todo_lists', 'todo_items', 'watch_items', 'bucket_items', 'question_answers'] as const
+      const tables = ['love_notes', 'vlogs', 'availability', 'schedule_slots', 'locations', 'moods', 'gratitudes', 'taps', 'countdowns', 'calendar_events', 'capsules', 'todo_lists', 'todo_items', 'watch_items', 'bucket_items', 'question_answers'] as const
       const out: Record<string, unknown> = { exported_at: new Date().toISOString(), profile }
       for (const t of tables) {
         const { data } = await supabase.from(t).select('*')
