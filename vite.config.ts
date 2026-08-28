@@ -40,6 +40,10 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Notifications push : le service worker généré charge nos gestionnaires
+        // `push` / `notificationclick` (public/push-sw.js). Le chemin suit la base
+        // de déploiement — « /nous-deux/push-sw.js » sur GitHub Pages.
+        importScripts: [`${base}push-sw.js`],
         // L'app shell est mis en cache ; les appels Supabase ne le sont JAMAIS (données privées, temps réel)
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         navigateFallback: `${base}index.html`,
