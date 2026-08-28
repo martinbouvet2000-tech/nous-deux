@@ -6,16 +6,21 @@ import { useConfirmStore } from '@/lib/confirm'
 export default function ConfirmDialogHost() {
   const { open, options, close } = useConfirmStore()
   if (!open) return null
-  const { title, message, confirmLabel = 'Confirmer', cancelLabel = 'Annuler', danger = false } = options
+  const { title, message, confirmLabel = 'Confirmer', cancelLabel = 'Annuler', danger = false, irreversible = danger } = options
   return (
-    <Modal title={title} description={message ?? 'Cette action est définitive.'} onClose={() => close(false)} alert>
-      {danger && (
+    <Modal
+      title={title}
+      description={message ?? (irreversible ? 'Cette action est définitive.' : 'Confirme pour continuer.')}
+      onClose={() => close(false)}
+      alert
+    >
+      {irreversible && (
         <div className="flex items-center gap-2 text-[13px] text-[#F0A5AD]/90">
           <AlertTriangle size={15} aria-hidden="true" /> Action irréversible
         </div>
       )}
       <div className="flex flex-col-reverse sm:flex-row gap-2 pt-1">
-        {/* Le focus par défaut est sur l'action sûre */}
+        {/* Le focus par défaut est sur l’action sûre */}
         <button onClick={() => close(false)} className={`${BTN_GHOST} flex-1`} autoFocus>{cancelLabel}</button>
         <button onClick={() => close(true)} className={`${danger ? BTN_DANGER : BTN_PRIMARY} flex-1`}>
           {confirmLabel}

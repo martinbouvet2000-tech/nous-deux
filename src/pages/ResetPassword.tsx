@@ -19,7 +19,7 @@ export default function ResetPassword() {
   const [loading, setLoading] = useState(false)
   const [waited, setWaited] = useState(false)
 
-  // Laisse 2 s à Supabase pour établir la session de récupération avant d'afficher l'erreur
+  // Laisse 2 s à Supabase pour établir la session de récupération avant d’afficher l’erreur
   useEffect(() => {
     const t = setTimeout(() => setWaited(true), 2000)
     return () => clearTimeout(t)
@@ -33,7 +33,7 @@ export default function ResetPassword() {
     setLoading(true)
     try {
       await updatePassword(password)
-      toast.success('Mot de passe mis à jour. Bon retour !')
+      toast.success('Mot de passe mis à jour. Bon retour\u202f!')
       navigate('/', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Impossible de mettre à jour le mot de passe.')
@@ -42,22 +42,23 @@ export default function ResetPassword() {
     }
   }
 
+  // Hors de AppLayout : cet écran gère lui-même les encoches (safe areas).
   return (
-    <div className="min-h-dvh flex items-center justify-center px-5 py-12 bg-[#110F0E] grain relative">
+    <div className="min-h-dvh flex items-center justify-center pt-safe pb-safe px-safe bg-[#110F0E] grain relative">
       <Backdrop />
-      <div className="w-full max-w-[420px] lux-card rounded-[24px] p-6 md:p-8 relative z-10">
+      <div className="flex-1 max-w-[420px] mx-5 my-12 lux-card rounded-[24px] p-6 md:p-8 relative z-10">
         <div className="text-center mb-8">
           <Heart size={40} fill="currentColor" className="mx-auto mb-4 text-[#D4A574]/85" aria-hidden="true" />
           <h1 className="font-display text-[1.75rem] tracking-tight text-[#F0EAE0]">Nouveau mot de passe</h1>
-          <p className="text-sm text-[#9B9287] mt-1.5">Choisis-en un que tu n'utilises nulle part ailleurs.</p>
+          <p className="text-sm text-[#9B9287] mt-1.5">Choisis-en un que tu n’utilises nulle part ailleurs.</p>
         </div>
 
         {!user ? (
           <div className="rounded-2xl p-5 bg-[#1E1B17] text-sm text-[#9B9287] leading-relaxed" role="status" aria-live="polite">
             {waited ? (
               <>
-                Ce lien est invalide ou a expiré. Retourne à la{' '}
-                <button onClick={() => navigate('/', { replace: true })} className="text-[#D4A574] hover:text-[#E8C9A0]">connexion</button>{' '}
+                Ce lien n’est plus valable (il a expiré ou il a déjà servi). Retourne à la{' '}
+                <button onClick={() => navigate('/', { replace: true })} className="tap-44 text-[#D4A574] hover:text-[#E8C9A0]">connexion</button>{' '}
                 et redemande un lien.
               </>
             ) : 'Vérification du lien…'}

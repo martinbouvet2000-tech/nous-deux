@@ -1,4 +1,6 @@
 import { toast } from '@/lib/toast'
+import { isOnline } from '@/lib/network'
+import { useConnectivityStore } from '@/stores/connectivityStore'
 
 /**
  * Message lisible pour un utilisateur à partir d'une erreur Supabase/PostgREST.
@@ -37,8 +39,22 @@ interface Result<T> {
 }
 
 /**
- * Exécute une requête Supabase, affiche un toast d'erreur si besoin,
- * et renvoie `{ ok, data }` — plus jamais d'erreur avalée en silence.
+ * Hors ligne, la bannière globale (ConnectivityBanner) dit déjà tout : « Hors
+ * ligne — dernières infos il y a 5 min ». Empiler par-dessus un toast par écran
+ * qui échoue ne renseignait personne et en affichait jusqu'à quatre d'affilée.
+ * On se tait donc pendant la coupure ; la déduplication de `lib/toast` suffit
+ * pour le cas limite « réseau annoncé présent mais injoignable ».
+ */
+function offlineSilence(): boolean {
+  return !isOnline() || useConnectivityStore.getState().status === 'offline'
+}
+
+/**
+ * Exécute une requête Supabase et renvoie `{ ok, data, error }` — plus jamais
+ * d'erreur avalée en silence. Un toast est affiché sauf si `silent` est demandé
+ * ou si l'on est hors ligne (la bannière globale s'en charge déjà).
+ * L'appelant qui veut son propre message garde `error` sous la main et peut le
+ * traduire avec `humanizeError`.
  */
 export async function run<T>(
   query: PromiseLike<Result<T>>,
@@ -47,14 +63,21 @@ export async function run<T>(
   try {
     const { data, error } = await query
     if (error) {
-      console.error('[db]', error)
-      if (!opts.silent) toast.error(humanizeError(error, opts.errorMessage))
+      // Un échec attendu (appel `silent`) ou une simple coupure réseau n'a rien à
+      // faire dans la console : hors ligne, la bannière dit déjà tout, et empiler
+      // « [db] OfflineError: pas de connexion » à chaque écran ne renseignait personne.
+      if (!opts.silent && !offlineSilence()) {
+        console.error('[db]', error)
+        toast.error(humanizeError(error, opts.errorMessage))
+      }
       return { ok: false, data: null, error }
     }
     return { ok: true, data, error: null }
   } catch (err) {
-    console.error('[db] unexpected', err)
-    if (!opts.silent) toast.error(humanizeError(err, opts.errorMessage))
+    if (!opts.silent && !offlineSilence()) {
+      console.error('[db] unexpected', err)
+      toast.error(humanizeError(err, opts.errorMessage))
+    }
     return { ok: false, data: null, error: err }
   }
 }

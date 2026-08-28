@@ -36,7 +36,7 @@ export default function Login() {
         await signIn(email, password)
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Une erreur est survenue.')
+      setError(err instanceof Error ? err.message : 'Une erreur est survenue. Réessaie dans un instant.')
     } finally {
       setLoading(false)
     }
@@ -46,20 +46,20 @@ export default function Login() {
     mode === 'signup' ? 'Créer un compte'
     : mode === 'forgot' ? 'Mot de passe oublié'
     : mode === 'check-email' ? 'Vérifie ta boîte mail'
-    : mode === 'reset-sent' ? 'Email envoyé'
+    : mode === 'reset-sent' ? 'Lien envoyé'
     : 'Bon retour'
 
   const subheading =
-    mode === 'signup' ? 'Rejoins ton/ta partenaire sur Awy'
-    : mode === 'forgot' ? 'On t’envoie un lien pour choisir un nouveau mot de passe'
+    mode === 'signup' ? 'Rejoins ton/ta partenaire sur Awy.'
+    : mode === 'forgot' ? 'On t’envoie un lien pour choisir un nouveau mot de passe.'
     : mode === 'check-email' ? `Un lien de confirmation a été envoyé à ${email}. Clique dessus pour activer ton compte (pense aux spams).`
     : mode === 'reset-sent' ? `Si un compte existe pour ${email}, un lien de réinitialisation vient d’être envoyé. Il est valable une heure.`
-    : 'Connecte-toi pour retrouver ton/ta partenaire'
+    : 'Connecte-toi pour retrouver ton/ta partenaire.'
 
   return (
     <div className="min-h-dvh grid lg:grid-cols-[1.1fr_1fr] grain relative">
       <Backdrop />
-      {/* ─── Left panel — branding (desktop) ─── */}
+      {/* ─── Panneau gauche — identité de marque (bureau) ─── */}
       <div className="hidden lg:flex items-center justify-center relative overflow-hidden z-10">
         <span className="absolute right-0 inset-y-[12%] w-px bg-gradient-to-b from-transparent via-[#D4A574]/25 to-transparent" aria-hidden="true" />
         <div className="absolute rounded-full" style={{ top: '10%', left: '10%', width: 500, height: 500, background: 'radial-gradient(closest-side, rgba(212,165,116,0.10), rgba(212,165,116,0.04) 45%, transparent 72%)', animation: 'loginOrbDrift1 12s ease-in-out infinite' }} aria-hidden="true" />
@@ -72,22 +72,23 @@ export default function Login() {
           <Ornament className="max-w-[200px] mx-auto mb-6" />
           <h1 className="mb-5 font-display-italic text-[3.6rem] leading-[1.05] gradient-text-live">Awy</h1>
           <p className="text-base leading-relaxed text-[#9B9287] max-w-[34ch] mx-auto text-balance">
-            Votre espace intime, privé et chaleureux — peu importe la distance.
+            Un espace rien qu’à vous deux&#8239;: intime, privé et chaleureux, peu importe la distance.
           </p>
         </div>
       </div>
 
-      {/* ─── Right panel — form ─── */}
-      <main className="flex items-center justify-center px-5 py-10 relative z-10 min-h-dvh">
-        <div className="w-full max-w-[420px] lux-card rounded-[24px] p-6 md:p-8">
-          {/* Mobile branding */}
+      {/* ─── Panneau droit — formulaire ───
+          Hors de AppLayout : cet écran gère lui-même les encoches (safe areas). */}
+      <main className="flex items-center justify-center pt-safe pb-safe px-safe relative z-10 min-h-dvh">
+        <div className="flex-1 max-w-[420px] mx-5 my-10 lux-card rounded-[24px] p-6 md:p-8">
+          {/* Identité de marque — version mobile */}
           <div className="text-center mb-8 lg:hidden animate-fade-in">
             <div className="relative inline-block mb-6">
               <div className="absolute rounded-full" style={{ top: '50%', left: '50%', transform: 'translate(-50%,-40%)', width: 80, height: 60, background: 'radial-gradient(closest-side, rgba(212,165,116,0.2), transparent 75%)', animation: 'loginGlowPulse 4s ease-in-out infinite' }} aria-hidden="true" />
               <Heart size={48} className="relative" fill="currentColor" style={{ color: '#D4A574', opacity: 0.85, filter: 'drop-shadow(0 4px 20px rgba(212,165,116,0.2))' }} aria-hidden="true" />
             </div>
             <h1 className="font-display-italic text-[2.4rem] leading-[1.1] gradient-text-live">Awy</h1>
-            <p className="text-[#9B9287] text-sm mt-2 text-balance">Votre espace intime, privé et chaleureux — peu importe la distance.</p>
+            <p className="text-[#9B9287] text-sm mt-2 text-balance">Un espace rien qu’à vous deux&#8239;: intime, privé et chaleureux, peu importe la distance.</p>
           </div>
 
           <div className="mb-7 animate-slide-up">
@@ -101,7 +102,7 @@ export default function Login() {
               <div className="w-14 h-14 rounded-2xl bg-[rgba(212,165,116,0.12)] flex items-center justify-center">
                 <MailCheck size={26} className="text-[#D4A574]" aria-hidden="true" />
               </div>
-              <button type="button" onClick={() => switchMode('signin')} className="inline-flex items-center gap-2 text-sm text-[#D4A574] hover:text-[#E8C9A0] transition-colors">
+              <button type="button" onClick={() => switchMode('signin')} className="tap-44 inline-flex items-center gap-2 text-sm text-[#D4A574] hover:text-[#E8C9A0] transition-colors">
                 <ArrowLeft size={16} aria-hidden="true" /> Retour à la connexion
               </button>
             </div>
@@ -126,8 +127,8 @@ export default function Login() {
                   <div className="flex items-baseline justify-between">
                     <label htmlFor="login-password" className={LABEL}>Mot de passe</label>
                     {mode === 'signin' && (
-                      <button type="button" onClick={() => switchMode('forgot')} className="text-xs text-[#9B9287] hover:text-[#D4A574] transition-colors mb-1.5 min-h-6 px-1">
-                        Oublié ?
+                      <button type="button" onClick={() => switchMode('forgot')} className="tap-44 text-xs text-[#9B9287] hover:text-[#D4A574] transition-colors mb-1.5 px-1">
+                        Oublié&#8239;?
                       </button>
                     )}
                   </div>
@@ -155,7 +156,7 @@ export default function Login() {
                   <span className="w-5 h-5 rounded-full border-2 border-[#110F0E]/30 border-t-[#110F0E] animate-spin" aria-label="Chargement" />
                 ) : (
                   <>
-                    {mode === 'signup' ? "S'inscrire" : mode === 'forgot' ? 'Envoyer le lien' : 'Se connecter'}
+                    {mode === 'signup' ? 'S’inscrire' : mode === 'forgot' ? 'Envoyer le lien' : 'Se connecter'}
                     <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" aria-hidden="true" />
                   </>
                 )}
@@ -163,14 +164,14 @@ export default function Login() {
 
               <p className="text-center pt-2 text-sm text-[#9B9287]">
                 {mode === 'forgot' ? (
-                  <button type="button" onClick={() => switchMode('signin')} className="text-[#D4A574] font-semibold hover:text-[#E8C9A0] transition-colors">
+                  <button type="button" onClick={() => switchMode('signin')} className="tap-44 text-[#D4A574] font-semibold hover:text-[#E8C9A0] transition-colors">
                     Retour à la connexion
                   </button>
                 ) : (
                   <>
-                    {mode === 'signup' ? 'Déjà un compte ?' : 'Pas encore de compte ?'}{' '}
-                    <button type="button" onClick={() => switchMode(mode === 'signup' ? 'signin' : 'signup')} className="text-[#D4A574] font-semibold hover:text-[#E8C9A0] transition-colors">
-                      {mode === 'signup' ? 'Se connecter' : "S'inscrire"}
+                    {mode === 'signup' ? 'Déjà un compte\u202f?' : 'Pas encore de compte\u202f?'}{' '}
+                    <button type="button" onClick={() => switchMode(mode === 'signup' ? 'signin' : 'signup')} className="tap-44 text-[#D4A574] font-semibold hover:text-[#E8C9A0] transition-colors">
+                      {mode === 'signup' ? 'Se connecter' : 'S’inscrire'}
                     </button>
                   </>
                 )}

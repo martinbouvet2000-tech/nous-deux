@@ -12,6 +12,19 @@ export const WEEKDAY_SHORT = ['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di'] as const
 export const WEEKDAY_LABELS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'] as const
 export const WEEKDAY_ABBR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const
 
+/** Les sept jours, dans l'ordre français (lundi en tête) */
+export const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const
+
+/**
+ * Libellé d'un jour (1 = lundi … 7 = dimanche).
+ * En français les noms de jours s'écrivent en minuscules : la majuscule n'est
+ * demandée (`capitalized`) qu'en début de phrase, de titre ou d'étiquette isolée.
+ */
+export function weekdayLabel(weekday: number, capitalized = false): string {
+  const label = WEEKDAY_LABELS[weekday - 1] ?? ''
+  return capitalized ? label : label.toLowerCase()
+}
+
 /** 'HH:MM' ou 'HH:MM:SS' → minutes depuis minuit */
 export function timeToMinutes(t: string): number {
   const [h = '0', m = '0'] = t.split(':')

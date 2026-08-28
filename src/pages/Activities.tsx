@@ -1,11 +1,11 @@
-import { useEffect, useState, useCallback, type FormEvent } from 'react'
+import { useState, useCallback, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Plus, X, Film, Tv, FileVideo, Star, Check, Play, Compass, MapPin, Utensils, Palette, Sparkles, Trophy, ListTodo } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
+import { useLiveData } from '@/hooks/useLiveData'
 import type { WatchItem, BucketItem } from '@/types/database'
-import { format, parseISO } from 'date-fns'
-import { fr } from 'date-fns/locale'
+import { parseISO } from 'date-fns'
 import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
 import Tabs from '@/components/ui/Tabs'
@@ -13,6 +13,7 @@ import EmptyState from '@/components/ui/EmptyState'
 import { confirm } from '@/lib/confirm'
 import { run } from '@/lib/db'
 import { BTN_PRIMARY, BTN_GHOST, INPUT, LABEL, CARD, CARD_EDGE } from '@/lib/ui'
+import { formatLongDateFR, toDateInputValue } from '@/lib/dates'
 import TodosSection from '@/pages/Todos'
 
 type MainTab = 'watch' | 'bucket' | 'projects'
@@ -73,7 +74,7 @@ const MEDALLION =
 
 /** Bouton de suppression discret — invisible au repos sur desktop, mais cible ≥ 44px */
 const DELETE_BTN =
-  'p-2.5 -m-2.5 shrink-0 rounded-full text-[#9B9287] hover:text-[#F0A5AD] hover:bg-[rgba(224,108,117,0.10)] transition-all duration-200 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100'
+  'p-3.5 -m-3.5 shrink-0 rounded-full text-[#9B9287] hover:text-[#F0A5AD] hover:bg-[rgba(224,108,117,0.10)] transition-all duration-200 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100'
 
 /** Filtres secondaires — une seule rangée de chips, un seul style d'état actif */
 function FilterChips<K extends string>({ options, value, onChange, label }: {
@@ -95,7 +96,7 @@ function FilterChips<K extends string>({ options, value, onChange, label }: {
             key={o.key}
             onClick={() => onChange(o.key)}
             aria-pressed={active}
-            className={`h-8 px-4 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/50 ${
+            className={`tap-44 h-8 px-4 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/50 ${
               active ? 'bg-[#D4A574]/15 text-[#D4A574]' : 'text-[#9B9287] hover:text-[#F0EAE0]'
             }`}
           >
@@ -162,14 +163,11 @@ function WatchSection({ open, onClose }: { open: boolean; onClose: () => void })
     if (data) setItems(data)
   }, [])
 
-  useEffect(() => {
-    fetchItems()
-    const channel = supabase
-      .channel(`watch:${profile?.id ?? 'anon'}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'watch_items' }, () => fetchItems())
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [fetchItems, profile?.id])
+  useLiveData({
+    channel: `watch:${profile?.id ?? 'anon'}`,
+    load: fetchItems,
+    bind: (ch) => ch.on('postgres_changes', { event: '*', schema: 'public', table: 'watch_items' }, () => fetchItems()),
+  })
 
   const addItem = async (e: FormEvent) => {
     e.preventDefault()
@@ -211,8 +209,8 @@ function WatchSection({ open, onClose }: { open: boolean; onClose: () => void })
   ]
 
   const emptyText = filter === 'all'
-    ? 'Ajoutez un film, une série ou un documentaire — et gardez-le au chaud pour votre prochaine soirée.'
-    : 'Rien dans ce filtre pour l’instant. Essayez « Tout » pour voir toute votre liste.'
+    ? 'Ajoute un film, une série ou un documentaire — et garde-le au chaud pour votre prochaine soirée.'
+    : 'Rien dans ce filtre pour l’instant. Essaie «\u202fTout\u202f» pour voir toute votre liste.'
 
   return (
     <div className="space-y-5 reveal">
@@ -250,13 +248,13 @@ function WatchSection({ open, onClose }: { open: boolean; onClose: () => void })
                 {item.notes && <p className="text-[13px] leading-relaxed text-[#9B9287]">{item.notes}</p>}
 
                 <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
-                  <div className="flex items-center -ml-1.5" role="group" aria-label={`Note de ${item.title}`}>
-                    {!item.rating && <span className="text-[11px] tracking-[0.12em] uppercase text-[#9B9287] ml-1.5 mr-1">Noter</span>}
+                  <div className="flex items-center -ml-3" role="group" aria-label={`Note de ${item.title}`}>
+                    {!item.rating && <span className="text-[11px] tracking-[0.12em] uppercase text-[#9B9287] ml-3 mr-1">Noter</span>}
                     {[1, 2, 3, 4, 5].map((star) => (
                       <button
                         key={star}
                         onClick={() => updateRating(item, star)}
-                        className="p-1 rounded-full transition-colors duration-200 hover:bg-white/[0.05] hover:[&_svg]:text-[#D4A574]"
+                        className="grid size-11 shrink-0 place-items-center rounded-full transition-colors duration-200 hover:bg-white/[0.05] hover:[&_svg]:text-[#D4A574]"
                         aria-label={`Noter ${star} sur 5`}
                       >
                         <Star size={18} strokeWidth={1.5} className={`size-[18px] transition-colors ${item.rating && star <= item.rating ? 'fill-[#D4A574] text-[#D4A574]' : item.rating ? 'text-[#F0EAE0]/20' : 'text-[#9B9287]/50 group-hover/stars:text-[#D4A574]/50'}`} aria-hidden="true" />
@@ -269,14 +267,14 @@ function WatchSection({ open, onClose }: { open: boolean; onClose: () => void })
                       {item.status === 'to_watch' && (
                         <button
                           onClick={() => updateStatus(item, 'watching')}
-                          className="h-9 px-4 rounded-full text-[13px] font-medium inline-flex items-center gap-1.5 text-[#F0EAE0]/90 bg-white/[0.055] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] hover:bg-white/[0.09] transition-colors duration-200"
+                          className="tap-44 h-9 px-4 rounded-full text-[13px] font-medium inline-flex items-center gap-1.5 text-[#F0EAE0]/90 bg-white/[0.055] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] hover:bg-white/[0.09] transition-colors duration-200"
                         >
                           <Play size={13} aria-hidden="true" /> Commencer
                         </button>
                       )}
                       <button
                         onClick={() => updateStatus(item, 'watched')}
-                        className="h-9 px-4 rounded-full text-[13px] font-medium inline-flex items-center gap-1.5 bg-[#D4A574]/12 text-[#D4A574] shadow-[inset_0_0_0_1px_rgba(212,165,116,0.25)] hover:bg-[#D4A574]/20 transition-colors duration-200"
+                        className="tap-44 h-9 px-4 rounded-full text-[13px] font-medium inline-flex items-center gap-1.5 bg-[#D4A574]/12 text-[#D4A574] shadow-[inset_0_0_0_1px_rgba(212,165,116,0.25)] hover:bg-[#D4A574]/20 transition-colors duration-200"
                       >
                         <Check size={13} aria-hidden="true" /> Vu
                       </button>
@@ -342,14 +340,11 @@ function BucketSection({ open, onClose }: { open: boolean; onClose: () => void }
     if (data) setItems(data)
   }, [])
 
-  useEffect(() => {
-    fetchItems()
-    const channel = supabase
-      .channel(`bucket:${profile?.id ?? 'anon'}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bucket_items' }, () => fetchItems())
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [fetchItems, profile?.id])
+  useLiveData({
+    channel: `bucket:${profile?.id ?? 'anon'}`,
+    load: fetchItems,
+    bind: (ch) => ch.on('postgres_changes', { event: '*', schema: 'public', table: 'bucket_items' }, () => fetchItems()),
+  })
 
   const addItem = async (e: FormEvent) => {
     e.preventDefault()
@@ -365,7 +360,7 @@ function BucketSection({ open, onClose }: { open: boolean; onClose: () => void }
 
   const toggleDone = async (item: BucketItem) => {
     const newDone = !item.is_done
-    const done_date = newDone ? format(new Date(), 'yyyy-MM-dd') : null
+    const done_date = newDone ? toDateInputValue(new Date()) : null
     setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, is_done: newDone, done_date } : i)))
     const { ok } = await run(supabase.from('bucket_items').update({ is_done: newDone, done_date }).eq('id', item.id))
     if (!ok) fetchItems()
@@ -417,7 +412,7 @@ function BucketSection({ open, onClose }: { open: boolean; onClose: () => void }
         <EmptyState
           icon={Compass}
           title={filter === 'all' ? 'Aucun rêve écrit, pour l’instant' : filter === 'done' ? 'Rien d’accompli — mais ça vient' : 'Tout est déjà vécu !'}
-          text={filter === 'all' ? 'Notez ici les voyages, les envies et les petites folies que vous voulez vivre à deux.' : 'Changez de filtre pour retrouver le reste de votre liste.'}
+          text={filter === 'all' ? 'Note ici les voyages, les envies et les petites folies que vous voulez vivre à deux.' : 'Change de filtre pour retrouver le reste de votre liste.'}
         />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -448,7 +443,7 @@ function BucketSection({ open, onClose }: { open: boolean; onClose: () => void }
                       </span>
                     )}
                     {item.is_done && item.done_date && (
-                      <span className="num text-[#D4A574]">{format(parseISO(item.done_date), 'd MMM yyyy', { locale: fr })}</span>
+                      <span className="num text-[#D4A574]">{formatLongDateFR(parseISO(item.done_date))}</span>
                     )}
                   </div>
                 </div>

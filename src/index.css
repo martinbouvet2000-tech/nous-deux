@@ -1,7 +1,4 @@
 @import "tailwindcss";
-@import "@fontsource-variable/fraunces/standard.css";
-@import "@fontsource-variable/fraunces/standard-italic.css";
-@import "@fontsource-variable/instrument-sans";
 
 @theme {
   --color-primary: #D4A574;
@@ -31,6 +28,58 @@
   --color-focus: #E8C9A0;
   --font-sans: 'Instrument Sans Variable', 'Instrument Fallback', system-ui, -apple-system, sans-serif;
   --font-display: 'Fraunces Variable', 'Fraunces Fallback', Georgia, serif;
+}
+
+/* ─── Zones sûres iOS (app installée) : encoche, Dynamic Island, barre d'accueil ───
+   Une seule source de vérité — on n'écrit `env()` nulle part ailleurs. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+/* ─── Polices : sous-ensemble « latin » uniquement ───
+   Les paquets @fontsource-variable exposent trois sous-ensembles (latin,
+   latin-ext, vietnamese) et leurs CSS « tout compris » les déclarent tous.
+   L'interface est intégralement française et le service worker précache
+   chaque .woff2 émis : on ne déclare donc que « latin », qui couvre à lui
+   seul é è ê ë à â ä î ï ô ö ù û ü ÿ ç œ æ, les majuscules accentuées et
+   les guillemets « » (U+0000-00FF + U+2000-206F).
+   Axes conservés à l'identique : Fraunces = jeu « standard » (wght + opsz,
+   requis par `font-variation-settings: 'opsz' 144`), Instrument Sans = wght.
+   Déclarations recopiées telles quelles depuis les paquets (mêmes familles,
+   mêmes graisses, même font-display) — seules les lignes latin-ext et
+   vietnamese ont été retirées. */
+
+/* fraunces-latin-standard-normal */
+@font-face {
+  font-family: 'Fraunces Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/fraunces/files/fraunces-latin-standard-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+/* fraunces-latin-standard-italic */
+@font-face {
+  font-family: 'Fraunces Variable';
+  font-style: italic;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/fraunces/files/fraunces-latin-standard-italic.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+/* instrument-sans-latin-wght-normal */
+@font-face {
+  font-family: 'Instrument Sans Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 700;
+  src: url('@fontsource-variable/instrument-sans/files/instrument-sans-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
 
 /* Polices de repli aux métriques ajustées : limite le saut de mise en page avant l'arrivée des woff2 */
@@ -257,6 +306,15 @@
   }
   .btn-tertiary:hover { background: rgba(240, 234, 224, 0.05); color: #F0EAE0; }
   .btn-tertiary:active { transform: scale(0.97); }
+  /* Le visuel reste à 36 px, la zone tactile monte à 44 px */
+  .btn-tertiary { position: relative; }
+  .btn-tertiary::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; top: 50%;
+    height: max(100%, 44px);
+    transform: translateY(-50%);
+  }
 
   /* ─── Halo curseur (desktop) ─── */
   .cursor-halo {
@@ -270,6 +328,28 @@
 }
 
 @layer utilities {
+  /* ─── Zones sûres : haut, bas et côtés (paysage) ─── */
+  .pt-safe { padding-top: var(--safe-top); }
+  .pb-safe { padding-bottom: var(--safe-bottom); }
+  .pl-safe { padding-left: var(--safe-left); }
+  .pr-safe { padding-right: var(--safe-right); }
+  .px-safe { padding-left: var(--safe-left); padding-right: var(--safe-right); }
+
+  /* ─── Confort du pouce : zone tactile de 44 px minimum, visuel inchangé ───
+     À poser sur un contrôle dont la boîte fait moins de 44 px (pastille d'onglet,
+     chip de filtre, petit bouton). Le pseudo-élément est invisible et ne déborde
+     jamais au-delà de 44 px : pas de recouvrement entre voisins. */
+  .tap-44 { position: relative; }
+  .tap-44::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+    border-radius: inherit;
+  }
+
   /* Apparition en cascade au chargement */
   .reveal { opacity: 0; animation: rise 420ms cubic-bezier(0.2, 0, 0, 1) forwards; }
   @keyframes rise {

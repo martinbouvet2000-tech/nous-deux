@@ -1,14 +1,14 @@
-import { useEffect, useState, useCallback, type FormEvent } from 'react'
+import { useState, useCallback, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Plus, ChevronLeft, ChevronRight, X, Check, CalendarDays, CalendarClock, Users, User, Clock } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
+import { useLiveData } from '@/hooks/useLiveData'
 import type { CalendarEvent } from '@/types/database'
 import {
-  format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval,
+  startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval,
   isSameMonth, isSameDay, addMonths, subMonths, parseISO, isBefore,
 } from 'date-fns'
-import { fr } from 'date-fns/locale'
 import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
 import Tabs from '@/components/ui/Tabs'
@@ -18,7 +18,14 @@ import EmptyState from '@/components/ui/EmptyState'
 import { confirm } from '@/lib/confirm'
 import { run } from '@/lib/db'
 import { toast } from '@/lib/toast'
-import { formatTimeIn, timezoneCity } from '@/lib/timezone'
+import {
+  formatTimeIn, timezoneCity, detectTimezone,
+  zonedDateKey, zonedInputToDate, zonedCivilDate, formatDayTimeIn,
+} from '@/lib/timezone'
+import {
+  capitalizeFirst, describeDateTimeRangeInput, formatDayMonthFR, formatMonthYearFR,
+  toDateInputValue, toDateTimeInputValue,
+} from '@/lib/dates'
 import { shine, unshine } from '@/lib/shine'
 import { BTN_PRIMARY, BTN_GHOST, INPUT, LABEL, CARD, CARD_EDGE, ICON_BTN, EYEBROW } from '@/lib/ui'
 
@@ -33,8 +40,13 @@ const PAGE_TABS: { key: PageTab; label: string; icon: typeof CalendarDays }[] = 
   { key: 'schedule', label: 'Emploi du temps', icon: CalendarClock },
 ]
 
-/** Valeur d'un input datetime-local à partir d'une date — en heure locale (jamais toISOString, qui décale d'un fuseau) */
-const toLocalInput = (d: Date) => format(d, "yyyy-MM-dd'T'HH:mm")
+/** « la veille » / « le lendemain » quand la date civile diffère d'un fuseau à l'autre */
+function dayShiftLabel(fromTz: string, toTz: string, at: Date): string {
+  const mine = zonedDateKey(fromTz, at)
+  const theirs = zonedDateKey(toTz, at)
+  if (theirs === mine) return ''
+  return theirs > mine ? ' le lendemain' : ' la veille'
+}
 
 /** Chip « À deux » (or) / « Seul·e · Prénom » (neutre) */
 function KindChip({ event, authorName, compact = false }: { event: CalendarEvent; authorName: string; compact?: boolean }) {
@@ -54,13 +66,18 @@ function KindChip({ event, authorName, compact = false }: { event: CalendarEvent
 
 export default function CalendarPage() {
   const { profile, partnerProfile } = useAuthStore()
+  // Source de vérité pour « pour toi » : le fuseau du profil (jamais celui du navigateur)
+  const selfTz = profile?.timezone ?? detectTimezone()
   const [params, setParams] = useSearchParams()
   const tab: PageTab = params.get('tab') === 'schedule' ? 'schedule' : 'agenda'
   const setTab = (t: PageTab) => setParams(t === 'agenda' ? {} : { tab: t }, { replace: true })
   const [scheduleAddSignal, setScheduleAddSignal] = useState(0)
   const [events, setEvents] = useState<CalendarEvent[]>([])
-  const [currentMonth, setCurrentMonth] = useState(new Date())
-  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date())
+  // On ouvre sur TON jour civil (fuseau du profil), jamais sur celui du navigateur :
+  // sinon la cellule sélectionnée et celle marquée « aujourd'hui » (calculée plus bas
+  // avec `zonedDateKey`) pouvaient tomber sur deux jours différents quand tu voyages.
+  const [currentMonth, setCurrentMonth] = useState(() => zonedCivilDate(selfTz, new Date()))
+  const [selectedDate, setSelectedDate] = useState<Date | null>(() => zonedCivilDate(selfTz, new Date()))
   const [showForm, setShowForm] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -82,14 +99,11 @@ export default function CalendarPage() {
     if (data) setEvents(data)
   }, [currentMonth])
 
-  useEffect(() => {
-    fetchEvents()
-    const channel = supabase
-      .channel(`calendar:${profile?.id ?? 'anon'}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_events' }, () => fetchEvents())
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [fetchEvents, profile?.id])
+  useLiveData({
+    channel: `calendar:${profile?.id ?? 'anon'}`,
+    load: fetchEvents,
+    bind: (ch) => ch.on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_events' }, () => fetchEvents()),
+  })
 
   const monthStart = startOfMonth(currentMonth)
   const monthEnd = endOfMonth(currentMonth)
@@ -97,21 +111,25 @@ export default function CalendarPage() {
   const calEnd = endOfWeek(monthEnd, { weekStartsOn: 1 })
   const days = eachDayOfInterval({ start: calStart, end: calEnd })
 
-  const eventsForDay = (day: Date) => events.filter((e) => isSameDay(parseISO(e.start_at), day))
+  // Chaque jour de la grille est une étiquette de date civile (minuit navigateur) : on la compare
+  // à la date civile de l'événement VUE DANS LE FUSEAU DU PROFIL, pour qu'il tombe au bon jour.
+  const dayKey = (day: Date) => toDateInputValue(day)
+  const eventsForDay = (day: Date) => events.filter((e) => zonedDateKey(selfTz, parseISO(e.start_at)) === dayKey(day))
   const selectedDayEvents = selectedDate ? eventsForDay(selectedDate) : []
   const upcoming = (() => {
     const now = new Date(); const horizon = new Date(now.getTime() + 7 * 86400000)
-    return [...events].filter((e) => { const d = parseISO(e.start_at); return d >= now && d <= horizon && !(selectedDate && isSameDay(d, selectedDate)) })
+    const selectedKey = selectedDate ? dayKey(selectedDate) : null
+    return [...events].filter((e) => { const d = parseISO(e.start_at); return d >= now && d <= horizon && zonedDateKey(selfTz, d) !== selectedKey })
       .sort((a, b) => a.start_at.localeCompare(b.start_at)).slice(0, 6)
   })()
 
   const openForm = (date?: Date) => {
-    const d = date ?? selectedDate ?? new Date()
+    const d = date ?? selectedDate ?? zonedCivilDate(selfTz, new Date())
     // Pré-remplissage 18:00–19:00 ce jour-là, en heure locale
     const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 18, 0, 0, 0)
     const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 19, 0, 0, 0)
-    setStartAt(toLocalInput(start))
-    setEndAt(toLocalInput(end))
+    setStartAt(toDateTimeInputValue(start))
+    setEndAt(toDateTimeInputValue(end))
     setTitle(''); setDescription(''); setColor(COLORS[0]); setKind(null); setFormError('')
     setShowForm(true)
   }
@@ -120,9 +138,9 @@ export default function CalendarPage() {
     e.preventDefault()
     if (!profile || !title.trim() || !startAt || !endAt) return
     if (!kind) return setFormError('Choisis si cet événement est à deux ou seul·e.')
-    // `new Date('yyyy-MM-ddTHH:mm')` (sans Z) est interprété en heure locale : c'est voulu
-    const start = new Date(startAt)
-    const end = new Date(endAt)
+    // L'heure saisie est exprimée dans le fuseau du PROFIL (pas celui du navigateur) : on convertit en instant UTC.
+    const start = zonedInputToDate(selfTz, startAt)
+    const end = zonedInputToDate(selfTz, endAt)
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return setFormError('Date invalide.')
     if (!isBefore(start, end)) return setFormError("L'heure de fin doit être après le début.")
     setFormError('')
@@ -142,10 +160,11 @@ export default function CalendarPage() {
     )
     setSaving(false)
     if (ok) {
-      toast.success('Événement ajouté à votre agenda')
+      toast.success('Événement ajouté à votre agenda.')
       setShowForm(false)
-      setSelectedDate(start)
-      setCurrentMonth(start)
+      const civil = zonedCivilDate(selfTz, start)
+      setSelectedDate(civil)
+      setCurrentMonth(civil)
       fetchEvents()
     }
   }
@@ -162,6 +181,12 @@ export default function CalendarPage() {
 
   const partnerTz = partnerProfile?.timezone
   const showPartnerTime = !!partnerTz && !!profile && partnerTz !== profile.timezone
+
+  // Les sélecteurs natifs s'affichent au format du système (souvent mm/jj/aaaa, AM/PM) :
+  // on relit la saisie en toutes lettres, en français, juste en dessous.
+  const dateEcho = describeDateTimeRangeInput(startAt, endAt)
+  const partnerStart = showPartnerTime && startAt ? zonedInputToDate(selfTz, startAt) : null
+  const partnerStartValid = !!partnerStart && !Number.isNaN(partnerStart.getTime())
 
   const subtitle = showPartnerTime
     ? `Vos rendez-vous, affichés dans vos deux fuseaux : ${timezoneCity(profile!.timezone)} pour toi, ${timezoneCity(partnerTz!)} pour ${partnerProfile!.display_name}.`
@@ -199,23 +224,28 @@ export default function CalendarPage() {
               <ChevronLeft size={18} aria-hidden="true" />
             </button>
             <h2 className="font-display text-[17px] tracking-tight text-[#F0EAE0] first-letter:uppercase" aria-live="polite">
-              {format(currentMonth, 'MMMM yyyy', { locale: fr })}
+              {formatMonthYearFR(currentMonth)}
             </h2>
             <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className={ICON_BTN} aria-label="Mois suivant">
               <ChevronRight size={18} aria-hidden="true" />
             </button>
           </div>
 
-          <div className="grid grid-cols-7 mb-1.5" aria-hidden="true">
+          {/* La grille déborde de 8 px sur les marges de la carte et resserre ses gouttières :
+              sept colonnes dans 375 px ne peuvent pas faire 44 px de large (7 x 44 = 308 > 295
+              disponibles), on gagne donc ce qu'on peut en largeur (~43 px) et on garantit les
+              44 px en hauteur via `min-h-11`. En-tête et grille gardent le même débord pour
+              rester alignés. */}
+          <div className="-mx-2 sm:mx-0 grid grid-cols-7 mb-1.5" aria-hidden="true">
             {WEEKDAYS.map((d) => (
               <div key={d} className="text-center text-[11px] tracking-[0.14em] uppercase text-[#9B9287] py-1">{d}</div>
             ))}
           </div>
 
-          <div className="grid grid-cols-7 gap-1">
+          <div className="-mx-2 sm:mx-0 grid grid-cols-7 gap-0.5 sm:gap-1">
             {days.map((day) => {
               const isCurrentMonth = isSameMonth(day, currentMonth)
-              const isToday = isSameDay(day, new Date())
+              const isToday = zonedDateKey(selfTz, new Date()) === dayKey(day)
               const isSelected = !!selectedDate && isSameDay(day, selectedDate)
               const dow = day.getDay()
               const isWeekend = dow === 0 || dow === 6
@@ -225,10 +255,10 @@ export default function CalendarPage() {
                   key={day.toISOString()}
                   onClick={() => setSelectedDate(day)}
                   onDoubleClick={() => openForm(day)}
-                  aria-label={`${format(day, 'EEEE d MMMM', { locale: fr })}${dayEvents.length ? `, ${dayEvents.length} événement${dayEvents.length > 1 ? 's' : ''}` : ''}`}
+                  aria-label={`${capitalizeFirst(formatDayMonthFR(day))}${dayEvents.length ? `, ${dayEvents.length} événement${dayEvents.length > 1 ? 's' : ''}` : ''}`}
                   aria-pressed={isSelected}
                   className={[
-                    'aspect-square rounded-xl flex flex-col items-center justify-center gap-1 text-[15px] num transition-all duration-200 focus-visible:outline-offset-[-2px]',
+                    'aspect-square min-h-11 rounded-xl flex flex-col items-center justify-center gap-1 text-[15px] num transition-all duration-200 focus-visible:outline-offset-[-2px]',
                     isWeekend ? 'bg-white/[0.035]' : 'bg-white/[0.02]',
                     isSelected
                       ? 'bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E] font-semibold shadow-[0_8px_20px_-10px_rgba(212,165,116,0.6)]'
@@ -237,7 +267,7 @@ export default function CalendarPage() {
                         : `${isCurrentMonth ? 'text-[#F0EAE0]/85' : 'text-[#9B9287]/50'} hover:bg-white/[0.04]`,
                   ].join(' ')}
                 >
-                  <span className="leading-none">{format(day, 'd')}</span>
+                  <span className="leading-none">{day.getDate()}</span>
                   <span className="flex h-1.5 items-center gap-0.5" aria-hidden="true">
                     {dayEvents.slice(0, 3).map((e) => (
                       <span
@@ -261,7 +291,7 @@ export default function CalendarPage() {
           <div className={`${CARD} lg:sticky lg:top-6 space-y-4`} onMouseMove={shine} onMouseLeave={unshine}>
             <div className={CARD_EDGE} aria-hidden="true" />
             <h2 className="font-display text-[20px] text-[#F0EAE0] first-letter:uppercase">
-              {format(selectedDate, 'EEEE d MMMM', { locale: fr })}
+              {formatDayMonthFR(selectedDate)}
             </h2>
 
             {selectedDayEvents.length === 0 ? (
@@ -282,7 +312,7 @@ export default function CalendarPage() {
                         <p className="text-[14px] text-[#F0EAE0] leading-snug">{event.title}</p>
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                           <KindChip event={event} authorName={authorName(event)} />
-                          <span className="text-[13px] text-[#F0EAE0]/75 num">{format(start, 'HH:mm')} – {format(end, 'HH:mm')}{!isSameDay(start, end) && <span className="text-[#9B9287]"> (+1 j)</span>}</span>
+                          <span className="text-[13px] text-[#F0EAE0]/75 num">{formatTimeIn(selfTz, start)} – {formatTimeIn(selfTz, end)}{zonedDateKey(selfTz, start) !== zonedDateKey(selfTz, end) && <span className="text-[#9B9287]"> (+1 j)</span>}</span>
                           {showPartnerTime && (
                             <span className="px-2 py-0.5 rounded-full bg-[#C2788E]/12 text-[#D99AAD] text-[11px] num">
                               {formatTimeIn(partnerTz!, start)} – {formatTimeIn(partnerTz!, end)} · {partnerProfile!.display_name}
@@ -312,11 +342,11 @@ export default function CalendarPage() {
                     const start = parseISO(event.start_at)
                     return (
                       <li key={event.id}>
-                        <button onClick={() => { setSelectedDate(start); setCurrentMonth(start) }} className="w-full flex items-center gap-3 rounded-xl px-2.5 py-2 text-left hover:bg-white/[0.04] transition-colors">
+                        <button onClick={() => { const civil = zonedCivilDate(selfTz, start); setSelectedDate(civil); setCurrentMonth(civil) }} className="w-full min-h-11 flex items-center gap-3 rounded-xl px-2.5 py-2 text-left hover:bg-white/[0.04] transition-colors">
                           <span className="size-2 rounded-full shrink-0" style={{ backgroundColor: event.color }} aria-hidden="true" />
                           <span className="flex-1 min-w-0 truncate text-[13px] text-[#F0EAE0]/90">{event.title}</span>
                           <KindChip event={event} authorName={authorName(event)} compact />
-                          <span className="text-[12px] text-[#9B9287] num first-letter:uppercase shrink-0">{format(start, 'EEE d · HH:mm', { locale: fr })}</span>
+                          <span className="text-[12px] text-[#9B9287] num first-letter:uppercase shrink-0">{formatDayTimeIn(selfTz, start)}</span>
                         </button>
                       </li>
                     )
@@ -374,16 +404,24 @@ export default function CalendarPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label htmlFor="ev-start" className={LABEL}>Début</label>
-                <input id="ev-start" type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} className={`${INPUT}`} required />
+                <input id="ev-start" type="datetime-local" lang="fr-FR" value={startAt} onChange={(e) => setStartAt(e.target.value)} className={`${INPUT}`} aria-describedby="ev-when" required />
               </div>
               <div>
                 <label htmlFor="ev-end" className={LABEL}>Fin</label>
-                <input id="ev-end" type="datetime-local" value={endAt} min={startAt} onChange={(e) => setEndAt(e.target.value)} className={`${INPUT}`} required />
+                <input id="ev-end" type="datetime-local" lang="fr-FR" value={endAt} min={startAt} onChange={(e) => setEndAt(e.target.value)} className={`${INPUT}`} aria-describedby="ev-when" required />
               </div>
             </div>
-            {showPartnerTime && startAt && !Number.isNaN(new Date(startAt).getTime()) && (
-              <p className="text-[12px] text-[#D4A574]/90 inline-flex items-center gap-1.5"><Clock size={12} aria-hidden="true" /> 
-                Soit <span className="num">{formatTimeIn(partnerTz!, new Date(startAt))}</span> chez {partnerProfile!.display_name}.
+            <p id="ev-when" className="text-[12px] text-[#F0EAE0]/70 min-h-[16px]" aria-live="polite">
+              {dateEcho && (
+                <>
+                  <CalendarDays size={12} className="inline-block align-[-1px] mr-1.5 text-[#D4A574]" aria-hidden="true" />
+                  {capitalizeFirst(dateEcho)}
+                </>
+              )}
+            </p>
+            {showPartnerTime && partnerStartValid && (
+              <p className="text-[12px] text-[#D4A574]/90 inline-flex items-center gap-1.5"><Clock size={12} aria-hidden="true" />
+                Soit <span className="num">{formatTimeIn(partnerTz!, partnerStart!)}</span>{dayShiftLabel(selfTz, partnerTz!, partnerStart!)} chez {partnerProfile!.display_name}.
               </p>
             )}
             <div>

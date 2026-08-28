@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { CalendarClock, Check, MapPin, Repeat, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
+import { useLiveData } from '@/hooks/useLiveData'
 import type { ScheduleSlot } from '@/types/database'
 import Modal from '@/components/ui/Modal'
 import EmptyState from '@/components/ui/EmptyState'
@@ -12,9 +13,10 @@ import { toast } from '@/lib/toast'
 import { shine, unshine } from '@/lib/shine'
 import { timezoneCity } from '@/lib/timezone'
 import { BTN_PRIMARY, BTN_GHOST, INPUT, LABEL, CARD, CARD_EDGE } from '@/lib/ui'
+import { capitalizeFirst, describeTimeRangeInput } from '@/lib/dates'
 import {
-  SLOT_COLORS, SLOT_COLOR_NAMES, WEEKDAY_SHORT, WEEKDAY_LABELS, WEEKDAY_ABBR,
-  timeToMinutes, shortTime, localClockIn,
+  SLOT_COLORS, SLOT_COLOR_NAMES, WEEKDAY_SHORT, WEEKDAY_ABBR, WEEKDAYS,
+  timeToMinutes, shortTime, localClockIn, weekdayLabel,
 } from '@/lib/schedule'
 
 type Who = 'me' | 'partner'
@@ -56,19 +58,26 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
     setLoaded(true)
   }, [])
 
+  // Les écoutes dépendent de l'identifiant du partenaire, absent du nom du canal :
+  // `rebindKey` le porte pour que le ré-abonnement suive.
+  useLiveData({
+    enabled: !!profile,
+    channel: profile ? `schedule:${profile.id}` : null,
+    rebindKey: partnerProfile?.id ?? null,
+    load: fetchSlots,
+    bind: (ch) => {
+      ch.on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_slots', filter: `user_id=eq.${profile?.id}` }, () => fetchSlots())
+      if (partnerProfile?.id) {
+        ch.on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_slots', filter: `user_id=eq.${partnerProfile.id}` }, () => fetchSlots())
+      }
+    },
+  })
+
+  // L'heure avance : la colonne « maintenant » se recale chaque minute.
   useEffect(() => {
-    if (!profile) return
-    fetchSlots()
-    let channel = supabase
-      .channel(`schedule:${profile.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_slots', filter: `user_id=eq.${profile.id}` }, () => fetchSlots())
-    if (partnerProfile?.id) {
-      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_slots', filter: `user_id=eq.${partnerProfile.id}` }, () => fetchSlots())
-    }
-    channel.subscribe()
     const timer = window.setInterval(() => setNow(new Date()), 60_000)
-    return () => { supabase.removeChannel(channel); window.clearInterval(timer) }
-  }, [fetchSlots, profile, partnerProfile?.id])
+    return () => window.clearInterval(timer)
+  }, [])
 
   const openCreate = useCallback((weekday?: number) => {
     setEditing(null)
@@ -133,7 +142,7 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
 
   const remove = async () => {
     if (!editing) return
-    const yes = await confirm({ title: 'Supprimer ce créneau ?', message: `« ${editing.title} » du ${WEEKDAY_LABELS[editing.weekday - 1].toLowerCase()} sera retiré.`, confirmLabel: 'Supprimer', danger: true })
+    const yes = await confirm({ title: 'Supprimer ce créneau ?', message: `« ${editing.title} » du ${weekdayLabel(editing.weekday)} sera retiré.`, confirmLabel: 'Supprimer', danger: true })
     if (!yes) return
     const { ok } = await run(supabase.from('schedule_slots').delete().eq('id', editing.id), { errorMessage: 'Suppression impossible.' })
     if (ok) { setOpen(false); fetchSlots() }
@@ -164,6 +173,11 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
 
   const daySlots = (d: number) => shown.filter((s) => s.weekday === d).sort((a, b) => timeToMinutes(a.start_time) - timeToMinutes(b.start_time))
 
+  // Écho de la saisie du formulaire, en français et sur 24 h
+  const timeEcho = describeTimeRangeInput(start, end)
+  const daysEcho = days.length === 7 ? 'tous les jours' : days.map((d) => weekdayLabel(d)).join(', ')
+  const slotEcho = timeEcho ? capitalizeFirst(daysEcho ? `${daysEcho} · ${timeEcho}` : timeEcho) : ''
+
   const renderSlot = (s: ScheduleSlot, compact = false) => {
     const inner = (
       <>
@@ -180,7 +194,7 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
     )
     const cls = `relative overflow-hidden rounded-xl pl-3 pr-2 py-1.5 text-left w-full h-full ${isMine ? 'hover:brightness-110 transition-all duration-200' : ''}`
     const style = { backgroundColor: `${s.color}1F` }
-    const label = `${s.title}, ${WEEKDAY_LABELS[s.weekday - 1]} de ${shortTime(s.start_time)} à ${shortTime(s.end_time)}${s.location ? `, ${s.location}` : ''}`
+    const label = `${s.title}, ${weekdayLabel(s.weekday)} de ${shortTime(s.start_time)} à ${shortTime(s.end_time)}${s.location ? `, ${s.location}` : ''}`
     return isMine
       ? <button type="button" onClick={() => openEdit(s)} className={cls} style={style} aria-label={`Modifier ${label}`}>{inner}</button>
       : <div className={cls} style={style} aria-label={label}>{inner}</div>
@@ -202,7 +216,7 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
                 aria-selected={active}
                 disabled={disabled}
                 onClick={() => setWho(key)}
-                className={`min-h-10 px-4 rounded-full text-[13px] font-medium whitespace-nowrap transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                className={`min-h-11 px-4 rounded-full text-[13px] font-medium whitespace-nowrap transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
                   active ? 'bg-white/[0.08] text-[#F0EAE0] shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_0_0_1px_rgba(212,165,116,0.25)]' : 'text-[#9B9287] hover:text-[#F0EAE0]'
                 }`}
               >
@@ -251,8 +265,8 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
                 ))}
               </div>
 
-              {WEEKDAY_LABELS.map((label, i) => {
-                const d = i + 1
+              {WEEKDAYS.map((d) => {
+                const label = weekdayLabel(d, true)
                 const list = daySlots(d)
                 return (
                   <div
@@ -290,7 +304,9 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
 
           {/* ─── Mobile : sélecteur de jour + liste ─── */}
           <div className="md:hidden space-y-3">
-            <div className="grid grid-cols-7 gap-1" role="tablist" aria-label="Jour">
+            {/* Sept colonnes contraintes par la largeur d'écran : gouttière réduite à 2 px
+                pour que chaque jour reste au moins carré 44 x 44 px dès 360 px de large. */}
+            <div className="grid grid-cols-7 gap-0.5" role="tablist" aria-label="Jour">
               {WEEKDAY_SHORT.map((l, i) => {
                 const d = i + 1
                 const active = mobileDay === d
@@ -301,7 +317,7 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
                     key={d}
                     role="tab"
                     aria-selected={active}
-                    aria-label={WEEKDAY_LABELS[i]}
+                    aria-label={weekdayLabel(i + 1, true)}
                     onClick={() => setMobileDay(d)}
                     className={`min-h-11 rounded-full flex flex-col items-center justify-center gap-0.5 text-[13px] font-medium transition-all duration-200 ${
                       active
@@ -317,7 +333,7 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
             </div>
             <div className={CARD}>
               <div className={CARD_EDGE} aria-hidden="true" />
-              <h2 className="font-display text-[18px] text-[#F0EAE0] mb-3">{WEEKDAY_LABELS[mobileDay - 1]}</h2>
+              <h2 className="font-display text-[18px] text-[#F0EAE0] mb-3">{weekdayLabel(mobileDay, true)}</h2>
               {daySlots(mobileDay).length === 0 ? (
                 <p className="text-[13px] text-[#9B9287]">Rien ce jour-là.</p>
               ) : (
@@ -344,7 +360,8 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
             </div>
             <div>
               <span className={LABEL} id="slot-days-label">Jours</span>
-              <div className="flex gap-1.5" role="group" aria-labelledby="slot-days-label">
+              {/* Gouttière réduite : sept boutons dans la largeur d'une modale, 41 x 44 px chacun. */}
+              <div className="flex gap-1" role="group" aria-labelledby="slot-days-label">
                 {WEEKDAY_SHORT.map((l, i) => {
                   const d = i + 1
                   const on = days.includes(d)
@@ -353,7 +370,7 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
                       key={d}
                       type="button"
                       aria-pressed={on}
-                      aria-label={WEEKDAY_LABELS[i]}
+                      aria-label={weekdayLabel(i + 1, true)}
                       onClick={() => toggleDay(d)}
                       className={`flex-1 min-h-11 rounded-full text-[13px] font-medium transition-all duration-200 ${
                         on ? 'bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E]' : 'bg-white/[0.04] text-[#9B9287] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07)] hover:text-[#F0EAE0]'
@@ -368,13 +385,17 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label htmlFor="slot-start" className={LABEL}>Début</label>
-                <input id="slot-start" type="time" value={start} onChange={(e) => setStart(e.target.value)} className={INPUT} required />
+                <input id="slot-start" type="time" lang="fr-FR" value={start} onChange={(e) => setStart(e.target.value)} className={INPUT} aria-describedby="slot-when" required />
               </div>
               <div>
                 <label htmlFor="slot-end" className={LABEL}>Fin</label>
-                <input id="slot-end" type="time" value={end} min={start} onChange={(e) => setEnd(e.target.value)} className={INPUT} required />
+                <input id="slot-end" type="time" lang="fr-FR" value={end} min={start} onChange={(e) => setEnd(e.target.value)} className={INPUT} aria-describedby="slot-when" required />
               </div>
             </div>
+            {/* Le sélecteur natif peut afficher AM/PM selon le système : on relit l'heure sur 24 h. */}
+            <p id="slot-when" className="-mt-2 text-[12px] text-[#F0EAE0]/70 num min-h-[16px]" aria-live="polite">
+              {slotEcho}
+            </p>
             <div>
               <label htmlFor="slot-location" className={LABEL}>Lieu (optionnel)</label>
               <input id="slot-location" type="text" placeholder="Ex : Campus, Bureau, Salle de sport…" value={location} onChange={(e) => setLocation(e.target.value)} className={INPUT} maxLength={60} />

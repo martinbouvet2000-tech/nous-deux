@@ -4,7 +4,8 @@ import AmbientMood from '@/components/AmbientMood'
 import { useLocationSharing } from '@/hooks/useLocationSharing'
 
 /**
- * 6 destinations. Sur mobile : 5 + Réglages ("Plus") — tout est atteignable au pouce.
+ * 6 destinations, atteignables au pouce. Le sixième onglet mène aux Réglages :
+ * il porte le même nom que le titre de la page, sur mobile comme sur bureau.
  */
 const NAV_ITEMS = [
   { to: '/', icon: Home, label: 'Accueil' },
@@ -18,12 +19,12 @@ export default function AppLayout() {
   useLocationSharing()
   return (
     <div className="flex min-h-dvh bg-[#110F0E] grain">
-      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-full focus:bg-[#D4A574] focus:text-[#110F0E] focus:text-sm">
+      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-[calc(0.75rem+var(--safe-top))] focus:left-[calc(0.75rem+var(--safe-left))] focus:z-[100] focus:inline-flex focus:items-center focus:min-h-11 focus:px-5 focus:rounded-full focus:bg-[#D4A574] focus:text-[#110F0E] focus:text-sm">
         Aller au contenu
       </a>
 
       {/* ─── Desktop sidebar ─── */}
-      <nav className="hidden md:flex flex-col w-[232px] bg-[#15120F]/92 backdrop-blur-2xl shrink-0 fixed h-dvh z-40 border-r border-[#F0EAE0]/[0.06]" aria-label="Navigation principale">
+      <nav className="hidden md:flex flex-col w-[232px] bg-[#15120F]/92 backdrop-blur-2xl shrink-0 fixed h-dvh z-40 border-r border-[#F0EAE0]/[0.06] pt-safe pb-safe pl-safe" aria-label="Navigation principale">
         <div className="px-6 pt-8 pb-7">
           <div className="flex items-center gap-3">
             <Heart size={17} className="text-[#D4A574]/70" fill="currentColor" aria-hidden="true" />
@@ -64,17 +65,17 @@ export default function AppLayout() {
       </nav>
 
       {/* ─── Main content ─── */}
-      <main className="flex-1 md:ml-[232px] pb-28 md:pb-6 overflow-y-auto min-w-0" id="main" tabIndex={-1}>
+      <main className="flex-1 md:ml-[232px] pt-safe px-safe pb-28 md:pb-6 overflow-y-auto min-w-0" id="main" tabIndex={-1}>
         <AmbientMood>
           <Outlet />
         </AmbientMood>
       </main>
 
       {/* ─── Mobile bottom nav ─── */}
-      <div className="md:hidden pointer-events-none fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] h-8 z-40 bg-gradient-to-t from-[#110F0E] to-transparent" aria-hidden="true" />
+      <div className="md:hidden pointer-events-none fixed inset-x-0 bottom-[calc(4.25rem+var(--safe-bottom))] h-8 z-40 bg-gradient-to-t from-[#110F0E] to-transparent" aria-hidden="true" />
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#110F0E]/80 backdrop-blur-2xl backdrop-saturate-150 border-t border-[#F0EAE0]/[0.07] shadow-[0_-12px_32px_rgba(0,0,0,0.55)]" aria-label="Navigation principale">
-        <div className="flex justify-around items-center px-1 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-          {[...NAV_ITEMS, { to: '/settings', icon: Settings, label: 'Plus' }].map(({ to, icon: Icon, label }) => (
+        <div className="flex justify-around items-center pt-2 pb-[max(0.5rem,var(--safe-bottom))] pl-[calc(0.25rem+var(--safe-left))] pr-[calc(0.25rem+var(--safe-right))]">
+          {[...NAV_ITEMS, { to: '/settings', icon: Settings, label: 'Réglages' }].map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
               to={to}

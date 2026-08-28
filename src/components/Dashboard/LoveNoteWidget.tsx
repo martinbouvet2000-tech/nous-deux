@@ -1,14 +1,20 @@
-import { useState, useEffect, useCallback } from 'react'
-import { PenLine, X, Send, Quote } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { PenLine, X, Send, Quote, Loader2, Check } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
+import { useLiveData } from '@/hooks/useLiveData'
 import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import type { LoveNote } from '@/types/database'
-import { run } from '@/lib/db'
+import { run, humanizeError } from '@/lib/db'
 import { INPUT, ICON_BTN } from '@/lib/ui'
 
 const SEND_BTN = 'inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-gradient-to-r from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_2px_20px_rgba(212,165,116,0.2)] hover:shadow-[0_4px_28px_rgba(212,165,116,0.35)] hover:translate-y-[-1px] active:translate-y-0 active:scale-[0.98] transition-all duration-300 ease-out disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A574]/60'
+
+/** Durée d'affichage de la confirmation avant de revenir à l'état normal */
+const CONFIRM_MS = 4000
+
+type SendStatus = 'idle' | 'sending' | 'sent'
 
 export default function LoveNoteWidget() {
   const { profile, partnerProfile } = useAuthStore()
@@ -16,8 +22,10 @@ export default function LoveNoteWidget() {
   const [noteFromMe, setNoteFromMe] = useState<LoveNote | null>(null)
   const [showEditor, setShowEditor] = useState(false)
   const [draft, setDraft] = useState('')
-  const [sending, setSending] = useState(false)
-  const [justSent, setJustSent] = useState(false)
+  const [status, setStatus] = useState<SendStatus>('idle')
+  /** Message d'échec affiché sous le champ — le texte saisi, lui, reste en place */
+  const [sendError, setSendError] = useState<string | null>(null)
+  const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const loadNotes = useCallback(async () => {
     if (!profile || !partnerProfile) return
@@ -31,59 +39,112 @@ export default function LoveNoteWidget() {
     setNoteFromMe(sent.data?.[0] ?? null)
   }, [profile, partnerProfile])
 
-  useEffect(() => {
-    if (!profile || !partnerProfile) return
-    loadNotes()
-    const channel = supabase
-      .channel(`love-notes:${profile.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'love_notes', filter: `receiver_id=eq.${profile.id}` }, () => loadNotes())
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [profile, partnerProfile, loadNotes])
+  useLiveData({
+    enabled: !!profile && !!partnerProfile,
+    channel: profile ? `love-notes:${profile.id}` : null,
+    load: loadNotes,
+    bind: (ch) => ch.on('postgres_changes', { event: '*', schema: 'public', table: 'love_notes', filter: `receiver_id=eq.${profile?.id}` }, () => loadNotes()),
+  })
+
+  // Le minuteur de confirmation ne doit pas survivre au démontage du widget
+  useEffect(() => () => { if (confirmTimer.current) clearTimeout(confirmTimer.current) }, [])
+
+  const sending = status === 'sending'
 
   const sendNote = async () => {
     const content = draft.trim()
     if (!profile || !partnerProfile || !content || sending) return
-    setSending(true)
+    setSendError(null)
+    setStatus('sending')
 
-    // On insère d'abord (si ça échoue, l'ancien mot reste), puis on désactive les précédents
-    const { ok, data } = await run<LoveNote>(
+    // On insère d'abord (si ça échoue, l'ancien mot reste), puis on désactive les précédents.
+    // `silent` : le message d'échec s'affiche ici, sous le champ, juste à côté du texte conservé —
+    // bien plus parlant qu'un toast qui passe pendant qu'on regarde ailleurs.
+    const { ok, data, error } = await run<LoveNote>(
       supabase.from('love_notes').insert({ sender_id: profile.id, receiver_id: partnerProfile.id, content }).select('*').single(),
-      { errorMessage: "Ton petit mot n'est pas parti." },
+      { silent: true },
     )
-    if (ok && data) {
-      await supabase.from('love_notes').update({ is_active: false })
-        .eq('sender_id', profile.id).eq('receiver_id', partnerProfile.id).neq('id', data.id)
-      setDraft('')
-      setShowEditor(false)
-      setJustSent(true)
-      setTimeout(() => setJustSent(false), 3000)
-      loadNotes()
+
+    if (!ok || !data) {
+      setStatus('idle')
+      setSendError(`${humanizeError(error, "Ton petit mot n'est pas parti.")} Ton texte est gardé ici — réessaie dans un instant.`)
+      return
     }
-    setSending(false)
+
+    await run(
+      supabase.from('love_notes').update({ is_active: false })
+        .eq('sender_id', profile.id).eq('receiver_id', partnerProfile.id).neq('id', data.id),
+      { silent: true },
+    )
+
+    // La ligne est écrite en base : on peut le dire sans rien promettre de plus.
+    // Rien ne nous dit qu'il a été lu — on dit donc « envoyé », pas « reçu ».
+    setDraft('')
+    setShowEditor(false)
+    setStatus('sent')
+    if (confirmTimer.current) clearTimeout(confirmTimer.current)
+    confirmTimer.current = setTimeout(() => setStatus('idle'), CONFIRM_MS)
+    loadNotes()
+  }
+
+  const closeEditor = () => {
+    setShowEditor(false)
+    setDraft('')
+    setSendError(null)
   }
 
   if (!partnerProfile) return null
 
+  const confirmation = (
+    <div className="flex items-center justify-center gap-2 py-1 motion-safe:animate-bounce-in" role="status" aria-live="polite">
+      <Check size={14} className="shrink-0 text-[#C2788E]" aria-hidden="true" />
+      <span className="text-[#C2788E] text-sm font-medium leading-relaxed text-balance">
+        Petit mot envoyé — {partnerProfile.display_name} le trouvera en ouvrant Awy
+      </span>
+    </div>
+  )
+
   const editor = (
-    <div className="flex gap-2">
-      <input
-        type="text"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && sendNote()}
-        placeholder="Ex : Tu me manques, j'ai hâte de te voir…"
-        aria-label="Ton petit mot"
-        className={`${INPUT} py-2.5 flex-1`}
-        maxLength={500}
-        autoFocus
-      />
-      <button onClick={() => { setShowEditor(false); setDraft('') }} className={ICON_BTN} aria-label="Annuler">
-        <X size={16} aria-hidden="true" />
-      </button>
-      <button onClick={sendNote} disabled={sending || !draft.trim()} className={SEND_BTN} aria-label="Envoyer le petit mot">
-        <Send size={14} aria-hidden="true" />
-      </button>
+    <div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => { setDraft(e.target.value); if (sendError) setSendError(null) }}
+          onKeyDown={(e) => { if (e.key === 'Enter') sendNote() }}
+          placeholder="Ex : Tu me manques, j'ai hâte de te voir…"
+          aria-label="Ton petit mot"
+          aria-invalid={!!sendError}
+          className={`${INPUT} py-2.5 flex-1`}
+          maxLength={500}
+          disabled={sending}
+          autoFocus
+        />
+        <button onClick={closeEditor} disabled={sending} className={ICON_BTN} aria-label="Annuler">
+          <X size={16} aria-hidden="true" />
+        </button>
+        <button
+          onClick={sendNote}
+          disabled={sending || !draft.trim()}
+          className={SEND_BTN}
+          aria-label={sending ? 'Envoi du petit mot en cours' : 'Envoyer le petit mot'}
+          aria-busy={sending}
+        >
+          {sending
+            ? <Loader2 size={14} className="motion-safe:animate-spin" aria-hidden="true" />
+            : <Send size={14} aria-hidden="true" />}
+        </button>
+      </div>
+
+      {/* Le champ n'est jamais vidé tant que la ligne n'est pas en base : rien ne se perd. */}
+      <p className="mt-2 text-xs leading-relaxed text-[#9B9287] min-h-4" role="status" aria-live="polite">
+        {sending ? 'Envoi en cours…' : ''}
+      </p>
+      {sendError && (
+        <p className="text-xs leading-relaxed text-[#F0A5AD] motion-safe:animate-fade-in" role="alert">
+          {sendError}
+        </p>
+      )}
     </div>
   )
 
@@ -114,7 +175,11 @@ export default function LoveNoteWidget() {
               <PenLine size={14} aria-hidden="true" />
             </button>
           </div>
+          {/* La réponse envoyée depuis cette carte se confirme ici, sous la lettre */}
           {showEditor && <div className="mt-4 pt-3 border-t border-white/[0.04] animate-slide-up">{editor}</div>}
+          {!showEditor && status === 'sent' && (
+            <div className="mt-4 pt-3 border-t border-white/[0.04]">{confirmation}</div>
+          )}
         </div>
       </div>
     )
@@ -125,10 +190,8 @@ export default function LoveNoteWidget() {
     <div className="relative overflow-hidden rounded-2xl group">
       <div className="absolute top-0 left-[15%] right-[15%] h-px bg-gradient-to-r from-transparent via-[rgba(212,165,116,0.12)] to-transparent opacity-60 group-hover:opacity-100 transition-opacity duration-500 z-10" aria-hidden="true" />
       <div className="lux-card relative px-5 py-4 md:px-6 rounded-2xl transition-all duration-500 ease-out">
-        {justSent ? (
-          <div className="flex items-center justify-center gap-2 py-1 animate-bounce-in" role="status">
-            <span className="text-[#C2788E] text-sm font-medium leading-relaxed">Petit mot envoyé avec amour</span>
-          </div>
+        {status === 'sent' ? (
+          confirmation
         ) : showEditor ? (
           <div className="animate-slide-up">
             <p className="text-xs tracking-wide text-[#9B9287] mb-2.5 font-medium">Écris un petit mot pour {partnerProfile.display_name}</p>

@@ -5,7 +5,8 @@ import { supabase } from '@/lib/supabase'
 import { run } from '@/lib/db'
 import { toast } from '@/lib/toast'
 import { confirm } from '@/lib/confirm'
-import { getAllTimezones, detectTimezone, timezoneCity } from '@/lib/timezone'
+import { getAllTimezones, detectTimezone, timezoneCity, timezoneRegion, timezoneLabel, zonedDateKey } from '@/lib/timezone'
+import { describeDateInput } from '@/lib/dates'
 import { SELECT, BTN_PRIMARY, BTN_GHOST, INPUT, LABEL, CARD, CARD_EDGE, ICON_BTN, CARD_TITLE } from '@/lib/ui'
 import PageHeader from '@/components/ui/PageHeader'
 import ShareLocationToggle from '@/components/map/ShareLocationToggle'
@@ -27,6 +28,27 @@ export default function SettingsPage() {
 
   const timezones = useMemo(() => getAllTimezones(), [])
   const detected = useMemo(() => detectTimezone(), [])
+  // Le sélecteur ne montre jamais d’identifiant IANA : villes en français,
+  // regroupées par région et triées avec les règles d’alphabet français.
+  const timezoneGroups = useMemo(() => {
+    const collator = new Intl.Collator('fr')
+    const byRegion = new Map<string, { tz: string; city: string }[]>()
+    for (const tz of timezones) {
+      const region = timezoneRegion(tz)
+      const list = byRegion.get(region) ?? []
+      list.push({ tz, city: timezoneCity(tz) })
+      byRegion.set(region, list)
+    }
+    return [...byRegion]
+      .map(([region, cities]) => ({ region, cities: cities.sort((a, b) => collator.compare(a.city, b.city)) }))
+      .sort((a, b) => collator.compare(a.region, b.region))
+  }, [timezones])
+  // « Aujourd’hui » se lit dans le fuseau du profil, pas dans celui du navigateur :
+  // à 00 h 30 à Varsovie, l’UTC est encore la veille et bornerait le champ trop tôt.
+  const todayKey = zonedDateKey(timezone, new Date())
+  // Le sélecteur natif s’affiche au format du système (souvent mm/jj/aaaa) :
+  // on relit la date choisie en toutes lettres, en français.
+  const relationshipEcho = describeDateInput(relationshipStart)
 
   // Si le profil arrive après le montage
   useEffect(() => {
@@ -57,7 +79,7 @@ export default function SettingsPage() {
         location_city: city.trim() || null,
         relationship_start: relationshipStart || null,
       }).eq('id', profile.id),
-      { errorMessage: "Le profil n'a pas pu être enregistré." },
+      { errorMessage: 'Le profil n’a pas pu être enregistré.' },
     )
     if (ok) {
       await fetchProfile()
@@ -73,7 +95,7 @@ export default function SettingsPage() {
     setLinking(true)
     try {
       await linkPartner(partnerCode)
-      toast.success('Vous êtes liés ! 💛')
+      toast.success('Vous êtes liés.')
       setPartnerCode('')
     } catch (err) {
       setLinkError(err instanceof Error ? err.message : 'Impossible de lier ce code.')
@@ -95,7 +117,7 @@ export default function SettingsPage() {
 
   const shareCode = async () => {
     if (!profile?.partner_code) return
-    const text = `Rejoins-moi sur Awy ! Mon code d'invitation : ${profile.partner_code}\n${window.location.origin}${import.meta.env.BASE_URL}`
+    const text = `Rejoins-moi sur Awy\u202f! Mon code d’invitation\u202f: ${profile.partner_code}\n${window.location.origin}${import.meta.env.BASE_URL}`
     try {
       if (navigator.share) {
         await navigator.share({ title: 'Awy', text })
@@ -110,15 +132,15 @@ export default function SettingsPage() {
   const handleUnlink = async () => {
     if (!partnerProfile) return
     const yes = await confirm({
-      title: `Te délier de ${partnerProfile.display_name} ?`,
-      message: 'Vous ne verrez plus les données l’un de l’autre. Rien n’est supprimé : vous pourrez vous relier avec vos codes.',
-      confirmLabel: 'Me délier', danger: true,
+      title: `Te délier de ${partnerProfile.display_name}\u202f?`,
+      message: 'Vous serez déliés tous les deux\u202f: vous ne verrez plus les données l’un de l’autre. Rien n’est supprimé — vos codes restent valables, et tout réapparaîtra le jour où vous vous relierez.',
+      confirmLabel: 'Me délier', danger: true, irreversible: false,
     })
     if (!yes) return
     setBusy(true)
     try {
       await unlinkPartner()
-      toast.info('Vous êtes déliés.')
+      toast.info('Vous êtes déliés. Vos codes restent valables.')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Impossible de te délier.')
     } finally {
@@ -133,7 +155,7 @@ export default function SettingsPage() {
       await requestPasswordReset(user.email)
       toast.success(`Un lien pour changer ton mot de passe a été envoyé à ${user.email}.`)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Impossible d'envoyer l'email.")
+      toast.error(err instanceof Error ? err.message : 'Impossible d’envoyer l’email.')
     } finally {
       setBusy(false)
     }
@@ -158,7 +180,7 @@ export default function SettingsPage() {
       URL.revokeObjectURL(url)
       toast.success('Export téléchargé.')
     } catch {
-      toast.error("L'export a échoué.")
+      toast.error('L’export a échoué.')
     } finally {
       setBusy(false)
     }
@@ -166,12 +188,12 @@ export default function SettingsPage() {
 
   const handleDelete = async () => {
     const yes = await confirm({
-      title: 'Supprimer définitivement ton compte ?',
-      message: 'Toutes tes données (pensées, souvenirs, capsules…) seront effacées. Cette action est irréversible. Pense à exporter avant.',
+      title: 'Supprimer définitivement ton compte\u202f?',
+      message: 'Tout ce que tu as écrit et partagé ici (pensées, souvenirs, capsules…) sera effacé, et tu seras délié·e. Pense à exporter tes données avant.',
       confirmLabel: 'Supprimer mon compte', danger: true,
     })
     if (!yes) return
-    const really = await confirm({ title: 'Vraiment sûr·e ?', message: 'Dernière confirmation avant suppression.', confirmLabel: 'Oui, supprimer', danger: true })
+    const really = await confirm({ title: 'Dernière étape', message: 'Ton compte est supprimé dès que tu confirmes. Il n’y a pas de retour en arrière.', confirmLabel: 'Oui, supprimer', danger: true })
     if (!really) return
     setBusy(true)
     try {
@@ -186,7 +208,7 @@ export default function SettingsPage() {
 
   return (
     <div className="px-5 md:px-8 py-6 max-w-3xl lg:max-w-[1000px] mx-auto reveal">
-      <PageHeader eyebrow="Votre espace" title="Réglages" subtitle="Profil, partenaire, sécurité et données." />
+      <PageHeader eyebrow="Ton espace" title="Réglages" subtitle="Ton profil, votre lien, ta sécurité et tes données." />
       <div className="grid gap-5 lg:grid-cols-2 lg:items-start mt-4">
       <div className="space-y-5">
 
@@ -201,9 +223,9 @@ export default function SettingsPage() {
           </h2>
 
           <div className="relative">
-            <p className={LABEL}>Ton code d'invitation</p>
+            <p className={LABEL}>Ton code d’invitation</p>
             <div className="flex gap-2">
-              <div className="flex-1 bg-[rgba(255,255,255,0.03)] rounded-xl px-4 py-3 font-mono text-lg tracking-widest text-center text-[#F0EAE0] select-all" aria-label="Code d'invitation">
+              <div className="flex-1 bg-[rgba(255,255,255,0.03)] rounded-xl px-4 py-3 font-mono text-lg tracking-widest text-center text-[#F0EAE0] select-all" aria-label="Code d’invitation">
                 {profile?.partner_code ?? '…'}
               </div>
               <button onClick={copyCode} className={ICON_BTN} aria-label="Copier le code" title="Copier">
@@ -214,7 +236,7 @@ export default function SettingsPage() {
               </button>
             </div>
             <p className="text-xs tracking-wide text-[#9B9287] mt-2 leading-relaxed">
-              Envoie ce code à ton/ta partenaire. Il/elle crée un compte, puis l'entre ici-même dans ses Réglages.
+              Envoie ce code à ton/ta partenaire. Une fois son compte créé, il suffit de l’entrer ici, dans les Réglages.
             </p>
           </div>
 
@@ -259,7 +281,7 @@ export default function SettingsPage() {
               <p className="font-medium text-sm text-[#F0EAE0]">{partnerProfile.display_name}</p>
               <p className="text-xs tracking-wide text-[#9B9287]">{partnerProfile.location_city ?? timezoneCity(partnerProfile.timezone)}</p>
             </div>
-            <button onClick={handleUnlink} disabled={busy} className={`${BTN_GHOST} text-xs`} aria-label="Me délier">
+            <button onClick={handleUnlink} disabled={busy} className={`${BTN_GHOST} text-xs`} aria-label={`Délier de ${partnerProfile.display_name}`}>
               <Unlink size={14} aria-hidden="true" /> Délier
             </button>
           </div>
@@ -282,15 +304,19 @@ export default function SettingsPage() {
           <div className="flex items-baseline justify-between">
             <label htmlFor="pf-tz" className={LABEL}>Fuseau horaire</label>
             {detected !== timezone && (
-              <button type="button" onClick={() => setTimezone(detected)} className="text-xs text-[#D4A574] hover:text-[#E8C9A0] inline-flex items-center gap-1 mb-1.5">
+              <button type="button" onClick={() => setTimezone(detected)} className="tap-44 text-xs text-[#D4A574] hover:text-[#E8C9A0] inline-flex items-center gap-1 mb-1.5">
                 <Locate size={11} aria-hidden="true" /> Détecter ({timezoneCity(detected)})
               </button>
             )}
           </div>
           <select id="pf-tz" value={timezone} onChange={(e) => setTimezone(e.target.value)} className={`${INPUT} ${SELECT}`}>
-            {!timezones.includes(timezone) && <option value={timezone}>{timezone}</option>}
-            {timezones.map((tz) => (
-              <option key={tz} value={tz} className="bg-[#1E1B17] text-[#F0EAE0]">{tz.replace(/_/g, ' ')}</option>
+            {!timezones.includes(timezone) && <option value={timezone}>{timezoneLabel(timezone)}</option>}
+            {timezoneGroups.map(({ region, cities }) => (
+              <optgroup key={region} label={region} className="bg-[#1E1B17] text-[#F0EAE0]">
+                {cities.map(({ tz, city }) => (
+                  <option key={tz} value={tz} className="bg-[#1E1B17] text-[#F0EAE0]">{city}</option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>
@@ -299,15 +325,18 @@ export default function SettingsPage() {
           <label htmlFor="pf-city" className={`${LABEL} flex items-center gap-1`}>
             <MapPin size={12} aria-hidden="true" /> Ville
           </label>
-          <input id="pf-city" type="text" value={city} onChange={(e) => setCity(e.target.value)} className={INPUT} placeholder="Ex : Paris" maxLength={60} autoComplete="address-level2" />
+          <input id="pf-city" type="text" value={city} onChange={(e) => setCity(e.target.value)} className={INPUT} placeholder={'Ex\u202f: Paris'} maxLength={60} autoComplete="address-level2" />
         </div>
 
         <ShareLocationToggle />
 
         <div>
           <label htmlFor="pf-since" className={LABEL}>Ensemble depuis</label>
-          <input id="pf-since" type="date" value={relationshipStart} onChange={(e) => setRelationshipStart(e.target.value)} max={new Date().toISOString().slice(0, 10)} className={INPUT} />
-          <p className="text-xs text-[#9B9287] mt-1.5">Sert au compteur « Jour N ensemble » sur l'accueil.</p>
+          <input id="pf-since" type="date" lang="fr-FR" value={relationshipStart} onChange={(e) => setRelationshipStart(e.target.value)} max={todayKey} className={INPUT} aria-describedby="pf-since-echo" />
+          <p id="pf-since-echo" className="text-xs text-[#D4A574]/90 mt-1.5 min-h-4" aria-live="polite">
+            {relationshipEcho && `Depuis le ${relationshipEcho}.`}
+          </p>
+          <p className="text-xs text-[#9B9287] mt-1">Sert au compteur «&#8239;Jour N ensemble&#8239;» sur l’accueil.</p>
         </div>
 
         <button type="submit" disabled={saving || !dirty} className={`${BTN_PRIMARY} w-full py-3`}>
@@ -332,7 +361,7 @@ export default function SettingsPage() {
         <ul className="divide-y divide-white/[0.06] -mx-1">
           {[
             { icon: KeyRound, label: 'Changer mon mot de passe', onClick: handleChangePassword },
-            { icon: Download, label: 'Exporter mes données (JSON)', onClick: handleExport },
+            { icon: Download, label: 'Exporter mes données (fichier JSON)', onClick: handleExport },
             { icon: LogOut, label: 'Se déconnecter', onClick: signOut },
           ].map(({ icon: Icon, label, onClick }) => (
             <li key={label}>
@@ -349,7 +378,7 @@ export default function SettingsPage() {
       {/* ─── Zone de danger ─── */}
       <section className="rounded-[20px] p-5 shadow-[inset_0_0_0_1px_rgba(224,108,117,0.22)] bg-[rgba(224,108,117,0.04)]" aria-labelledby="danger-title">
         <h2 id="danger-title" className="font-display text-[17px] text-[#F0A5AD] flex items-center gap-2"><Trash2 size={15} aria-hidden="true" /> Zone sensible</h2>
-        <p className="text-[13px] text-[#9B9287] mt-1.5 leading-relaxed">La suppression efface définitivement toutes vos données. Exporte-les avant si tu veux les garder.</p>
+        <p className="text-[13px] text-[#9B9287] mt-1.5 leading-relaxed">Supprimer ton compte efface définitivement tes données. Exporte-les avant si tu veux les garder.</p>
         <button onClick={handleDelete} disabled={busy} className="mt-3 text-[13px] text-[#F0A5AD]/90 underline underline-offset-4 decoration-[#F0A5AD]/40 hover:decoration-[#F0A5AD] min-h-11 disabled:opacity-60">
           Supprimer définitivement mon compte
         </button>

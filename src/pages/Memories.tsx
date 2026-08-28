@@ -1,10 +1,10 @@
-import { useEffect, useState, useCallback, type FormEvent } from 'react'
-import { Camera, Plus, X, Clock, Lock, Mail, Hourglass, Clapperboard } from 'lucide-react'
+import { useState, useCallback, type FormEvent } from 'react'
+import { Plus, X, Clock, Lock, Mail, Hourglass, Clapperboard, CalendarDays } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
-import type { TimelineEvent, Capsule } from '@/types/database'
-import { format, parseISO, isPast, isToday } from 'date-fns'
-import { fr } from 'date-fns/locale'
+import { useLiveData } from '@/hooks/useLiveData'
+import type { Capsule } from '@/types/database'
+import { parseISO, isPast, isToday } from 'date-fns'
 import Modal from '@/components/ui/Modal'
 import PageHeader from '@/components/ui/PageHeader'
 import EmptyState from '@/components/ui/EmptyState'
@@ -14,10 +14,11 @@ import { confirm } from '@/lib/confirm'
 import { run } from '@/lib/db'
 import { toast } from '@/lib/toast'
 import { shine, unshine } from '@/lib/shine'
-import { BTN_PRIMARY, BTN_GHOST, INPUT, LABEL, CARD, CARD_EDGE, EYEBROW } from '@/lib/ui'
+import { BTN_PRIMARY, BTN_GHOST, INPUT, LABEL, CARD, CARD_EDGE } from '@/lib/ui'
+import { capitalizeFirst, describeDateInput, formatLongDateFR, toDateInputValue } from '@/lib/dates'
 
-type Tab = 'vlog' | 'timeline' | 'capsules'
-const TIMELINE_EMOJIS = ['💕', '✈️', '🎉', '🏠', '💍', '🎂', '📸', '🌅', '🎓', '⭐']
+type Tab = 'vlog' | 'capsules'
+
 
 /** Icône native des champs date : éclaircie pour rester lisible sur le thème sombre */
 /** Suppression discrète : visible au doigt, révélée au survol/focus sur desktop */
@@ -33,57 +34,28 @@ const canReveal = (c: Capsule) => {
 export default function Memories() {
   const { profile, partnerProfile } = useAuthStore()
   const [tab, setTab] = useState<Tab>('vlog')
-  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([])
   const [capsules, setCapsules] = useState<Capsule[]>([])
-  const [showTimelineForm, setShowTimelineForm] = useState(false)
   const [showCapsuleForm, setShowCapsuleForm] = useState(false)
   const [showVlogComposer, setShowVlogComposer] = useState(false)
-
-  const [tlTitle, setTlTitle] = useState('')
-  const [tlDescription, setTlDescription] = useState('')
-  const [tlEmoji, setTlEmoji] = useState('💕')
-  const [tlDate, setTlDate] = useState(format(new Date(), 'yyyy-MM-dd'))
 
   const [capContent, setCapContent] = useState('')
   const [capRevealDate, setCapRevealDate] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const fetchTimeline = useCallback(async () => {
-    const { data } = await run(supabase.from('timeline_events').select('*').order('event_date', { ascending: false }).limit(200), { errorMessage: 'Impossible de charger vos souvenirs.' })
-    if (data) setTimelineEvents(data)
-  }, [])
-
   const fetchCapsules = useCallback(async () => {
-    const { data } = await run(supabase.from('capsules').select('*').order('reveal_date', { ascending: true }).limit(200), { errorMessage: 'Impossible de charger les capsules.' })
-    if (data) setCapsules(data)
+    // Lecture via la fonction SECURITY DEFINER get_capsules() : le SELECT direct sur la table
+    // `capsules` est révoqué côté base. La fonction renvoie les capsules du couple (triées par
+    // reveal_date) en masquant `content` (NULL) tant que la capsule n'est pas révélée pour le
+    // destinataire — le contenu reste donc scellé côté serveur, pas seulement côté UI.
+    const { data } = await run(supabase.rpc('get_capsules'), { errorMessage: 'Impossible de charger les capsules.' })
+    if (data) setCapsules(data as Capsule[])
   }, [])
 
-  useEffect(() => {
-    fetchTimeline()
-    fetchCapsules()
-    const channel = supabase
-      .channel(`memories:${profile?.id ?? 'anon'}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'timeline_events' }, () => fetchTimeline())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'capsules' }, () => fetchCapsules())
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [fetchTimeline, fetchCapsules, profile?.id])
-
-  const addTimelineEvent = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!profile || !tlTitle.trim() || !tlDate) return
-    setSaving(true)
-    const { ok } = await run(
-      supabase.from('timeline_events').insert({ title: tlTitle.trim(), description: tlDescription.trim() || null, emoji: tlEmoji, event_date: tlDate, created_by: profile.id }),
-      { errorMessage: "Le moment n'a pas pu être ajouté." },
-    )
-    setSaving(false)
-    if (ok) {
-      toast.success('Moment ajouté à votre histoire')
-      setShowTimelineForm(false); setTlTitle(''); setTlDescription('')
-      fetchTimeline()
-    }
-  }
+  useLiveData({
+    channel: `memories:${profile?.id ?? 'anon'}`,
+    load: fetchCapsules,
+    bind: (ch) => ch.on('postgres_changes', { event: '*', schema: 'public', table: 'capsules' }, () => fetchCapsules()),
+  })
 
   const addCapsule = async (e: FormEvent) => {
     e.preventDefault()
@@ -95,7 +67,7 @@ export default function Memories() {
     )
     setSaving(false)
     if (ok) {
-      toast.success(`Capsule scellée jusqu'au ${format(parseISO(capRevealDate), 'd MMMM yyyy', { locale: fr })}`)
+      toast.success(`Capsule scellée jusqu'au ${formatLongDateFR(parseISO(capRevealDate))}`)
       setShowCapsuleForm(false); setCapContent(''); setCapRevealDate('')
       fetchCapsules()
     }
@@ -110,13 +82,6 @@ export default function Memories() {
     if (ok) fetchCapsules()
   }
 
-  const deleteTimelineEvent = async (ev: TimelineEvent) => {
-    const yes = await confirm({ title: 'Supprimer ce souvenir ?', message: `« ${ev.title} » disparaîtra de votre timeline à tous les deux.`, confirmLabel: 'Supprimer', danger: true })
-    if (!yes) return
-    const { ok } = await run(supabase.from('timeline_events').delete().eq('id', ev.id), { errorMessage: 'Suppression impossible.' })
-    if (ok) fetchTimeline()
-  }
-
   const deleteCapsule = async (c: Capsule) => {
     const yes = await confirm({ title: 'Détruire cette capsule ?', message: 'Elle ne sera jamais lue.', confirmLabel: 'Détruire', danger: true })
     if (!yes) return
@@ -126,25 +91,13 @@ export default function Memories() {
 
   const partnerName = partnerProfile?.display_name ?? 'ton/ta partenaire'
 
-  /* Regroupement de la timeline par année (la requête est déjà triée du plus récent au plus ancien) */
-  const timelineByYear = timelineEvents.reduce<{ year: string; items: TimelineEvent[] }[]>((acc, ev) => {
-    const year = format(parseISO(ev.event_date), 'yyyy')
-    const last = acc[acc.length - 1]
-    if (last && last.year === year) last.items.push(ev)
-    else acc.push({ year, items: [ev] })
-    return acc
-  }, [])
-  /** Deux colonnes sur grand écran seulement quand la timeline a de la matière */
-  const twoCols = timelineEvents.length >= 3
+  // Écho français de la date saisie, sous le sélecteur natif (cf. CalendarPage)
+  const capsuleEcho = describeDateInput(capRevealDate)
 
   const headerAction =
     tab === 'vlog' ? (
       <button onClick={() => setShowVlogComposer(true)} className={BTN_PRIMARY}>
         <Clapperboard size={14} aria-hidden="true" /> Ajouter un vlog
-      </button>
-    ) : tab === 'timeline' ? (
-      <button onClick={() => setShowTimelineForm(true)} className={BTN_PRIMARY}>
-        <Plus size={14} aria-hidden="true" /> Ajouter un moment
       </button>
     ) : (
       <button onClick={() => setShowCapsuleForm(true)} className={BTN_PRIMARY} disabled={!partnerProfile} title={partnerProfile ? undefined : 'Lie ton/ta partenaire d’abord'}>
@@ -159,8 +112,8 @@ export default function Memories() {
         title="Souvenirs"
         subtitle={
           tab === 'vlog'
-            ? 'Votre quotidien en images, partagé en direct.'
-            : 'Les moments qui comptent, et les mots gardés pour plus tard.'
+            ? 'Votre quotidien en images — et les étapes qui comptent, marquées dans le fil.'
+            : 'Les mots gardés pour plus tard, scellés jusqu’à la date choisie.'
         }
         action={headerAction}
         tabs={
@@ -170,7 +123,6 @@ export default function Memories() {
             onChange={setTab}
             tabs={[
               { key: 'vlog', label: 'Vlog', icon: Clapperboard },
-              { key: 'timeline', label: 'Notre histoire', icon: Camera },
               { key: 'capsules', label: 'Capsules', icon: Lock },
             ]}
           />
@@ -179,105 +131,6 @@ export default function Memories() {
 
       {tab === 'vlog' && (
         <VlogFeed composerOpen={showVlogComposer} onOpenComposer={() => setShowVlogComposer(true)} onCloseComposer={() => setShowVlogComposer(false)} />
-      )}
-
-      {tab === 'timeline' && (
-        <>
-          {timelineEvents.length === 0 ? (
-            <EmptyState
-              icon={Camera}
-              title="Votre histoire commence ici"
-              text="Ajoutez les moments qui vous ont construits : la rencontre, le premier voyage, les retrouvailles…"
-            />
-          ) : (
-            <div className="space-y-8">
-              {timelineByYear.map(({ year, items }) => (
-                <section key={year} aria-label={`Souvenirs de ${year}`}>
-                  <div className="flex items-center gap-3 mb-4">
-                    <span className="h-px w-10 bg-gradient-to-r from-transparent to-[#D4A574]/30" aria-hidden="true" />
-                    <span className={`${EYEBROW} num`}>{year}</span>
-                    <span className="h-px flex-1 bg-gradient-to-l from-transparent to-[#D4A574]/30" aria-hidden="true" />
-                  </div>
-
-                  <div className="relative">
-                    <span
-                      className={`absolute left-[21px] top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-[#D4A574]/25 to-transparent ${twoCols ? 'lg:hidden' : ''}`}
-                      aria-hidden="true"
-                    />
-                    <ol className={twoCols ? 'grid gap-4 lg:grid-cols-2' : 'space-y-4'}>
-                      {items.map((event) => (
-                        <li key={event.id} className="grid grid-cols-[44px_1fr] gap-4 items-start">
-                          <span
-                            className="size-11 rounded-full grid place-items-center bg-gradient-to-br from-[#D4A574]/18 to-[#C2788E]/18 shadow-[inset_0_0_0_1px_rgba(212,165,116,0.25),0_0_0_4px_#110F0E]"
-                            aria-hidden="true"
-                          >
-                            <span className="emoji text-lg leading-none">{event.emoji}</span>
-                          </span>
-                          <article className={`${CARD} group`} onMouseMove={shine} onMouseLeave={unshine}>
-                            <div className={CARD_EDGE} aria-hidden="true" />
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
-                                <h2 className="text-[15px] text-[#F0EAE0] leading-snug font-normal">{event.title}</h2>
-                                <p className="text-xs text-[#9B9287] num mt-0.5">{format(parseISO(event.event_date), 'd MMMM yyyy', { locale: fr })}</p>
-                              </div>
-                              {event.created_by === profile?.id && (
-                                <button onClick={() => deleteTimelineEvent(event)} className={DELETE_BTN} aria-label={`Supprimer ${event.title}`}>
-                                  <X size={15} aria-hidden="true" />
-                                </button>
-                              )}
-                            </div>
-                            {event.description && <p className="text-[13px] text-[#9B9287] mt-2 leading-relaxed whitespace-pre-wrap">{event.description}</p>}
-                          </article>
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                </section>
-              ))}
-            </div>
-          )}
-
-          {showTimelineForm && (
-            <Modal title="Nouveau moment" description="Un instant à graver dans votre histoire commune." onClose={() => setShowTimelineForm(false)}>
-              <form onSubmit={addTimelineEvent} className="space-y-4">
-                <div>
-                  <span className={LABEL}>Emoji</span>
-                  <div className="grid grid-cols-5 gap-2" role="radiogroup" aria-label="Emoji">
-                    {TIMELINE_EMOJIS.map((e) => (
-                      <button
-                        type="button"
-                        key={e}
-                        onClick={() => setTlEmoji(e)}
-                        role="radio"
-                        aria-checked={tlEmoji === e}
-                        aria-label={`Emoji ${e}`}
-                        className={`h-12 rounded-xl text-xl transition-all duration-200 ${tlEmoji === e ? 'bg-[rgba(212,165,116,0.15)] shadow-[inset_0_0_0_1.5px_#E8C9A0]' : 'bg-white/[0.03] hover:bg-[rgba(212,165,116,0.08)]'}`}
-                      >
-                        <span className="emoji" aria-hidden="true">{e}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label htmlFor="tl-title" className={LABEL}>Titre du moment</label>
-                  <input id="tl-title" type="text" value={tlTitle} onChange={(e) => setTlTitle(e.target.value)} className={INPUT} maxLength={120} required placeholder="Ex : Notre premier voyage" />
-                </div>
-                <div>
-                  <label htmlFor="tl-desc" className={LABEL}>Description (optionnel)</label>
-                  <textarea id="tl-desc" value={tlDescription} onChange={(e) => setTlDescription(e.target.value)} rows={2} className={`${INPUT} resize-none`} maxLength={1000} />
-                </div>
-                <div>
-                  <label htmlFor="tl-date" className={LABEL}>Date</label>
-                  <input id="tl-date" type="date" value={tlDate} onChange={(e) => setTlDate(e.target.value)} className={`${INPUT}`} required lang="fr-FR" />
-                </div>
-                <div className="flex gap-2 pt-1">
-                  <button type="button" onClick={() => setShowTimelineForm(false)} className={`${BTN_GHOST} flex-1`}>Annuler</button>
-                  <button type="submit" disabled={saving || !tlTitle.trim()} className={`${BTN_PRIMARY} flex-1`}>{saving ? 'Enregistrement…' : 'Ajouter'}</button>
-                </div>
-              </form>
-            </Modal>
-          )}
-        </>
       )}
 
       {tab === 'capsules' && (
@@ -293,7 +146,7 @@ export default function Memories() {
               {capsules.map((capsule) => {
                 const revealable = canReveal(capsule)
                 const isMine = capsule.sender_id === profile?.id
-                const revealDate = format(parseISO(capsule.reveal_date), 'd MMMM yyyy', { locale: fr })
+                const revealDate = formatLongDateFR(parseISO(capsule.reveal_date))
                 const sealed = isMine && !capsule.is_opened && !!capsule.content
                 return (
                   <li key={capsule.id} className={`${CARD} group`} onMouseMove={shine} onMouseLeave={unshine}>
@@ -309,9 +162,9 @@ export default function Memories() {
                           <span className="num">
                             {revealable
                               ? capsule.is_opened
-                                ? `Ouverte le ${format(parseISO(capsule.opened_at!), 'd MMM yyyy', { locale: fr })}`
+                                ? `Ouverte le ${formatLongDateFR(parseISO(capsule.opened_at!))}`
                                 : 'Prête à ouvrir !'
-                              : `Disponible le ${format(parseISO(capsule.reveal_date), 'd MMM yyyy', { locale: fr })}`}
+                              : `Disponible le ${revealDate}`}
                           </span>
                         </p>
                       </div>
@@ -363,7 +216,16 @@ export default function Memories() {
                 </div>
                 <div>
                   <label htmlFor="cap-date" className={LABEL}>Date de révélation</label>
-                  <input id="cap-date" type="date" value={capRevealDate} onChange={(e) => setCapRevealDate(e.target.value)} min={format(new Date(), 'yyyy-MM-dd')} className={`${INPUT}`} required lang="fr-FR" />
+                  <input id="cap-date" type="date" value={capRevealDate} onChange={(e) => setCapRevealDate(e.target.value)} min={toDateInputValue(new Date())} className={`${INPUT}`} required lang="fr-FR" aria-describedby="cap-when" />
+                  {/* Le sélecteur natif s'affiche au format du système : on relit la date en français. */}
+                  <p id="cap-when" className="mt-1.5 text-[12px] text-[#F0EAE0]/70 min-h-[16px]" aria-live="polite">
+                    {capsuleEcho && (
+                      <>
+                        <CalendarDays size={12} className="inline-block align-[-1px] mr-1.5 text-[#D4A574]" aria-hidden="true" />
+                        {capitalizeFirst(capsuleEcho)}
+                      </>
+                    )}
+                  </p>
                 </div>
                 <div className="flex gap-2 pt-1">
                   <button type="button" onClick={() => setShowCapsuleForm(false)} className={`${BTN_GHOST} flex-1`}>Annuler</button>

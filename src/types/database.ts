@@ -15,7 +15,7 @@ export interface Profile {
   updated_at: string
 }
 
-export type MoodState = 'joyful' | 'proud' | 'peaceful' | 'tired' | 'stressed' | 'focused' | 'down'
+export type MoodState = 'joyful' | 'proud' | 'peaceful' | 'love' | 'excited' | 'focused' | 'tired' | 'bored' | 'sick' | 'stressed' | 'angry' | 'down'
 
 export interface Mood {
   id: string
@@ -116,7 +116,8 @@ export interface Capsule {
   id: string
   sender_id: string
   receiver_id: string
-  content: string
+  // NULL quand la capsule est encore scellée pour le destinataire (masqué par get_capsules()).
+  content: string | null
   image_url: string | null
   reveal_date: string
   is_opened: boolean
@@ -201,6 +202,8 @@ export interface Vlog {
   media_path: string
   media_type: 'image' | 'video'
   caption: string | null
+  /** Marqué comme étape importante — remplace l'ancienne « Notre histoire » (frise des grands moments) */
+  is_milestone: boolean
   taken_at: string
   created_at: string
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback, type FormEvent } from 'react'
 import { ListTodo, Plus, Check, X, ChevronRight, ChevronLeft, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
+import { useLiveData } from '@/hooks/useLiveData'
 import type { TodoList, TodoItem } from '@/types/database'
 import Modal from '@/components/ui/Modal'
 import EmptyState from '@/components/ui/EmptyState'
@@ -13,7 +14,7 @@ const EMOJIS = ['📋', '🏠', '✈️', '🎁', '💰', '📦', '🍳', '💪'
 
 /** Bouton de suppression discret — invisible au repos sur desktop, mais cible ≥ 44px */
 const DELETE_BTN =
-  'p-2.5 -m-2.5 shrink-0 rounded-full text-[#9B9287] hover:text-[#F0A5AD] hover:bg-[rgba(224,108,117,0.10)] transition-all duration-200 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100'
+  'p-3.5 -m-3.5 shrink-0 rounded-full text-[#9B9287] hover:text-[#F0A5AD] hover:bg-[rgba(224,108,117,0.10)] transition-all duration-200 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100'
 
 interface Props {
   /** À chaque changement de valeur, la modale « Nouvelle liste » s'ouvre (piloté par l'en-tête de page) */
@@ -58,16 +59,20 @@ export default function TodosSection({ openSignal }: Props) {
     }
   }, [])
 
-  useEffect(() => {
-    fetchLists()
-    fetchAllItems()
-    const channel = supabase
-      .channel(`todos:${profile?.id ?? 'anon'}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'todo_lists' }, () => fetchLists())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'todo_items' }, () => fetchAllItems())
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [fetchLists, fetchAllItems, profile?.id])
+  // Deux tables, deux lectures : le chargement (initial et rattrapage) les enchaîne,
+  // le temps réel ne relit que celle qui a bougé.
+  const loadAll = useCallback(async () => {
+    await Promise.all([fetchLists(), fetchAllItems()])
+  }, [fetchLists, fetchAllItems])
+
+  useLiveData({
+    channel: `todos:${profile?.id ?? 'anon'}`,
+    load: loadAll,
+    bind: (ch) => {
+      ch.on('postgres_changes', { event: '*', schema: 'public', table: 'todo_lists' }, () => fetchLists())
+      ch.on('postgres_changes', { event: '*', schema: 'public', table: 'todo_items' }, () => fetchAllItems())
+    },
+  })
 
   const createList = async (e?: FormEvent) => {
     e?.preventDefault()
@@ -154,7 +159,7 @@ export default function TodosSection({ openSignal }: Props) {
           <div className={CARD_EDGE} aria-hidden="true" />
 
           <div className="flex items-center gap-2">
-            <button onClick={() => setActiveListId(null)} className="p-2.5 -m-2.5 mr-1 shrink-0 rounded-full text-[#9B9287] hover:text-[#F0EAE0] hover:bg-white/[0.06] transition-colors duration-200" aria-label="Retour aux listes">
+            <button onClick={() => setActiveListId(null)} className="p-[13px] -m-[13px] mr-1 shrink-0 rounded-full text-[#9B9287] hover:text-[#F0EAE0] hover:bg-white/[0.06] transition-colors duration-200" aria-label="Retour aux listes">
               <ChevronLeft size={18} aria-hidden="true" />
             </button>
             <h2 className="font-display text-[20px] leading-tight text-[#F0EAE0] flex items-center gap-2 min-w-0">
@@ -235,7 +240,7 @@ export default function TodosSection({ openSignal }: Props) {
         <EmptyState
           icon={ListTodo}
           title="Aucune liste, pour l’instant"
-          text="Créez une première liste — courses, préparatifs de voyage, petits projets — et cochez-la à deux."
+          text="Crée une première liste — courses, préparatifs de voyage, petits projets — et cochez-la à deux."
         />
       ) : (
         <ul className="grid gap-4 md:grid-cols-2">

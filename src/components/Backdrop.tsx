@@ -1,9 +1,23 @@
 import { useEffect, useRef } from 'react'
+import { useMotionBudget } from '@/hooks/useMotionBudget'
 
 /**
  * Fond vivant de l'app : deux aurores qui dérivent lentement + des braises/lucioles
- * dessinées au canvas, teintées par l'humeur du couple. Respecte prefers-reduced-motion,
- * se met en pause quand l'onglet est caché, et reste très léger (~60 particules).
+ * dessinées au canvas, teintées par l'humeur du couple.
+ *
+ * Économie d'énergie (point 20 de l'audit) : ce décor tournait en continu, y compris
+ * onglet caché ou téléphone posé sur la table, pour ~20 % de CPU permanents. Le
+ * budget d'animation est désormais délégué à `useMotionBudget`, qui coupe tout
+ * quand ça ne sert à rien :
+ *   - `prefers-reduced-motion: reduce` → une image fixe, aucune boucle ;
+ *   - onglet caché → boucle ANNULÉE (pas seulement un rendu sauté) ;
+ *   - 30 s sans le moindre geste → même chose, reprise au premier mouvement ;
+ *   - appareil modeste ou batterie faible → cadence divisée par deux.
+ *
+ * La reprise est volontairement sans à-coup : rien n'est réinitialisé pendant la
+ * pause (les braises restent où elles sont, les aurores CSS sont simplement
+ * `paused` puis `running`), et l'horloge de la boucle est recalée au redémarrage
+ * pour que le premier `dt` vaille une image et non toute la durée de la pause.
  */
 interface Props {
   /** Couleur d'accent (rgba) pilotée par l'humeur */
@@ -16,11 +30,22 @@ interface Ember {
   life: number; maxLife: number; hue: 0 | 1; twinkle: number
 }
 
+/** Poignée exposée par l'effet de mise en place, pilotée par le budget d'animation. */
+interface Controls {
+  start: () => void
+  stop: () => void
+  /** Cadence + mode image fixe. Redessine si l'on est déjà en pause. */
+  configure: (frameMs: number, still: boolean) => void
+}
+
 const reduced = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
 export default function Backdrop({ glowA = 'rgba(212,165,116,0.16)', glowB = 'rgba(194,120,142,0.12)' }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const haloRef = useRef<HTMLDivElement>(null)
+  const controlsRef = useRef<Controls | null>(null)
+
+  const { active, reduced: isReduced, frameMs } = useMotionBudget()
 
   // Halo qui suit le curseur (desktop uniquement, pointer fin)
   useEffect(() => {
@@ -39,20 +64,19 @@ export default function Backdrop({ glowA = 'rgba(212,165,116,0.16)', glowB = 'rg
     return () => { window.removeEventListener('mousemove', onMove); cancelAnimationFrame(raf) }
   }, [])
 
-  // Braises
+  // Braises — mise en place (une seule fois) ; le démarrage/l'arrêt est piloté
+  // par l'effet suivant, via `controlsRef`.
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d', { alpha: true })
     if (!ctx) return
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
-    let isReduced = mq.matches
     let w = 0, h = 0, dpr = 1
     let embers: Ember[] = []
     let raf = 0
-    let running = true
+    let frame = 1000 / 24 // valeur de départ, remplacée aussitôt par configure()
+    let still = false     // image fixe : on dessine, on n'anime pas
     let last = performance.now()
-    const FRAME = 1000 / 24 // 24 fps suffisent : les braises dérivent très lentement
 
     // Sprites pré-rendus (un dégradé radial par couleur, une seule fois) au lieu de 70 gradients/frame
     const sprite = (rgb: string) => {
@@ -81,21 +105,16 @@ export default function Backdrop({ glowA = 'rgba(212,165,116,0.16)', glowB = 'rg
       }
     }
 
-    const resize = () => {
-      dpr = Math.min(window.devicePixelRatio || 1, 1.5)
-      w = window.innerWidth; h = window.innerHeight
-      canvas.width = Math.floor(w * dpr); canvas.height = Math.floor(h * dpr)
-      canvas.style.width = `${w}px`; canvas.style.height = `${h}px`
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      embers = Array.from({ length: COUNT() }, () => spawn(true))
-      if (isReduced) draw(0)
-    }
-
+    /**
+     * `dt = 0` = simple repeinture, sans faire avancer les braises : c'est ce qui
+     * permet de redessiner à l'identique en pause (redimensionnement, image fixe)
+     * sans décaler quoi que ce soit à l'écran.
+     */
     const draw = (dt: number) => {
       ctx.clearRect(0, 0, w, h)
       for (let i = 0; i < embers.length; i++) {
         const e = embers[i]
-        if (!isReduced) {
+        if (dt > 0) {
           e.life += dt
           e.x += e.vx * dt * 0.06 + Math.sin((e.life + e.twinkle * 1000) / 2400) * 0.08
           e.y += e.vy * dt * 0.06
@@ -111,43 +130,71 @@ export default function Backdrop({ glowA = 'rgba(212,165,116,0.16)', glowB = 'rg
         ctx.globalAlpha = 0.55 * a
         ctx.drawImage(SPR[e.hue], e.x - R, e.y - R, R * 2, R * 2)
       }
+      ctx.globalAlpha = 1
+    }
+
+    const resize = () => {
+      dpr = Math.min(window.devicePixelRatio || 1, 1.5)
+      w = window.innerWidth; h = window.innerHeight
+      canvas.width = Math.floor(w * dpr); canvas.height = Math.floor(h * dpr)
+      canvas.style.width = `${w}px`; canvas.style.height = `${h}px`
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      embers = Array.from({ length: COUNT() }, () => spawn(true))
+      // En pause, le canvas vient d'être vidé par le redimensionnement : on
+      // repeint une image, sinon le fond disparaîtrait jusqu'au prochain geste.
+      if (!raf) draw(0)
     }
 
     const loop = (now: number) => {
-      if (!running) return
-      if (now - last < FRAME) { raf = requestAnimationFrame(loop); return }
+      if (now - last < frame) { raf = requestAnimationFrame(loop); return }
       const dt = Math.min(80, now - last); last = now
       draw(dt)
-      ctx.globalAlpha = 1
       raf = requestAnimationFrame(loop)
     }
 
-    const onPref = () => {
-      isReduced = mq.matches
-      cancelAnimationFrame(raf)
-      if (isReduced) draw(0)
-      else if (running) { last = performance.now(); raf = requestAnimationFrame(loop) }
+    const start = () => {
+      if (raf || still) return
+      // Recalage de l'horloge : sans lui, le premier `dt` après une pause de
+      // dix minutes ferait bondir toutes les braises d'un coup.
+      last = performance.now()
+      raf = requestAnimationFrame(loop)
     }
-    mq.addEventListener('change', onPref)
 
-    const onVisibility = () => {
-      running = document.visibilityState === 'visible'
-      if (running && !isReduced) { last = performance.now(); raf = requestAnimationFrame(loop) }
-      else cancelAnimationFrame(raf)
+    const stop = () => {
+      if (!raf) return
+      cancelAnimationFrame(raf) // on annule vraiment la boucle
+      raf = 0
     }
+
+    const configure = (nextFrameMs: number, nextStill: boolean) => {
+      frame = nextFrameMs
+      still = nextStill
+      if (still) { stop(); draw(0) }
+    }
+
+    controlsRef.current = { start, stop, configure }
 
     resize()
     window.addEventListener('resize', resize)
-    document.addEventListener('visibilitychange', onVisibility)
-    if (!isReduced) raf = requestAnimationFrame(loop)
     return () => {
-      running = false
-      cancelAnimationFrame(raf)
-      mq.removeEventListener('change', onPref)
+      stop()
+      controlsRef.current = null
       window.removeEventListener('resize', resize)
-      document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [])
+
+  // Braises — pilotage : c'est ici que la boucle est réellement annulée/relancée.
+  useEffect(() => {
+    const c = controlsRef.current
+    if (!c) return
+    c.configure(frameMs, isReduced)
+    if (active) c.start()
+    else c.stop()
+  }, [active, isReduced, frameMs])
+
+  // Aurores CSS : `paused` fige la transformation en cours et `running` la
+  // reprend exactement au même point — pas de saut, pas de flash.
+  const auroraPlayState = active ? 'running' : 'paused'
 
   return (
     <>
@@ -155,11 +202,11 @@ export default function Backdrop({ glowA = 'rgba(212,165,116,0.16)', glowB = 'rg
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0 [contain:strict]" aria-hidden="true">
         <div
           className="aurora absolute -top-[10%] -left-[5%] w-[36vw] h-[36vw] max-w-[460px] max-h-[460px] rounded-full animate-aurora-1 will-change-transform"
-          style={{ ['--glow' as string]: glowA }}
+          style={{ ['--glow' as string]: glowA, animationPlayState: auroraPlayState }}
         />
         <div
           className="aurora absolute -bottom-[12%] -right-[8%] w-[38vw] h-[38vw] max-w-[500px] max-h-[500px] rounded-full animate-aurora-2 will-change-transform"
-          style={{ ['--glow' as string]: glowB }}
+          style={{ ['--glow' as string]: glowB, animationPlayState: auroraPlayState }}
         />
         {/* Vignette douce pour concentrer l'œil */}
         <div className="absolute inset-0" style={{ background: 'radial-gradient(120% 80% at 50% 30%, transparent 50%, rgba(8,7,6,0.55) 100%)' }} />

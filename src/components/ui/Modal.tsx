@@ -23,6 +23,11 @@ export default function Modal({ title, description, onClose, children, alert = f
   const ref = useRef<HTMLDivElement>(null)
   const titleId = useId()
   const descId = useId()
+  // onClose est souvent une fonction inline recréée à chaque rendu du parent.
+  // On la garde dans une ref pour que l'effet de montage ne se relance PAS à
+  // chaque frappe (sinon ref.current.focus() volait le focus de l'input).
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
 
   useEffect(() => {
     openCount++
@@ -38,7 +43,7 @@ export default function Modal({ title, description, onClose, children, alert = f
 
     const onKey = (e: KeyboardEvent) => {
       if (myIndex !== openCount) return // une modale plus récente est ouverte
-      if (e.key === 'Escape') { e.stopPropagation(); onClose(); return }
+      if (e.key === 'Escape') { e.stopPropagation(); onCloseRef.current(); return }
       if (e.key !== 'Tab') return
       const f = ref.current?.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')
       if (!f?.length) { e.preventDefault(); return }
@@ -53,7 +58,8 @@ export default function Modal({ title, description, onClose, children, alert = f
       if (openCount === 0) { root?.removeAttribute('inert'); document.body.style.overflow = prevOverflow }
       prevFocus?.focus?.()
     }
-  }, [onClose])
+    // Montage/démontage uniquement — surtout PAS [onClose] (voir onCloseRef ci-dessus).
+  }, [])
 
   return createPortal(
     <div
@@ -78,10 +84,11 @@ export default function Modal({ title, description, onClose, children, alert = f
             <h2 id={titleId} className="font-display text-[22px] leading-tight text-[#F0EAE0]">{title}</h2>
             {description && <p id={descId} className="text-[13px] text-[#9B9287] mt-1.5 leading-relaxed">{description}</p>}
           </div>
+          {/* Visuel inchangé (icône 18 px, -m-2 p-2) ; « tap-44 » porte la zone tactile à 44 px. */}
           <button
             data-close
             onClick={onClose}
-            className="-m-2 p-2 inline-flex items-center justify-center rounded-full text-[#9B9287] hover:text-[#F0EAE0] hover:bg-white/[0.06] transition-colors duration-200 shrink-0"
+            className="tap-44 -m-2 p-2 inline-flex items-center justify-center rounded-full text-[#9B9287] hover:text-[#F0EAE0] hover:bg-white/[0.06] transition-colors duration-200 shrink-0"
             aria-label="Fermer"
           >
             <X size={18} aria-hidden="true" />

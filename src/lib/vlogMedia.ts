@@ -26,9 +26,24 @@ export async function getSignedUrls(paths: string[]): Promise<Map<string, string
   }
   if (missing.length === 0) return out
 
-  const { data, error } = await supabase.storage.from(VLOG_BUCKET).createSignedUrls(missing, SIGNED_TTL)
-  if (error || !data) {
-    console.error('[vlogMedia] createSignedUrls', error)
+  // On protège l'appel : selon la réponse du storage, supabase-js peut lever
+  // une TypeError (« .map is not a function ») si le corps n'est pas un tableau.
+  // Sans ce try/catch, ce rejet non intercepté remontait en erreur de page.
+  let res: Awaited<ReturnType<ReturnType<typeof supabase.storage.from>['createSignedUrls']>>
+  try {
+    res = await supabase.storage.from(VLOG_BUCKET).createSignedUrls(missing, SIGNED_TTL)
+  } catch (err) {
+    console.error('[vlogMedia] createSignedUrls (exception)', err)
+    return out
+  }
+  if (res.error) {
+    console.error('[vlogMedia] createSignedUrls', res.error)
+    return out
+  }
+  const data = res.data
+  // Garde défensive : on n'itère que sur un vrai tableau
+  if (!Array.isArray(data)) {
+    console.error('[vlogMedia] createSignedUrls : réponse inattendue (non-tableau)', data)
     return out
   }
   const expires = Date.now() + SIGNED_TTL * 1000

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { BookOpen, Briefcase, Dumbbell, Utensils, Moon, Clock, type LucideIcon } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
+import { useLiveData } from '@/hooks/useLiveData'
 import type { ScheduleSlot } from '@/types/database'
 import { run } from '@/lib/db'
 import { getCurrentSlot, slotIconKind, currentSlotPhrase, shortTime, type SlotIconKind } from '@/lib/schedule'
@@ -30,16 +31,26 @@ export default function CurrentActivityBanner({ className = '' }: { className?: 
     if (data) setSlots(data)
   }, [partnerId])
 
+  // Relit les créneaux ET recale `now`, pour recalculer aussitôt le créneau en cours.
+  const refresh = useCallback(() => {
+    setNow(new Date())
+    return fetchSlots()
+  }, [fetchSlots])
+
+  // Chargement, temps réel et rattrapage au retour du réseau (les événements
+  // Realtime manqués pendant une coupure / veille ne réapparaissent pas seuls).
+  useLiveData({
+    enabled: !!partnerId,
+    channel: partnerId ? `schedule-banner:${partnerId}` : null,
+    load: refresh,
+    bind: (ch) => ch.on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_slots', filter: `user_id=eq.${partnerId}` }, () => refresh()),
+  })
+
+  // L'heure avance : on recalcule le créneau en cours chaque minute.
   useEffect(() => {
-    if (!partnerId) return
-    fetchSlots()
-    const channel = supabase
-      .channel(`schedule-banner:${partnerId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_slots', filter: `user_id=eq.${partnerId}` }, () => fetchSlots())
-      .subscribe()
     const timer = window.setInterval(() => setNow(new Date()), 60_000)
-    return () => { supabase.removeChannel(channel); window.clearInterval(timer) }
-  }, [fetchSlots, partnerId])
+    return () => window.clearInterval(timer)
+  }, [])
 
   if (!partnerProfile || slots.length === 0) return null
 

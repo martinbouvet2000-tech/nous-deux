@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { EYEBROW } from '@/lib/ui'
 
 interface Props {
-  /** Sur-titre micro-capitales (ex : "Votre espace") */
+  /** Sur-titre micro-capitales (ex : "Ton espace") */
   eyebrow?: string
   /** Titre — un mot peut être mis en valeur via `accent` */
   title: string

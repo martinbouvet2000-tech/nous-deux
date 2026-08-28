@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, type FormEvent } from 'react'
+import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
-import { Heart, MapPin, Timer, Send, Lock, Plus, X, Link2, PartyPopper, Flame, Hourglass } from 'lucide-react'
+import { useLiveData } from '@/hooks/useLiveData'
+import { MapPin, Timer, Send, Lock, Plus, X, Link2, PartyPopper, Hourglass, PhoneCall, Check, Flame } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { differenceInDays, differenceInHours, differenceInMinutes, isPast, format, parseISO } from 'date-fns'
+import { differenceInDays, differenceInHours, differenceInMinutes, isPast, parseISO, formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import type { Countdown, DailyQuestion } from '@/types/database'
 import LoveNoteWidget from '@/components/Dashboard/LoveNoteWidget'
@@ -15,24 +16,27 @@ import Modal from '@/components/ui/Modal'
 import { confirm } from '@/lib/confirm'
 import { run } from '@/lib/db'
 import { toast } from '@/lib/toast'
-import { timezoneDiffLabel, timezoneCity, formatTimeIn } from '@/lib/timezone'
+import { timezoneDiffLabel, timezoneCity, formatTimeIn, utcOffsetMinutes, zonedCivilDate, zonedInputToDate } from '@/lib/timezone'
+import {
+  resolveTimezone, dayKey, mutualStreak, countSinceServerDay, countdownTargetIn,
+  DAILY_SIGNAL_LIMIT, STREAK_LOOKBACK_DAYS,
+} from '@/lib/today'
+import {
+  capitalizeFirst, describeDateInput, formatDayMonthFR, formatLongDateFR,
+} from '@/lib/dates'
 import { BTN_PRIMARY, BTN_GHOST, INPUT, LABEL, EYEBROW } from '@/lib/ui'
 import Ornament from '@/components/ui/Ornament'
 import CountUp from '@/components/ui/CountUp'
 import { shine, unshine } from '@/lib/shine'
-import { utcOffsetMinutes } from '@/lib/timezone'
 
 /* ═══ Helpers ═══ */
-function getGreeting(): string {
-  const h = new Date().getHours()
+/** Salutation calée sur l'heure QU'IL EST CHEZ TOI (fuseau du profil), pas sur celle du navigateur. */
+function getGreeting(tz: string): string {
+  const h = hourIn(tz)
   if (h < 6) return 'Bonne nuit'
   if (h < 12) return 'Bonjour'
   if (h < 18) return 'Bon après-midi'
   return 'Bonsoir'
-}
-
-function todayISO() {
-  return format(new Date(), 'yyyy-MM-dd')
 }
 
 const COUNTDOWN_EMOJIS = ['❤️', '✈️', '🏠', '🎉', '🎂', '💍', '🌅', '🎄']
@@ -71,37 +75,48 @@ function SunArc({ tz }: { tz: string }) {
 }
 function isNightIn(tz: string) { const h = hourIn(tz); return h < 6.5 || h > 20.5 }
 
-interface BurstHeart { id: number; bx: string; by: string; br: string; size: number; delay: number; hue: string }
-let burstSeq = 0
-function makeBurst(n = 14): BurstHeart[] {
-  return Array.from({ length: n }, (_, i) => {
-    const ang = (i / n) * Math.PI * 2 + (Math.random() - 0.5) * 0.6
-    const dist = 70 + Math.random() * 70
-    return {
-      id: ++burstSeq,
-      bx: `${Math.cos(ang) * dist}px`,
-      by: `${Math.sin(ang) * dist - 30}px`,
-      br: `${(Math.random() - 0.5) * 120}deg`,
-      size: 8 + Math.random() * 10,
-      delay: Math.random() * 120,
-      hue: Math.random() < 0.55 ? '#D4A574' : '#D99AAD',
-    }
-  })
+/* ═══ « Envie d'appel » ═══
+ * Un signal temps réel : « j'ai envie de te parler, là ». À l'appui, on écrit dans
+ * la table `taps` (moi → partenaire) ; l'autre voit s'allumer une carte tout de suite.
+ * Réutilise `taps` (RLS + anti-spam serveur 30/j + Realtime déjà branchés) — un « tap »
+ * devient sémantiquement une envie d'appel, sans nouvelle table ni migration.
+ */
+const CALL_WINDOW_MS = 30 * 60_000 // une envie d'appel reste « fraîche » ~30 min
+
+// À partir de combien d'envois restants on prévient (le plafond serveur est de 30/jour).
+const CALL_QUOTA_WARN_AT = 5
+
+// Mémoire locale « j'ai lancé une envie d'appel » : sert à reconnaître, quand le
+// partenaire répond, qu'il « arrive » (plutôt qu'il lance un nouvel appel).
+function outKey(me: string, partner: string) { return `awy:call:out:${me}:${partner}` }
+function readOutgoing(me: string, partner: string): number {
+  try { const v = localStorage.getItem(outKey(me, partner)); return v ? Number(v) : 0 } catch { return 0 }
+}
+function writeOutgoing(me: string, partner: string, ts: number) {
+  try { localStorage.setItem(outKey(me, partner), String(ts)) } catch { /* stockage indisponible */ }
+}
+function clearOutgoing(me: string, partner: string) {
+  try { localStorage.removeItem(outKey(me, partner)) } catch { /* stockage indisponible */ }
 }
 
 /* ═══ DASHBOARD ═══ */
 export default function Dashboard() {
   const { profile, partnerProfile } = useAuthStore()
+  // Source de vérité pour « aujourd'hui » : le fuseau du profil (jamais celui du navigateur).
+  // Toute la page — salutation, date affichée, série, date minimale du compte à rebours —
+  // se cale dessus. Cf. `src/lib/today.ts` pour la règle et sa seule exception (anti-spam).
+  const selfTz = resolveTimezone(profile?.timezone)
   const [time1, setTime1] = useState('')
   const [time2, setTime2] = useState('')
 
-  // Tap state
-  const [tapped, setTapped] = useState(false)
-  const [todayCount, setTodayCount] = useState(0)
-  const [partnerTodayCount, setPartnerTodayCount] = useState(0)
-  const [receivedTap, setReceivedTap] = useState(false)
-  const [streak, setStreak] = useState(0)
-  const [burst, setBurst] = useState<BurstHeart[]>([])
+  // Envie d'appel (réutilise la table `taps`)
+  const [sendingCall, setSendingCall] = useState(false)
+  const [sentMsg, setSentMsg] = useState<string | null>(null)
+  const [incomingCall, setIncomingCall] = useState<{ id: string; created_at: string } | null>(null)
+  const [incomingIsJoining, setIncomingIsJoining] = useState(false)
+  const [callsSentToday, setCallsSentToday] = useState(0) // quota serveur (journée UTC, comme la base)
+  const [streak, setStreak] = useState(0) // jours consécutifs où on s'est fait signe tous les deux
+  const dismissedRef = useRef<Set<string>>(new Set()) // envies d'appel masquées localement (« Plus tard »)
 
   // Countdown
   const [countdown, setCountdown] = useState<Countdown | null>(null)
@@ -121,8 +136,11 @@ export default function Dashboard() {
   const [partnerAnswer, setPartnerAnswer] = useState<string | null>(null)
   const [answering, setAnswering] = useState(false)
 
+  // « Jour N ensemble » : on compare deux dates civiles, celle d'aujourd'hui VUE DE
+  // TON FUSEAU et celle du début — sinon le compteur avançait d'un jour à minuit
+  // navigateur, puis rebasculait. Même notion de « aujourd'hui » que le reste.
   const daysTogether = profile?.relationship_start
-    ? differenceInDays(new Date(), parseISO(profile.relationship_start))
+    ? differenceInDays(zonedCivilDate(selfTz, new Date()), parseISO(profile.relationship_start))
     : null
 
   // Clock tick
@@ -148,56 +166,73 @@ export default function Dashboard() {
     }
   }
 
-  // Countdown ticker (minute)
+  // Countdown ticker (minute) — l'échéance se lit dans TON fuseau (cf. `countdownTargetIn`)
   useEffect(() => {
     if (!countdown) return
-    const target = new Date(countdown.target_date)
+    const target = countdownTargetIn(selfTz, countdown.target_date)
     setRemaining(computeRemaining(target))
     const i = setInterval(() => setRemaining(computeRemaining(target)), 30_000)
     return () => clearInterval(i)
-  }, [countdown])
+  }, [countdown, selfTz])
 
   // Load all data
   const loadAll = useCallback(async () => {
     if (!profile) return
-    const today = todayISO()
 
-    // Taps
-    const { count: myTaps } = await supabase
-      .from('taps').select('*', { count: 'exact', head: true })
-      .eq('sender_id', profile.id).gte('created_at', today)
-    setTodayCount(myTaps ?? 0)
+    // Envie d'appel reçue : le tap partenaire → moi le plus récent, encore « frais »
+    // (≤ 30 min) et pas encore masqué. Réutilise l'abonnement Realtime sur `taps`.
+    if (partnerProfile) {
+      const since = new Date(Date.now() - CALL_WINDOW_MS).toISOString()
+      const { data: calls } = await supabase
+        .from('taps').select('id, created_at')
+        .eq('sender_id', partnerProfile.id).eq('receiver_id', profile.id)
+        .gte('created_at', since).order('created_at', { ascending: false }).limit(1)
+      const latest = (calls?.[0] as { id: string; created_at: string } | undefined) ?? null
+      if (latest && !dismissedRef.current.has(latest.id)) {
+        // Si j'ai moi-même lancé une envie d'appel récemment, sa réponse = « il/elle arrive ».
+        const out = readOutgoing(profile.id, partnerProfile.id)
+        const joining = out > 0 && new Date(latest.created_at).getTime() >= out
+        setIncomingCall(latest)
+        setIncomingIsJoining(joining)
+        if (joining) clearOutgoing(profile.id, partnerProfile.id) // appel abouti → on oublie
+      } else {
+        setIncomingCall(null)
+        setIncomingIsJoining(false)
+      }
+    } else {
+      setIncomingCall(null)
+      setIncomingIsJoining(false)
+    }
+
+    // ── Les compteurs de la journée ──
+    // Un seul aller-retour par personne sert deux usages, avec deux découpes de
+    // journée ASSUMÉES et documentées (cf. `src/lib/today.ts`) :
+    //  • le quota anti-spam se compte comme la base (journée UTC, `date_trunc('day', now())`) ;
+    //  • la série se compte en journées civiles de MON fuseau (`selfTz`).
+    const historySince = new Date(Date.now() - (STREAK_LOOKBACK_DAYS + 1) * 86_400_000).toISOString()
+    const { data: mySignals } = await supabase
+      .from('taps').select('created_at')
+      .eq('sender_id', profile.id).gte('created_at', historySince)
+      .order('created_at', { ascending: false }).limit(2000)
+    const mine = ((mySignals ?? []) as { created_at: string }[]).map((t) => t.created_at)
+    setCallsSentToday(countSinceServerDay(mine))
 
     if (partnerProfile) {
-      const { count: pTaps } = await supabase
-        .from('taps').select('*', { count: 'exact', head: true })
-        .eq('sender_id', partnerProfile.id).eq('receiver_id', profile.id).gte('created_at', today)
-      setPartnerTodayCount(pTaps ?? 0)
-
-      // Streak : jours consécutifs où on s'est TOUS LES DEUX envoyé une pensée
-      const since = new Date(); since.setDate(since.getDate() - 60)
-      const { data: md } = await supabase.from('taps').select('created_at')
-        .eq('sender_id', profile.id).gte('created_at', since.toISOString())
-      const { data: pd } = await supabase.from('taps').select('created_at')
-        .eq('sender_id', partnerProfile.id).eq('receiver_id', profile.id).gte('created_at', since.toISOString())
-      const myD = new Set((md ?? []).map(t => format(new Date(t.created_at), 'yyyy-MM-dd')))
-      const pD = new Set((pd ?? []).map(t => format(new Date(t.created_at), 'yyyy-MM-dd')))
-      let s = 0
-      for (let i = 0; i < 60; i++) {
-        const d = new Date(); d.setDate(d.getDate() - i)
-        const ds = format(d, 'yyyy-MM-dd')
-        if (myD.has(ds) && pD.has(ds)) s++
-        else if (i === 0) continue // aujourd'hui pas encore fait → on ne casse pas la série
-        else break
-      }
-      setStreak(s)
+      const { data: theirSignals } = await supabase
+        .from('taps').select('created_at')
+        .eq('sender_id', partnerProfile.id).eq('receiver_id', profile.id).gte('created_at', historySince)
+        .order('created_at', { ascending: false }).limit(2000)
+      const theirs = ((theirSignals ?? []) as { created_at: string }[]).map((t) => t.created_at)
+      setStreak(mutualStreak(selfTz, mine, theirs))
+    } else {
+      setStreak(0)
     }
 
     // Countdown (prochain à venir en priorité, sinon le dernier passé)
     const { data: cd } = await supabase.from('countdowns').select('*')
       .eq('is_active', true).order('target_date', { ascending: true })
     if (cd && cd.length > 0) {
-      const upcoming = cd.find(c => !isPast(new Date(c.target_date)))
+      const upcoming = cd.find(c => !isPast(countdownTargetIn(selfTz, c.target_date)))
       setCountdown(upcoming ?? cd[cd.length - 1])
     } else {
       setCountdown(null)
@@ -217,33 +252,76 @@ export default function Dashboard() {
     } else {
       setQuestion(null)
     }
-  }, [profile, partnerProfile])
+  }, [profile, partnerProfile, selfTz])
 
-  useEffect(() => {
-    if (!profile) return
-    loadAll()
-    const ch = supabase.channel(`dash:${profile.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'taps', filter: `receiver_id=eq.${profile.id}` }, () => {
-        setReceivedTap(true); setTimeout(() => setReceivedTap(false), 3000); loadAll()
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'countdowns' }, () => loadAll())
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'question_answers' }, () => loadAll())
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
-  }, [profile, partnerProfile, loadAll])
+  // Chargement, temps réel et rattrapage à la reconnexion (les événements Realtime
+  // manqués pendant une coupure / veille ne réapparaissent pas seuls), comme les
+  // autres surfaces live.
+  useLiveData({
+    enabled: !!profile,
+    channel: profile ? `dash:${profile.id}` : null,
+    load: loadAll,
+    bind: (ch) => {
+      // Envie d'appel entrante (partenaire → moi) : la carte s'allume tout de suite.
+      ch.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'taps', filter: `receiver_id=eq.${profile?.id}` }, () => loadAll())
+      ch.on('postgres_changes', { event: '*', schema: 'public', table: 'countdowns' }, () => loadAll())
+      ch.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'question_answers' }, () => loadAll())
+    },
+  })
 
-  const sendTap = async () => {
-    if (!profile || !partnerProfile || tapped) return
-    setTapped(true)
-    setBurst(makeBurst())
-    setTimeout(() => setBurst([]), 1300)
+  // Ce qu'il me reste avant le plafond serveur. Le décompte suit la découpe de la
+  // BASE (journée UTC) : c'est elle qui refuse l'insertion, pas nous — annoncer un
+  // reste calculé sur mon fuseau mentirait entre minuit local et minuit UTC.
+  const callsLeftToday = Math.max(0, DAILY_SIGNAL_LIMIT - callsSentToday)
+
+  // « J'ai envie de te parler » → tap moi → partenaire. L'anti-spam serveur (30/j)
+  // renvoie une erreur métier proprement affichée par run() ; on s'arrête avant.
+  const sendCall = async () => {
+    if (!profile || !partnerProfile || sendingCall) return
+    if (callsLeftToday === 0) {
+      toast.info(`Tu as épuisé tes ${DAILY_SIGNAL_LIMIT} envies d'appel du jour — garde-en pour demain`)
+      return
+    }
+    setSendingCall(true)
     try { navigator.vibrate?.(12) } catch { /* non supporté */ }
     const { ok } = await run(
       supabase.from('taps').insert({ sender_id: profile.id, receiver_id: partnerProfile.id }),
-      { errorMessage: "Impossible d'envoyer ta pensée." },
+      { errorMessage: "Impossible d'envoyer ton envie d'appel." },
     )
-    if (ok) setTodayCount(c => c + 1)
-    setTimeout(() => setTapped(false), 2000)
+    setSendingCall(false)
+    if (ok) {
+      setCallsSentToday((n) => n + 1)
+      writeOutgoing(profile.id, partnerProfile.id, Date.now())
+      setSentMsg(`Envoyé — ${partnerProfile.display_name} va voir que tu veux lui parler`)
+      setTimeout(() => setSentMsg(null), 6000)
+    }
+  }
+
+  // « Je te rejoins » : accuse réception d'une envie d'appel (tap moi → partenaire).
+  // Chez le partenaire, qui avait lancé l'appel, ma réponse s'affichera « {prénom} arrive ! ».
+  const joinCall = async () => {
+    if (!profile || !partnerProfile || !incomingCall || sendingCall) return
+    const id = incomingCall.id
+    setSendingCall(true)
+    try { navigator.vibrate?.(12) } catch { /* non supporté */ }
+    const { ok } = await run(
+      supabase.from('taps').insert({ sender_id: profile.id, receiver_id: partnerProfile.id }),
+      { errorMessage: `Impossible de prévenir ${partnerProfile.display_name}.` },
+    )
+    setSendingCall(false)
+    if (ok) {
+      setCallsSentToday((n) => n + 1)
+      dismissedRef.current.add(id)
+      setIncomingCall(null); setIncomingIsJoining(false)
+      setSentMsg(`${partnerProfile.display_name} sait que tu arrives`)
+      setTimeout(() => setSentMsg(null), 6000)
+    }
+  }
+
+  // « Plus tard » : masque la carte localement (aucune écriture serveur).
+  const dismissCall = () => {
+    if (incomingCall) dismissedRef.current.add(incomingCall.id)
+    setIncomingCall(null); setIncomingIsJoining(false)
   }
 
   const submitAnswer = async () => {
@@ -261,15 +339,16 @@ export default function Dashboard() {
     e.preventDefault()
     if (!profile || !cdTitle.trim() || !cdDate) return
     setCdSaving(true)
-    // Date choisie = fin de journée locale, pour que "J-0" tienne toute la journée
-    const target = new Date(`${cdDate}T23:59:00`)
+    // Date choisie = fin de journée DANS TON FUSEAU, pour que « J-0 » tienne toute
+    // la journée sur place (et pas jusqu'à 1 h ou 2 h du matin de la veille).
+    const target = zonedInputToDate(selfTz, `${cdDate}T23:59`)
     const { ok } = await run(
       supabase.from('countdowns').insert({ created_by: profile.id, title: cdTitle.trim(), target_date: target.toISOString(), emoji: cdEmoji, is_active: true }),
       { errorMessage: 'Impossible de créer le compte à rebours.' },
     )
     setCdSaving(false)
     if (ok) {
-      toast.success('Compte à rebours lancé ✨')
+      toast.success('Compte à rebours lancé.')
       setShowCountdownForm(false); setCdTitle(''); setCdDate(''); setCdEmoji('❤️')
       loadAll()
     }
@@ -285,11 +364,20 @@ export default function Dashboard() {
 
   if (!profile) return null
   const timeDiff = partnerProfile ? timezoneDiffLabel(profile.timezone, partnerProfile.timezone) : null
-  const todayLabel = format(new Date(), 'EEEE d MMMM', { locale: fr })
+  // La date affichée est celle qu'il est CHEZ TOI : entre minuit et 2 h du matin,
+  // le jour du navigateur et le jour UTC ne sont déjà plus les mêmes.
+  const todayKey = dayKey(selfTz)
+  const todayLabel = formatDayMonthFR(zonedCivilDate(selfTz, new Date()))
 
-  const cdPct = countdown
-    ? Math.max(0, Math.min(100, ((Date.now() - new Date(countdown.created_at).getTime()) / Math.max(1, new Date(countdown.target_date).getTime() - new Date(countdown.created_at).getTime())) * 100))
+  // Échéance des retrouvailles, lue dans TON fuseau : elle sert à la fois à la barre
+  // de progression et à la date affichée dessous (même instant, même jour civil).
+  const cdTarget = countdown ? countdownTargetIn(selfTz, countdown.target_date) : null
+  const cdPct = countdown && cdTarget
+    ? Math.max(0, Math.min(100, ((Date.now() - new Date(countdown.created_at).getTime()) / Math.max(1, cdTarget.getTime() - new Date(countdown.created_at).getTime())) * 100))
     : 0
+  // Jour civil de l'échéance CHEZ TOI : formatée en heure navigateur, la date
+  // sautait d'un jour dès que le fuseau du navigateur divergeait du tien.
+  const cdDateLabel = cdTarget ? formatLongDateFR(zonedCivilDate(selfTz, cdTarget)) : ''
 
   /* ─── Blocs ─── */
   const clockCard = (tz: string, city: string | null, time: string, k: string) => (
@@ -320,7 +408,7 @@ export default function Dashboard() {
   const hero = (
     <section className="text-center reveal" aria-labelledby="hero-title">
       <Ornament className="max-w-[220px] mx-auto mb-5" />
-      <p className={`${EYEBROW} mb-3`}>{getGreeting()} · <span className="first-letter:uppercase inline-block">{todayLabel}</span></p>
+      <p className={`${EYEBROW} mb-3`}>{getGreeting(selfTz)} · <span className="first-letter:uppercase inline-block">{todayLabel}</span></p>
       <h1 id="hero-title" className="font-display-italic text-[2.6rem] md:text-[3.4rem] xl:text-[3.8rem] leading-[1.05] mb-7 gradient-text-live text-balance">
         {profile.display_name}
         {partnerProfile && <span className="font-display-italic text-[0.72em] text-[#D4A574]/85 mx-[0.18em] align-baseline">&amp;</span>}
@@ -381,7 +469,7 @@ export default function Dashboard() {
               <div className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#D4A574] to-[#C2788E] transition-[width] duration-1000" style={{ width: `${cdPct}%` }} />
               <span className="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#F0EAE0] shadow-[0_0_10px_2px_rgba(212,165,116,0.55)] transition-[left] duration-1000" style={{ left: `${cdPct}%` }} aria-hidden="true" />
             </div>
-            <p className="mt-2 text-[11px] text-[#9B9287] num">{Math.round(cdPct)}% du chemin parcouru · <span className="first-letter:uppercase inline-block">{format(new Date(countdown.target_date), 'EEEE d MMMM yyyy', { locale: fr })}</span></p>
+            <p className="mt-2 text-[11px] text-[#9B9287] num">{Math.round(cdPct)}% du chemin parcouru · <span className="first-letter:uppercase inline-block">{cdDateLabel}</span></p>
           </div>
 
           <div className="mt-5 flex items-center justify-center gap-2">
@@ -399,80 +487,85 @@ export default function Dashboard() {
     </section>
   )
 
-  const heartBlock = (
-    <section className="lux-card rounded-[20px] text-center py-10 xl:py-12 px-4 relative reveal flex flex-col items-center justify-center overflow-hidden min-h-[480px] xl:min-h-[520px]" style={{ animationDelay: '150ms' }} aria-label="Je pense à toi">
+  const callAgo = incomingCall ? formatDistanceToNow(new Date(incomingCall.created_at), { addSuffix: true, locale: fr }) : ''
+
+  // Écho français sous le sélecteur natif de la date des retrouvailles
+  const cdDateEcho = describeDateInput(cdDate)
+
+  const callBlock = (
+    <section className="lux-card rounded-[20px] relative reveal overflow-hidden px-5 py-8 md:p-8 flex flex-col items-center text-center" style={{ animationDelay: '150ms' }} onMouseMove={shine} onMouseLeave={unshine} aria-labelledby="call-title">
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
         <div className="w-[22rem] h-[22rem] rounded-full animate-glow-breath" style={{ background: 'radial-gradient(closest-side, rgba(212,165,116,0.10), rgba(212,165,116,0.03) 50%, transparent 72%)' }} />
       </div>
 
-      <div className="relative inline-flex items-center justify-center mb-7 w-56 h-56">
-        {/* Anneau de progression : % du chemin vers les retrouvailles */}
-        <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 200 200" fill="none" aria-hidden="true">
-          <circle cx="100" cy="100" r="92" stroke="rgba(240,234,224,0.07)" strokeWidth="1.5" strokeDasharray="1 6" strokeLinecap="round" />
-          {countdown && !remaining.passed && (
-            <circle cx="100" cy="100" r="92" stroke="url(#ringG)" strokeWidth="2" strokeLinecap="round" strokeDasharray="578" strokeDashoffset={578 * (1 - cdPct / 100)} style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(.22,1,.36,1)' }} />
+      <h2 id="call-title" className={`${EYEBROW} mb-5 inline-flex items-center gap-1.5 relative`}>
+        <PhoneCall size={11} aria-hidden="true" className="text-[#D4A574]" /> Envie d'appel
+      </h2>
+
+      {/* ─ Carte mise en avant : le partenaire a envie de te parler (ou il arrive) ─ */}
+      {incomingCall && (
+        <div className="relative w-full max-w-[420px] mb-6 rounded-2xl p-4 md:p-5 text-left animate-fade-in bg-[rgba(212,165,116,0.09)] shadow-[inset_0_0_0_1px_rgba(232,201,160,0.45)]" role="status" aria-live="polite">
+          <div className="flex items-start gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[#D4A574]/15 text-[18px] shadow-[inset_0_0_0_1px_rgba(212,165,116,0.3)]" aria-hidden="true">💬</span>
+            <div className="min-w-0 flex-1">
+              <p className="font-display-italic text-[1.15rem] leading-snug text-[#F0EAE0]">
+                {incomingIsJoining
+                  ? `${partnerProfile?.display_name} arrive !`
+                  : `${partnerProfile?.display_name} a envie de te parler`}
+              </p>
+              <p className="mt-0.5 text-[12px] text-[#C9A98A]">{callAgo}</p>
+            </div>
+          </div>
+          {incomingIsJoining ? (
+            <div className="mt-3 flex justify-end">
+              <button onClick={dismissCall} className={`${BTN_GHOST} px-4`}>Top, à tout de suite</button>
+            </div>
+          ) : (
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button onClick={dismissCall} className="btn-tertiary">Plus tard</button>
+              <button onClick={joinCall} disabled={sendingCall} className={`${BTN_PRIMARY} px-4`}>
+                <Check size={15} aria-hidden="true" /> Je te rejoins
+              </button>
+            </div>
           )}
-          <defs><linearGradient id="ringG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#D4A574" /><stop offset="1" stopColor="#C2788E" /></linearGradient></defs>
-        </svg>
-        <svg className="absolute w-40 h-40 animate-orbit-rev opacity-60" viewBox="0 0 200 200" fill="none" aria-hidden="true">
-          <circle cx="100" cy="100" r="96" stroke="#D4A574" strokeOpacity="0.3" strokeWidth="0.8" strokeDasharray="1 14" />
-          <circle cx="100" cy="4" r="2.2" fill="#E8C9A0" />
-        </svg>
+        </div>
+      )}
 
-        <div className={`absolute w-36 h-36 rounded-full transition-all duration-1000 ${
-          tapped ? 'bg-secondary/20 scale-125 blur-xl' : receivedTap ? 'bg-secondary/12 scale-115 blur-lg' : 'bg-primary/[0.04] animate-heart-breath'
-        }`} aria-hidden="true" />
+      {/* ─ Bouton principal : lancer une envie d'appel ─ */}
+      <button
+        onClick={sendCall}
+        disabled={sendingCall || !partnerProfile || callsLeftToday === 0}
+        aria-label={partnerProfile ? `Dire à ${partnerProfile.display_name} que tu as envie de lui parler` : 'Lie ton/ta partenaire pour envoyer une envie d’appel'}
+        title={partnerProfile ? (callsLeftToday === 0 ? 'Plafond du jour atteint' : "J'ai envie de te parler") : 'Lie ton/ta partenaire d’abord'}
+        className="relative z-10 group/call inline-flex flex-col items-center gap-3 rounded-3xl px-8 py-7 transition-all duration-300 ease-out bg-white/[0.03] shadow-[inset_0_0_0_1px_rgba(240,234,224,0.08)] hover:bg-[rgba(212,165,116,0.08)] hover:shadow-[inset_0_0_0_1px_rgba(232,201,160,0.4)] active:scale-[0.97] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-white/[0.03]"
+      >
+        <span className="grid size-20 place-items-center rounded-full bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E] shadow-[0_16px_40px_-16px_rgba(194,120,142,0.75)] transition-transform duration-300 group-hover/call:-translate-y-0.5 group-active/call:scale-95">
+          <PhoneCall size={30} aria-hidden="true" className={sendingCall ? 'animate-pulse' : ''} />
+        </span>
+        <span className="font-display-italic text-[1.35rem] text-[#F0EAE0]">J'ai envie de te parler</span>
+      </button>
 
-        {burst.map((b) => (
-          <span key={b.id} className="absolute animate-burst pointer-events-none" style={{ ['--bx' as string]: b.bx, ['--by' as string]: b.by, ['--br' as string]: b.br, animationDelay: `${b.delay}ms`, color: b.hue }} aria-hidden="true">
-            <Heart size={b.size} fill="currentColor" strokeWidth={0} />
-          </span>
-        ))}
-
-        <button
-          onClick={sendTap}
-          aria-disabled={tapped || !partnerProfile}
-          aria-label={partnerProfile ? `Envoyer « je pense à toi » à ${partnerProfile.display_name}` : 'Lie ton/ta partenaire pour envoyer une pensée'}
-          title={partnerProfile ? 'Je pense à toi' : 'Lie ton/ta partenaire d’abord'}
-          className={`relative z-10 w-28 h-28 rounded-full flex items-center justify-center transition-all duration-500 ease-out ${
-            tapped ? 'scale-115' : receivedTap ? 'scale-108' : 'hover:scale-105 active:scale-90'
-          } ${!partnerProfile ? 'cursor-not-allowed' : ''}`}
-        >
-          <svg width="84" height="77" viewBox="0 0 64 58" aria-hidden="true" className={`transition-all duration-700 ${tapped || receivedTap ? '' : 'animate-heart-glow'}`}>
-            <defs>
-              <linearGradient id="heartFill" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stopColor={tapped || receivedTap ? '#E8B4C0' : '#E8C9A0'} />
-                <stop offset="0.55" stopColor={tapped || receivedTap ? '#C2788E' : '#D4A574'} />
-                <stop offset="1" stopColor={tapped || receivedTap ? '#A85C74' : '#C2788E'} />
-              </linearGradient>
-              <radialGradient id="heartLight" cx="0.35" cy="0.3" r="0.6">
-                <stop offset="0" stopColor="#fff" stopOpacity="0.45" />
-                <stop offset="1" stopColor="#fff" stopOpacity="0" />
-              </radialGradient>
-            </defs>
-            <path d="M32 56c-.9 0-1.7-.3-2.4-.9C20 46.9 12 40 12 31.1 12 24.9 16.7 20.5 22.6 20.5c3.7 0 7.1 1.9 9.4 5 2.3-3.1 5.7-5 9.4-5C47.3 20.5 52 24.9 52 31.1c0 8.9-8 15.8-17.6 24-.7.6-1.5.9-2.4.9z" transform="translate(0,-14)" fill="url(#heartFill)" opacity={partnerProfile ? 1 : 0.45} />
-            <path d="M32 56c-.9 0-1.7-.3-2.4-.9C20 46.9 12 40 12 31.1 12 24.9 16.7 20.5 22.6 20.5c3.7 0 7.1 1.9 9.4 5 2.3-3.1 5.7-5 9.4-5C47.3 20.5 52 24.9 52 31.1c0 8.9-8 15.8-17.6 24-.7.6-1.5.9-2.4.9z" transform="translate(0,-14)" fill="url(#heartLight)" />
-          </svg>
-        </button>
-      </div>
-
-      <p className="font-display-italic text-lg tracking-wide mb-3 text-[#F0EAE0]/85">
-        {tapped ? <span className="text-secondary animate-fade-in">Envoyé avec amour</span>
-          : receivedTap ? <span className="text-secondary animate-fade-in">{partnerProfile?.display_name} pense à toi</span>
-          : 'Je pense à toi'}
+      <p className="mt-4 min-h-[1.25rem] text-[13px] text-[#9B9287]" aria-live="polite">
+        {sentMsg
+          ? <span className="text-[#E8C9A0] animate-fade-in">{sentMsg}</span>
+          : !partnerProfile
+            ? 'Lie ton/ta partenaire pour lui envoyer un signal.'
+            : callsLeftToday === 0
+              ? `Tu as épuisé tes ${DAILY_SIGNAL_LIMIT} envies d'appel du jour — garde-en pour demain.`
+              : callsLeftToday <= CALL_QUOTA_WARN_AT
+                ? `Encore ${callsLeftToday} envie${callsLeftToday > 1 ? 's' : ''} d'appel aujourd'hui.`
+                : <>Un signal instantané — ça s'allume tout de suite chez {partnerProfile.display_name}.</>}
       </p>
-      <span className="sr-only" aria-live="polite">{tapped ? 'Pensée envoyée' : receivedTap ? `${partnerProfile?.display_name} pense à toi` : ''}</span>
 
-      <div className="flex items-center justify-center gap-2 text-xs text-[#9B9287]">
-        {streak > 0 && (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[rgba(232,184,109,0.10)] text-[#E8B86D]">
+      {/* Série : jours civils consécutifs (dans TON fuseau) où vous vous êtes fait signe tous les deux */}
+      {streak > 0 && (
+        <p className="mt-4">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[rgba(232,184,109,0.10)] text-[#E8B86D] text-xs">
             <Flame size={12} aria-hidden="true" />
             <span className="num">{streak} jour{streak > 1 ? 's' : ''} d'affilée</span>
           </span>
-        )}
-        {todayCount > 0 && <span className="px-2.5 py-1 rounded-full bg-white/[0.04] num">{todayCount} envoyé{todayCount > 1 ? 's' : ''}</span>}
-        {partnerTodayCount > 0 && <span className="px-2.5 py-1 rounded-full bg-white/[0.04] num">{partnerTodayCount} reçu{partnerTodayCount > 1 ? 's' : ''}</span>}
-      </div>
+        </p>
+      )}
 
       {daysTogether !== null && daysTogether >= 0 && (
         <p className="mt-6 flex items-baseline justify-center gap-2 text-[11px] tracking-[0.2em] uppercase text-[#9B9287]">
@@ -545,7 +638,7 @@ export default function Dashboard() {
 
         <div className="xl:col-span-7 space-y-6">
           {countdownBlock}
-          {heartBlock}
+          {callBlock}
           {questionBlock}
         </div>
         <aside className="xl:col-span-5 space-y-6">
@@ -560,12 +653,24 @@ export default function Dashboard() {
         <Modal title="Prochaines retrouvailles" description="Une date à attendre ensemble — elle s'affichera en haut de votre accueil à tous les deux." onClose={() => setShowCountdownForm(false)}>
           <form onSubmit={saveCountdown} className="space-y-4">
             <div>
-              <label htmlFor="cd-title" className={LABEL}>Quoi ?</label>
-              <input id="cd-title" type="text" value={cdTitle} onChange={(e) => setCdTitle(e.target.value)} placeholder="Ex : Week-end au Touquet" maxLength={80} required className={INPUT} />
+              {/* `cd-title` est déjà l'identifiant du titre de la section (aria-labelledby) :
+                  le champ porte le sien, sinon le libellé « Quoi ? » ne focalisait rien. */}
+              <label htmlFor="cd-title-input" className={LABEL}>Quoi ?</label>
+              <input id="cd-title-input" type="text" value={cdTitle} onChange={(e) => setCdTitle(e.target.value)} placeholder="Ex : Week-end au Touquet" maxLength={80} required className={INPUT} />
             </div>
             <div>
               <label htmlFor="cd-date" className={LABEL}>Quand ?</label>
-              <input id="cd-date" type="date" value={cdDate} onChange={(e) => setCdDate(e.target.value)} min={todayISO()} required className={INPUT} lang="fr-FR" />
+              <input id="cd-date" type="date" value={cdDate} onChange={(e) => setCdDate(e.target.value)} min={todayKey} required className={INPUT} lang="fr-FR" aria-describedby="cd-when" />
+              {/* Le sélecteur natif s'affiche au format du système (souvent mm/jj/aaaa) :
+                  on relit la date choisie en toutes lettres, en français, juste en dessous. */}
+              <p id="cd-when" className="mt-1.5 text-[12px] text-[#F0EAE0]/70 min-h-[16px]" aria-live="polite">
+                {cdDateEcho && (
+                  <>
+                    <Hourglass size={12} className="inline-block align-[-1px] mr-1.5 text-[#D4A574]" aria-hidden="true" />
+                    {capitalizeFirst(cdDateEcho)}
+                  </>
+                )}
+              </p>
             </div>
             <div>
               <span className={LABEL}>Emoji</span>

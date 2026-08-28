@@ -29,6 +29,8 @@ export function useLocationSharing() {
     let watchId: number | null = null
     let sending = false
     let cancelled = false
+    // Autorisation refusée : inutile de relancer la surveillance au retour de l'onglet.
+    let denied = false
 
     const onPosition = async (pos: GeolocationPosition) => {
       if (cancelled || sending) return
@@ -57,17 +59,26 @@ export function useLocationSharing() {
     }
 
     const onError = (err: GeolocationPositionError) => {
+      // Position momentanément indisponible (tunnel, GPS qui cherche, délai dépassé) :
+      // le prochain point repartira tout seul. Un toast ici n'apprend rien et
+      // survivait jusque sur d'autres écrans — on se contente du journal.
+      if (err.code !== err.PERMISSION_DENIED) {
+        console.warn('[geo] position indisponible:', err.message)
+        return
+      }
+      // Refus d'autorisation : là, c'est actionnable, et une seule fois suffit.
+      // La clé de dédoublonnage évite qu'un `watchPosition` bavard n'en empile plusieurs.
+      denied = true
+      stop()
       if (errorShown.current) return
       errorShown.current = true
-      if (err.code === err.PERMISSION_DENIED) {
-        toast.error('Autorise la localisation dans ton navigateur pour partager ta position.')
-      } else {
-        toast.error('Impossible de déterminer ta position pour le moment.')
-      }
+      toast.error('Autorise la localisation dans ton navigateur pour partager ta position.', {
+        key: 'geo-permission',
+      })
     }
 
     const start = () => {
-      if (watchId !== null) return
+      if (watchId !== null || denied) return
       watchId = navigator.geolocation.watchPosition(onPosition, onError, {
         enableHighAccuracy: false,
         maximumAge: 60_000,

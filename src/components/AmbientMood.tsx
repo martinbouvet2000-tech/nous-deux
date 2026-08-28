@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import Backdrop from '@/components/Backdrop'
 import { startOfDay } from 'date-fns'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
+import { useLiveData } from '@/hooks/useLiveData'
 import { moodFromRow } from '@/lib/moods'
 
 export default function AmbientMood({ children }: { children: React.ReactNode }) {
@@ -29,20 +30,18 @@ export default function AmbientMood({ children }: { children: React.ReactNode })
     }
   }, [profile, partnerProfile])
 
-  useEffect(() => {
-    if (!profile) return
-    loadCurrentMoods()
-
-    // Un canal par utilisateur, filtré : on n'écoute que nos deux humeurs
-    const channel = supabase.channel(`ambient:${profile.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'moods', filter: `user_id=eq.${profile.id}` }, () => loadCurrentMoods())
-    if (partnerProfile) {
-      channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'moods', filter: `user_id=eq.${partnerProfile.id}` }, () => loadCurrentMoods())
-    }
-    channel.subscribe()
-
-    return () => { supabase.removeChannel(channel) }
-  }, [profile, partnerProfile, loadCurrentMoods])
+  // Un canal par utilisateur, filtré : on n'écoute que nos deux humeurs
+  useLiveData({
+    enabled: !!profile,
+    channel: profile ? `ambient:${profile.id}` : null,
+    load: loadCurrentMoods,
+    bind: (ch) => {
+      ch.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'moods', filter: `user_id=eq.${profile?.id}` }, () => loadCurrentMoods())
+      if (partnerProfile) {
+        ch.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'moods', filter: `user_id=eq.${partnerProfile.id}` }, () => loadCurrentMoods())
+      }
+    },
+  })
 
 
   return (

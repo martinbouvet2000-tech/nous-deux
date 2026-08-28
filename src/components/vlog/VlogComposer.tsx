@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
-import { Clapperboard, ImagePlus, Play, X } from 'lucide-react'
-import { format } from 'date-fns'
+import { CalendarClock, Clapperboard, ImagePlus, Play, Star, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import type { Vlog } from '@/types/database'
@@ -8,6 +7,9 @@ import Modal from '@/components/ui/Modal'
 import { run } from '@/lib/db'
 import { toast } from '@/lib/toast'
 import { BTN_PRIMARY, BTN_GHOST, INPUT, LABEL } from '@/lib/ui'
+import { capitalizeFirst, describeDateTimeInput } from '@/lib/dates'
+import { toZonedInputValue, zonedInputToDate } from '@/lib/timezone'
+import { resolveTimezone } from '@/lib/today'
 import { VLOG_BUCKET, VLOG_MAX_BYTES, compressImage, extensionFor } from '@/lib/vlogMedia'
 
 const CAPTION_MAX = 500
@@ -30,15 +32,24 @@ const PHASE_LABEL: Record<Phase, string> = {
 /** Modale d'ajout d'un vlog : photo ou courte vidéo + légende + date */
 export default function VlogComposer({ onClose, onPublished }: Props) {
   const { profile } = useAuthStore()
+  // L'heure proposée — et relue à la publication — est celle qu'il est CHEZ TOI
+  // (fuseau du profil) : en heure navigateur, un vlog publié à 23:30 à Varsovie
+  // pouvait se ranger la veille ou le lendemain dans le fil.
+  const selfTz = resolveTimezone(profile?.timezone)
   const inputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [caption, setCaption] = useState('')
-  const [takenAt, setTakenAt] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"))
+  const [isMilestone, setIsMilestone] = useState(false)
+  const [takenAt, setTakenAt] = useState(() => toZonedInputValue(selfTz, new Date()))
   const [phase, setPhase] = useState<Phase>('idle')
   const busy = phase !== 'idle'
 
   const isVideo = !!file && file.type.startsWith('video/')
+
+  // Le sélecteur natif s'affiche au format du système (souvent mm/jj/aaaa, AM/PM) :
+  // on relit la saisie en toutes lettres, en français et sur 24 h, juste en dessous.
+  const takenAtEcho = describeDateTimeInput(takenAt)
 
   // Aperçu local (object URL), libéré à chaque changement de fichier
   useEffect(() => {
@@ -99,11 +110,14 @@ export default function VlogComposer({ onClose, onPublished }: Props) {
 
     // 3. Ligne en base
     setPhase('save')
-    const taken = takenAt ? new Date(takenAt) : new Date()
+    // L'heure saisie est une heure murale : on la lit dans TON fuseau (comme l'agenda),
+    // pour que l'instant enregistré corresponde à ce que tu vois écrit dans le champ.
+    const parsed = zonedInputToDate(selfTz, takenAt)
+    const taken = Number.isNaN(parsed.getTime()) ? new Date() : parsed
     const { ok, data } = await run(
       supabase
         .from('vlogs')
-        .insert({ author_id: profile.id, media_path: path, media_type, caption: caption.trim() || null, taken_at: (isNaN(taken.getTime()) ? new Date() : taken).toISOString() })
+        .insert({ author_id: profile.id, media_path: path, media_type, caption: caption.trim() || null, is_milestone: isMilestone, taken_at: taken.toISOString() })
         .select('*')
         .single(),
       { errorMessage: "Le vlog n'a pas pu être publié." },
@@ -159,7 +173,7 @@ export default function VlogComposer({ onClose, onPublished }: Props) {
                 type="button"
                 onClick={clearFile}
                 disabled={busy}
-                className="absolute top-2 right-2 grid size-9 place-items-center rounded-full bg-[#110F0E]/70 text-[#F0EAE0] hover:bg-[#110F0E]/90 transition-colors duration-200"
+                className="tap-44 absolute top-2 right-2 grid size-9 place-items-center rounded-full bg-[#110F0E]/70 text-[#F0EAE0] hover:bg-[#110F0E]/90 transition-colors duration-200"
                 aria-label="Retirer le fichier"
               >
                 <X size={15} aria-hidden="true" />
@@ -171,7 +185,7 @@ export default function VlogComposer({ onClose, onPublished }: Props) {
               </p>
             </div>
           )}
-          {isVideo && <p className="mt-2 text-xs text-[#9B9287]">Conseil : ≤ 60 s, c'est mieux — plus léger à envoyer, plus agréable à regarder.</p>}
+          {isVideo && <p className="mt-2 text-xs text-[#9B9287]">Conseil : 60&#8239;s max, c’est mieux — plus léger à envoyer, plus agréable à regarder.</p>}
         </div>
 
         {/* Légende */}
@@ -204,8 +218,50 @@ export default function VlogComposer({ onClose, onPublished }: Props) {
             required
             lang="fr-FR"
             disabled={busy}
+            aria-describedby="vlog-when"
           />
+          <p id="vlog-when" className="mt-1.5 text-[12px] text-[#F0EAE0]/70 min-h-[16px]" aria-live="polite">
+            {takenAtEcho && (
+              <>
+                <CalendarClock size={12} className="inline-block align-[-1px] mr-1.5 text-[#D4A574]" aria-hidden="true" />
+                {capitalizeFirst(takenAtEcho)}
+              </>
+            )}
+          </p>
         </div>
+
+        {/* Étape importante — remplace l'ancienne « Notre histoire » */}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={isMilestone}
+          onClick={() => setIsMilestone((v) => !v)}
+          disabled={busy}
+          className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors duration-200 ${
+            isMilestone
+              ? 'bg-[rgba(212,165,116,0.12)] shadow-[inset_0_0_0_1.5px_rgba(212,165,116,0.45)]'
+              : 'bg-white/[0.03] shadow-[inset_0_0_0_1px_rgba(240,234,224,0.07)] hover:bg-white/[0.05]'
+          } disabled:opacity-60`}
+        >
+          <span
+            className={`grid size-9 shrink-0 place-items-center rounded-full transition-colors duration-200 ${
+              isMilestone ? 'bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E]' : 'bg-white/[0.05] text-[#9B9287]'
+            }`}
+            aria-hidden="true"
+          >
+            <Star size={16} fill={isMilestone ? 'currentColor' : 'none'} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm text-[#F0EAE0]">Marquer comme étape importante</span>
+            <span className="block text-xs text-[#9B9287]">Les grands moments apparaissent dans le filtre « Étapes ».</span>
+          </span>
+          <span
+            className={`relative h-6 w-10 shrink-0 rounded-full transition-colors duration-200 ${isMilestone ? 'bg-[#D4A574]' : 'bg-white/[0.12]'}`}
+            aria-hidden="true"
+          >
+            <span className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-all duration-200 ${isMilestone ? 'left-[18px]' : 'left-0.5'}`} />
+          </span>
+        </button>
 
         {busy && (
           <div className="rounded-xl bg-white/[0.03] px-4 py-3" role="status" aria-live="polite">

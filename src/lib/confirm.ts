@@ -5,7 +5,14 @@ interface ConfirmOptions {
   message?: string
   confirmLabel?: string
   cancelLabel?: string
+  /** Action destructrice : bouton rouge */
   danger?: boolean
+  /**
+   * Affiche l’avertissement « Action irréversible ». Par défaut, une action
+   * `danger` est réputée irréversible ; passer `false` quand elle ne l’est pas
+   * (se délier, par exemple) pour ne pas contredire le message affiché.
+   */
+  irreversible?: boolean
 }
 
 interface ConfirmState {
@@ -22,7 +29,7 @@ export const useConfirmStore = create<ConfirmState>((set, get) => ({
   resolve: null,
   ask: (options) =>
     new Promise<boolean>((resolve) => {
-      // S'il y a déjà une demande en cours, on la refuse proprement
+      // S’il y a déjà une demande en cours, on la refuse proprement
       get().resolve?.(false)
       set({ open: true, options, resolve })
     }),

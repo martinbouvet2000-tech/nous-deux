@@ -1,11 +1,23 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { Heart, Plus, X, Sparkles, PenLine } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
-import { format } from 'date-fns'
-import { fr } from 'date-fns/locale'
+import { useLiveData } from '@/hooks/useLiveData'
 import { run } from '@/lib/db'
 import { INPUT, BTN_GHOST, BTN_PRIMARY, CARD, CARD_EDGE, EYEBROW } from '@/lib/ui'
+import { zonedCivilDate } from '@/lib/timezone'
+import { formatDayMonthFR } from '@/lib/dates'
+import { resolveTimezone, dayKey } from '@/lib/today'
+
+/**
+ * « 1er mars » : quantième à la française + mois, sans le jour de la semaine.
+ * `formatDayMonthFR` rend « dimanche 1er mars » ; l'en-tête de la carte est étroit,
+ * on ne garde donc que les deux derniers mots (un jour français s'écrit en un seul mot).
+ * Le « 1er » vient bien de `@/lib/dates`, jamais d'un formatage local.
+ */
+function dayAndMonthFR(date: Date): string {
+  return formatDayMonthFR(date).split(' ').slice(1).join(' ')
+}
 
 export default function GratitudeWidget() {
   const { profile, partnerProfile } = useAuthStore()
@@ -16,7 +28,11 @@ export default function GratitudeWidget() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  const today = format(new Date(), 'yyyy-MM-dd')
+  // « Aujourd'hui » = la journée civile DANS TON FUSEAU (colonne `gratitudes.date`).
+  // Avec l'heure du navigateur, une gratitude écrite à 00 h 30 à Varsovie atterrissait
+  // la veille — et celle de la/du partenaire semblait manquante. Cf. `src/lib/today.ts`.
+  const selfTz = resolveTimezone(profile?.timezone)
+  const today = dayKey(selfTz)
 
   const loadGratitude = useCallback(async () => {
     if (!profile) return
@@ -31,16 +47,12 @@ export default function GratitudeWidget() {
     }
   }, [profile, partnerProfile, today])
 
-  useEffect(() => {
-    if (!profile) return
-    loadGratitude()
-    if (!partnerProfile) return
-    const channel = supabase
-      .channel(`gratitudes:${profile.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'gratitudes', filter: `user_id=eq.${partnerProfile.id}` }, () => loadGratitude())
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [profile, partnerProfile, loadGratitude])
+  useLiveData({
+    enabled: !!profile,
+    channel: profile && partnerProfile ? `gratitudes:${profile.id}` : null,
+    load: loadGratitude,
+    bind: (ch) => ch.on('postgres_changes', { event: '*', schema: 'public', table: 'gratitudes', filter: `user_id=eq.${partnerProfile?.id}` }, () => loadGratitude()),
+  })
 
   const saveGratitude = async () => {
     if (!profile) return
@@ -74,12 +86,15 @@ export default function GratitudeWidget() {
   if (!partnerProfile) return null
 
   const header = (title: string) => (
-    <div className="flex items-center justify-between mb-4">
-      <h2 className={`${EYEBROW} inline-flex items-center gap-1.5`}>
-        <Heart size={11} className="text-[#C2788E]" fill="currentColor" aria-hidden="true" />
+    <div className="flex items-center justify-between gap-2 mb-4">
+      <h2 className={`${EYEBROW} inline-flex min-w-0 items-center gap-1.5`}>
+        <Heart size={11} className="text-[#C2788E] shrink-0" fill="currentColor" aria-hidden="true" />
         {title}
       </h2>
-      <span className="text-[11px] tracking-wide text-[#9B9287] num">{format(new Date(), 'd MMM', { locale: fr })}</span>
+      {/* « Aujourd'hui » vu de TON fuseau, écrit à la française (« 1er mars ») */}
+      <span className="shrink-0 text-[11px] tracking-wide text-[#9B9287] num">
+        {dayAndMonthFR(zonedCivilDate(selfTz, new Date()))}
+      </span>
     </div>
   )
 

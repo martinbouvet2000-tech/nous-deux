@@ -4,6 +4,7 @@ import { fr } from 'date-fns/locale'
 import { Phone, Check, Flag } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
+import { useLiveData } from '@/hooks/useLiveData'
 import { run } from '@/lib/db'
 import { toast } from '@/lib/toast'
 import { shine, unshine } from '@/lib/shine'
@@ -15,8 +16,8 @@ import CallFlag from '@/components/CallFlag'
 const reduced = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
 /**
- * « Dispo pour un appel ? » — un drapeau chacun. Le mien se change d'un tap,
- * celui de l'autre se met à jour en temps réel. Autonome.
+ * « Dispo pour un appel ? » — un drapeau chacun. Le mien se change d’un tap,
+ * celui de l’autre se met à jour en temps réel. Autonome.
  */
 export default function AvailabilityWidget({ className = '' }: { className?: string }) {
   const { profile, partnerProfile } = useAuthStore()
@@ -36,22 +37,29 @@ export default function AvailabilityWidget({ className = '' }: { className?: str
     setTheirs(partnerProfile ? rows.find((r) => r.user_id === partnerProfile.id) ?? null : null)
   }, [profile, partnerProfile])
 
+  // Charge les deux dispos, écoute le temps réel et rattrape au retour du réseau
+  // (les événements Realtime manqués pendant une coupure / veille ne reviennent pas seuls).
+  useLiveData({
+    enabled: !!profile,
+    channel: profile ? `availability:${profile.id}` : null,
+    load,
+    bind: (ch) => {
+      ch.on('postgres_changes', { event: '*', schema: 'public', table: 'availability', filter: `user_id=eq.${profile?.id}` }, () => load())
+      if (partnerProfile) {
+        ch.on('postgres_changes', { event: '*', schema: 'public', table: 'availability', filter: `user_id=eq.${partnerProfile.id}` }, (p) => {
+          load()
+          const row = p.new as Partial<Availability>
+          if (row?.status && row.status === 'free') toast.info(`${partnerProfile.display_name} est dispo pour un appel`)
+        })
+      }
+    },
+  })
+
+  // « il y a x min » : un re-rendu par minute suffit à garder l'horodatage juste.
   useEffect(() => {
-    if (!profile) return
-    load()
-    const ch = supabase.channel(`availability:${profile.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'availability', filter: `user_id=eq.${profile.id}` }, () => load())
-    if (partnerProfile) {
-      ch.on('postgres_changes', { event: '*', schema: 'public', table: 'availability', filter: `user_id=eq.${partnerProfile.id}` }, (p) => {
-        load()
-        const row = p.new as Partial<Availability>
-        if (row?.status && row.status === 'free') toast.info(`${partnerProfile.display_name} est dispo pour un appel`)
-      })
-    }
-    ch.subscribe()
     const t = setInterval(() => tick((n) => n + 1), 60_000)
-    return () => { supabase.removeChannel(ch); clearInterval(t) }
-  }, [profile, partnerProfile, load])
+    return () => clearInterval(t)
+  }, [])
 
   if (!profile) return null
 
@@ -85,7 +93,7 @@ export default function AvailabilityWidget({ className = '' }: { className?: str
 
   return (
     <section className={`lux-card relative overflow-hidden rounded-[20px] p-5 md:p-6 ${className}`} onMouseMove={shine} onMouseLeave={unshine} aria-labelledby="avail-title">
-      <h2 id="avail-title" className={`${EYEBROW} mb-4 inline-flex items-center gap-1.5`}><Phone size={11} aria-hidden="true" className="text-[#D4A574]" /> Dispo pour un appel ?</h2>
+      <h2 id="avail-title" className={`${EYEBROW} mb-4 inline-flex items-center gap-1.5`}><Phone size={11} aria-hidden="true" className="text-[#D4A574]" /> Dispo pour un appel&#8239;?</h2>
 
       {open ? (
         <div className="animate-fade-in">

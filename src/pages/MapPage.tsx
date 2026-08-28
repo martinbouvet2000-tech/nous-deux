@@ -5,6 +5,7 @@ import { Crosshair, Heart, MapPin, Navigation, User, Clock } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { run } from '@/lib/db'
 import { useAuthStore } from '@/stores/authStore'
+import { useLiveData } from '@/hooks/useLiveData'
 import type { LocationPoint } from '@/types/database'
 import { haversine, formatDistance, totalDistance } from '@/lib/geo'
 import { shine, unshine } from '@/lib/shine'
@@ -26,7 +27,7 @@ const MAP_CSS = `
 .awy-map .leaflet-container { background: #110F0E; font-family: inherit; }
 .awy-map .leaflet-control-zoom { border: 0; box-shadow: 0 12px 30px -12px rgba(0,0,0,.7); border-radius: 12px; overflow: hidden; margin: 14px; }
 .awy-map .leaflet-control-zoom a {
-  width: 40px; height: 40px; line-height: 40px; font-size: 18px;
+  width: 44px; height: 44px; line-height: 44px; font-size: 18px;
   background: #1E1B17; color: #F0EAE0; border: 1px solid rgba(240,234,224,.08); border-bottom-width: 0;
 }
 .awy-map .leaflet-control-zoom a:last-child { border-bottom-width: 1px; }
@@ -147,23 +148,24 @@ export default function MapPage() {
     setLoaded(true)
   }, [myId, partnerId])
 
-  useEffect(() => { fetchAll() }, [fetchAll])
-
-  // Realtime : nouveaux points (partenaire, et les miens pour garder la colonne à jour)
-  useEffect(() => {
-    if (!myId || !partnerId) return
-    const addPoint = (p: LocationPoint) => {
-      setPoints((prev) => (prev.some((x) => x.id === p.id) ? prev : [...prev, p].sort((a, b) => a.recorded_at.localeCompare(b.recorded_at))))
-      if (p.user_id === partnerId) setLastPartner((prev) => (!prev || prev.recorded_at <= p.recorded_at ? p : prev))
-      else setLastMe((prev) => (!prev || prev.recorded_at <= p.recorded_at ? p : prev))
-    }
-    const channel = supabase
-      .channel(`locations:${myId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'locations', filter: `user_id=eq.${partnerId}` }, (payload) => addPoint(payload.new as LocationPoint))
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'locations', filter: `user_id=eq.${myId}` }, (payload) => addPoint(payload.new as LocationPoint))
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [myId, partnerId])
+  // Chargement, temps réel et rattrapage au retour du réseau. Les nouveaux points
+  // arrivent un par un (INSERT) et sont insérés sans tout relire ; le rattrapage,
+  // lui, relit la journée — les INSERT manqués pendant une coupure / veille
+  // laisseraient sinon la carte figée sur une position morte.
+  useLiveData({
+    enabled: !!myId && !!partnerId,
+    channel: myId ? `locations:${myId}` : null,
+    load: fetchAll,
+    bind: (ch) => {
+      const addPoint = (p: LocationPoint) => {
+        setPoints((prev) => (prev.some((x) => x.id === p.id) ? prev : [...prev, p].sort((a, b) => a.recorded_at.localeCompare(b.recorded_at))))
+        if (p.user_id === partnerId) setLastPartner((prev) => (!prev || prev.recorded_at <= p.recorded_at ? p : prev))
+        else setLastMe((prev) => (!prev || prev.recorded_at <= p.recorded_at ? p : prev))
+      }
+      ch.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'locations', filter: `user_id=eq.${partnerId}` }, (payload) => addPoint(payload.new as LocationPoint))
+      ch.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'locations', filter: `user_id=eq.${myId}` }, (payload) => addPoint(payload.new as LocationPoint))
+    },
+  })
 
   // « il y a x min » rafraîchi toutes les 30 s
   useEffect(() => {
