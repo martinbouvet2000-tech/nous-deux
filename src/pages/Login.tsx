@@ -16,6 +16,15 @@ export default function Login() {
   const [displayName, setDisplayName] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  // Message laissé par la suppression de compte : la déconnexion purge les toasts,
+  // c'est donc ici qu'on le lit, une seule fois.
+  const [adieu] = useState(() => {
+    try {
+      const vu = sessionStorage.getItem('awy:adieu')
+      if (vu) sessionStorage.removeItem('awy:adieu')
+      return !!vu
+    } catch { return false }
+  })
   const { signIn, signUp, requestPasswordReset } = useAuthStore()
 
   const switchMode = (m: Mode) => { setMode(m); setError('') }
@@ -140,6 +149,11 @@ export default function Login() {
               )}
 
               <div aria-live="polite" aria-atomic="true">
+                {adieu && !error && (
+                  <div role="status" className="animate-bounce-in rounded-xl px-4 py-3 bg-[rgba(212,165,116,0.08)]">
+                    <p className="text-[#D4A574] text-sm m-0">Ton compte est supprimé. Prends soin de toi.</p>
+                  </div>
+                )}
                 {error && (
                   <div role="alert" className="animate-bounce-in rounded-xl px-4 py-3 bg-[rgba(239,68,68,0.08)]">
                     <p className="text-[#F87171] text-sm m-0">{error}</p>
