@@ -12,6 +12,7 @@ import PageHeader from '@/components/ui/PageHeader'
 import ShareLocationToggle from '@/components/map/ShareLocationToggle'
 import InstallAppButton from '@/components/settings/InstallAppButton'
 import NotificationsToggle from '@/components/settings/NotificationsToggle'
+import BackgroundLocationTokens from '@/components/settings/BackgroundLocationTokens'
 
 export default function SettingsPage() {
   const { profile, partnerProfile, user, signOut, fetchProfile, linkPartner, unlinkPartner, deleteAccount, requestPasswordReset } = useAuthStore()
@@ -199,7 +200,9 @@ export default function SettingsPage() {
     setBusy(true)
     try {
       await deleteAccount()
-      toast.info('Compte supprimé. Prends soin de toi.')
+      // La déconnexion qui suit purge les toasts : le message ne serait jamais lu.
+      // On le confie à l'écran de connexion, qui l'affichera une fois.
+      try { sessionStorage.setItem('awy:adieu', '1') } catch { /* stockage indisponible */ }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Suppression impossible.')
     } finally {
@@ -376,6 +379,9 @@ export default function SettingsPage() {
           ))}
         </ul>
       </section>
+
+      {/* ─── Position en arrière-plan ─── */}
+      <BackgroundLocationTokens />
 
       {/* ─── Zone de danger ─── */}
       <section className="rounded-[20px] p-5 shadow-[inset_0_0_0_1px_rgba(224,108,117,0.22)] bg-[rgba(224,108,117,0.04)]" aria-labelledby="danger-title">
