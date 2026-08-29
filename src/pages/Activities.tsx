@@ -126,7 +126,7 @@ export default function Activities() {
   }
 
   return (
-    <div className="px-5 md:px-8 py-6 max-w-3xl xl:max-w-[1160px] xl:px-10 mx-auto space-y-6">
+    <div className="px-5 md:px-8 py-6 max-md:py-7 max-w-3xl xl:max-w-[1160px] xl:px-10 mx-auto space-y-6 max-md:space-y-7">
       <PageHeader
         eyebrow="À deux"
         title="Nos envies"
@@ -213,7 +213,7 @@ function WatchSection({ open, onClose }: { open: boolean; onClose: () => void })
     : 'Rien dans ce filtre pour l’instant. Essaie «\u202fTout\u202f» pour voir toute votre liste.'
 
   return (
-    <div className="space-y-5 reveal">
+    <div className="space-y-5 max-md:space-y-6 reveal">
       <FilterChips options={filters} value={filter} onChange={setFilter} label="Filtrer par statut" />
 
       {filtered.length === 0 ? (
@@ -223,7 +223,7 @@ function WatchSection({ open, onClose }: { open: boolean; onClose: () => void })
           text={emptyText}
         />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 max-md:gap-5 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((item) => {
             const Icon = TYPE_ICONS[item.type]
             return (
@@ -289,7 +289,7 @@ function WatchSection({ open, onClose }: { open: boolean; onClose: () => void })
 
       {open && (
         <Modal title="Ajouter un film ou une série" onClose={onClose}>
-          <form onSubmit={addItem} className="space-y-4">
+          <form onSubmit={addItem} className="space-y-4 max-md:space-y-5">
             <div className="flex gap-2" role="radiogroup" aria-label="Type">
               {([['movie', 'Film', Film], ['series', 'Série', Tv], ['documentary', 'Docu', FileVideo]] as const).map(([t, label, Icon]) => (
                 <button
@@ -389,7 +389,7 @@ function BucketSection({ open, onClose }: { open: boolean; onClose: () => void }
   ]
 
   return (
-    <div className="space-y-5 reveal">
+    <div className="space-y-5 max-md:space-y-6 reveal">
       {/* Progression — seulement quand il y a quelque chose à célébrer */}
       {doneCount > 0 && (
         <div className={CARD}>
@@ -415,7 +415,7 @@ function BucketSection({ open, onClose }: { open: boolean; onClose: () => void }
           text={filter === 'all' ? 'Note ici les voyages, les envies et les petites folies que vous voulez vivre à deux.' : 'Change de filtre pour retrouver le reste de votre liste.'}
         />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 max-md:gap-5 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((item) => {
             const cat = BUCKET_CATEGORIES.find(c => c.key === item.category)
             return (
@@ -459,7 +459,7 @@ function BucketSection({ open, onClose }: { open: boolean; onClose: () => void }
 
       {open && (
         <Modal title="Ajouter un rêve" onClose={onClose}>
-          <form onSubmit={addItem} className="space-y-4">
+          <form onSubmit={addItem} className="space-y-4 max-md:space-y-5">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2" role="radiogroup" aria-label="Catégorie">
               {BUCKET_CATEGORIES.map(cat => (
                 <button

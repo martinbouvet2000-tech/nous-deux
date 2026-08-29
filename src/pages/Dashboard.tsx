@@ -631,17 +631,17 @@ export default function Dashboard() {
   return (
     <div className="mx-auto px-5 py-7 md:py-10 max-w-2xl xl:max-w-[1160px] xl:px-10">
       {/* Mobile / tablette : une colonne ; desktop large : grille asymétrique 7/5 */}
-      <div className="xl:grid xl:grid-cols-12 xl:gap-6 space-y-6 xl:space-y-0">
+      <div className="xl:grid xl:grid-cols-12 xl:gap-6 space-y-6 max-md:space-y-7 xl:space-y-0">
         <div className="xl:col-span-12 mb-2 xl:mb-4">{hero}</div>
         <div className="xl:col-span-12 empty:hidden"><CurrentActivityBanner className="reveal" /></div>
         {onboarding && <div className="xl:col-span-12">{onboarding}</div>}
 
-        <div className="xl:col-span-7 space-y-6">
+        <div className="xl:col-span-7 space-y-6 max-md:space-y-7">
           {countdownBlock}
           {callBlock}
           {questionBlock}
         </div>
-        <aside className="xl:col-span-5 space-y-6">
+        <aside className="xl:col-span-5 space-y-6 max-md:space-y-7">
           {loveNoteBlock}
           <div className="reveal" style={{ animationDelay: '150ms' }}><AvailabilityWidget /></div>
           <div className="reveal" style={{ animationDelay: '200ms' }}><HamsterMoodWidget /></div>
@@ -651,7 +651,7 @@ export default function Dashboard() {
 
       {showCountdownForm && (
         <Modal title="Prochaines retrouvailles" description="Une date à attendre ensemble — elle s'affichera en haut de votre accueil à tous les deux." onClose={() => setShowCountdownForm(false)}>
-          <form onSubmit={saveCountdown} className="space-y-4">
+          <form onSubmit={saveCountdown} className="space-y-4 max-md:space-y-5">
             <div>
               {/* `cd-title` est déjà l'identifiant du titre de la section (aria-labelledby) :
                   le champ porte le sien, sinon le libellé « Quoi ? » ne focalisait rien. */}

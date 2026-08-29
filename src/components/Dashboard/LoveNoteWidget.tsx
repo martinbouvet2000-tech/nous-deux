@@ -194,7 +194,7 @@ export default function LoveNoteWidget() {
           confirmation
         ) : showEditor ? (
           <div className="animate-slide-up">
-            <p className="text-xs tracking-wide text-[#9B9287] mb-2.5 font-medium">Écris un petit mot pour {partnerProfile.display_name}</p>
+            <p className="text-xs leading-relaxed tracking-wide text-[#9B9287] mb-2.5 font-medium">Écris un petit mot pour {partnerProfile.display_name}</p>
             {editor}
           </div>
         ) : (

@@ -127,7 +127,7 @@ export default function TodosSection({ openSignal }: Props) {
   /* ═══ Modale « Nouvelle liste » ═══ */
   const newListModal = showNewList && (
     <Modal title="Nouvelle liste" description="Courses, préparatifs, projets… tout ce que vous suivez à deux." onClose={() => setShowNewList(false)}>
-      <form onSubmit={createList} className="space-y-4">
+      <form onSubmit={createList} className="space-y-4 max-md:space-y-5">
         <div>
           <span className={LABEL}>Emoji</span>
           <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Emoji">
@@ -178,7 +178,7 @@ export default function TodosSection({ openSignal }: Props) {
           {activeItems.length > 0 ? (
             <ul className="mt-4 divide-y divide-[#F0EAE0]/[0.05]">
               {activeItems.map((item) => (
-                <li key={item.id} className="group flex items-center gap-2 py-1.5">
+                <li key={item.id} className="group flex items-center gap-2 py-1.5 max-md:py-2.5">
                   <button
                     onClick={() => toggleItem(item)}
                     role="checkbox"
@@ -235,7 +235,7 @@ export default function TodosSection({ openSignal }: Props) {
 
   /* ═══ Vue d'ensemble ═══ */
   return (
-    <div className="space-y-4 reveal">
+    <div className="space-y-4 max-md:space-y-5 reveal">
       {lists.length === 0 ? (
         <EmptyState
           icon={ListTodo}

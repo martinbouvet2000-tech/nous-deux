@@ -64,7 +64,7 @@ export default function ResetPassword() {
             ) : 'Vérification du lien…'}
           </div>
         ) : (
-          <form onSubmit={submit} className="space-y-4" noValidate>
+          <form onSubmit={submit} className="space-y-4 max-md:space-y-5" noValidate>
             <div>
               <label htmlFor="new-pwd" className="block text-xs font-medium tracking-[0.08em] uppercase text-[#9B9287] mb-1.5">Nouveau mot de passe</label>
               <input id="new-pwd" type="password" value={password} onChange={(e) => setPassword(e.target.value)}

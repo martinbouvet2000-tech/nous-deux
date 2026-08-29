@@ -193,7 +193,7 @@ export default function CalendarPage() {
     : 'Vos rendez-vous, réunis au même endroit.'
 
   return (
-    <div className="px-5 md:px-8 py-6 max-w-3xl lg:max-w-[1080px] mx-auto space-y-5 reveal">
+    <div className="px-5 md:px-8 py-6 max-md:py-7 max-w-3xl lg:max-w-[1080px] mx-auto space-y-5 max-md:space-y-6 reveal">
       <PageHeader
         eyebrow="Votre temps"
         title={tab === 'agenda' ? 'Agenda' : 'Emploi du'}
@@ -215,7 +215,7 @@ export default function CalendarPage() {
 
       {tab === 'schedule' && <ScheduleView addSignal={scheduleAddSignal} />}
 
-      {tab === 'agenda' && <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-6 lg:items-start space-y-5 lg:space-y-0">
+      {tab === 'agenda' && <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-6 lg:items-start space-y-5 max-md:space-y-6 lg:space-y-0">
         {/* ─── Grille du mois ─── */}
         <div className={CARD} onMouseMove={shine} onMouseLeave={unshine}>
           <div className={CARD_EDGE} aria-hidden="true" />
@@ -288,7 +288,7 @@ export default function CalendarPage() {
 
         {/* ─── Panneau du jour ─── */}
         {selectedDate && (
-          <div className={`${CARD} lg:sticky lg:top-6 space-y-4`} onMouseMove={shine} onMouseLeave={unshine}>
+          <div className={`${CARD} lg:sticky lg:top-6 space-y-4 max-md:space-y-5`} onMouseMove={shine} onMouseLeave={unshine}>
             <div className={CARD_EDGE} aria-hidden="true" />
             <h2 className="font-display text-[20px] text-[#F0EAE0] first-letter:uppercase">
               {formatDayMonthFR(selectedDate)}
@@ -301,7 +301,7 @@ export default function CalendarPage() {
                 text="Rien de prévu — l'occasion rêvée d'inventer quelque chose à deux."
               />
             ) : (
-              <ul className="space-y-2">
+              <ul className="space-y-2 max-md:space-y-2.5">
                 {selectedDayEvents.map((event) => {
                   const start = parseISO(event.start_at)
                   const end = parseISO(event.end_at)
@@ -337,7 +337,7 @@ export default function CalendarPage() {
             {upcoming.length > 0 && (
               <div className="pt-4 border-t border-white/[0.06]">
                 <h3 className={`${EYEBROW} mb-3`}>Les 7 prochains jours</h3>
-                <ul className="space-y-1.5">
+                <ul className="space-y-1.5 max-md:space-y-2">
                   {upcoming.map((event) => {
                     const start = parseISO(event.start_at)
                     return (
@@ -360,7 +360,7 @@ export default function CalendarPage() {
 
       {showForm && (
         <Modal title="Nouvel événement" description={showPartnerTime ? `Saisis l'heure dans ton fuseau (${timezoneCity(profile!.timezone)}) ; ${partnerProfile!.display_name} la verra convertie.` : undefined} onClose={() => setShowForm(false)}>
-          <form onSubmit={saveEvent} className="space-y-4" noValidate>
+          <form onSubmit={saveEvent} className="space-y-4 max-md:space-y-5" noValidate>
             <div>
               <span className={LABEL} id="ev-kind-label">Type d'événement</span>
               <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-labelledby="ev-kind-label" aria-required="true">

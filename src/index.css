@@ -166,6 +166,29 @@
     background: rgba(212, 165, 116, 0.14);
   }
 
+  /* ─── Safari iOS : le zoom qui ne redescend jamais ───
+     Quand un champ dont la police calculée fait moins de 16 px reçoit le focus,
+     iOS zoome dessus — et ne dézoome pas au blur : il faut pincer à la main après
+     chaque saisie. On garantit donc 16 px sur tout contrôle de saisie par défaut,
+     et on ne redescend à 14 px que là où un pointeur fin existe (souris, trackpad),
+     c'est-à-dire sur le bureau, où ce zoom automatique n'existe pas.
+     On n'ajoute JAMAIS `maximum-scale=1` ni `user-scalable=no` au viewport : ça
+     ferait taire le symptôme en interdisant à l'utilisateur de zoomer lui-même,
+     ce qui est une régression d'accessibilité.
+     Cette règle vit dans `base` : une classe utilitaire Tailwind posée sur un champ
+     l'emporterait dessus — d'où le garde-fou de `src/__tests__/champsMobile.test.ts`,
+     qui interdit toute classe de taille inférieure à 16 px sur un champ. */
+  input, textarea, select {
+    font-size: 1rem;      /* 16 px : seuil sous lequel iOS zoome */
+    line-height: 1.5rem;
+  }
+  @media (pointer: fine) {
+    input, textarea, select {
+      font-size: 0.875rem;  /* 14 px : rendu bureau inchangé */
+      line-height: 1.25rem;
+    }
+  }
+
   input[type="date"],
   input[type="time"],
   input[type="datetime-local"] {

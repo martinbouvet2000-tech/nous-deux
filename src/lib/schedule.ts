@@ -100,3 +100,14 @@ export function currentSlotPhrase(name: string, title: string): string {
   if (/^cours\b/i.test(trimmed)) return `${name} est en ${trimmed.charAt(0).toLowerCase()}${trimmed.slice(1)}`
   return `${name} : ${trimmed}`
 }
+
+/**
+ * Couleur stable déduite d'un intitulé : « Maths » aura toujours la même
+ * pastille. Utilisé par l'import, pour qu'un emploi du temps arrivé d'un fichier
+ * ressemble à un emploi du temps saisi à la main, et non à un mur monochrome.
+ */
+export function colorForTitle(title: string): string {
+  let hash = 0
+  for (const ch of title.trim().toLowerCase()) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0
+  return SLOT_COLORS[hash % SLOT_COLORS.length]
+}

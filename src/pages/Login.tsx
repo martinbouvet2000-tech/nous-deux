@@ -107,7 +107,7 @@ export default function Login() {
               </button>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4 animate-slide-up" style={{ animationDelay: '0.1s' }} noValidate>
+            <form onSubmit={handleSubmit} className="space-y-4 max-md:space-y-5 animate-slide-up" style={{ animationDelay: '0.1s' }} noValidate>
               {mode === 'signup' && (
                 <div className="animate-slide-up">
                   <label htmlFor="login-name" className={LABEL}>Prénom</label>

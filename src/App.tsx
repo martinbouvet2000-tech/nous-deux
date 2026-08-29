@@ -121,6 +121,20 @@ export default function App() {
     useToastStore.getState().setAuthenticated(!!user)
   }, [user])
 
+  // Notifications push : un navigateur peut faire tourner son abonnement sans
+  // prévenir l'app (téléphone restauré, permission réattribuée). On remet la
+  // ligne à jour au démarrage, en silence et sans jamais redemander la
+  // permission — sinon des notifications s'arrêteraient sans que personne
+  // ne s'en aperçoive. Import différé : rien de tout cela n'est dans le
+  // chemin critique du premier écran.
+  useEffect(() => {
+    const id = user?.id
+    if (!id) return
+    import('@/lib/push')
+      .then(({ rafraichirAbonnement }) => rafraichirAbonnement(id))
+      .catch(() => { /* confort : son échec ne regarde pas l'utilisateur */ })
+  }, [user?.id])
+
   useEffect(() => {
     let cancelled = false
 

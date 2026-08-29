@@ -135,7 +135,7 @@ export default function VlogComposer({ onClose, onPublished }: Props) {
 
   return (
     <Modal title="Nouveau vlog" description="Une photo ou une courte vidéo, un mot — l'autre le voit en direct." onClose={busy ? () => {} : onClose}>
-      <form onSubmit={publish} className="space-y-4">
+      <form onSubmit={publish} className="space-y-4 max-md:space-y-5">
         {/* Média */}
         <div>
           <span className={LABEL} id="vlog-media-label">Photo ou vidéo</span>
@@ -185,7 +185,7 @@ export default function VlogComposer({ onClose, onPublished }: Props) {
               </p>
             </div>
           )}
-          {isVideo && <p className="mt-2 text-xs text-[#9B9287]">Conseil : 60&#8239;s max, c’est mieux — plus léger à envoyer, plus agréable à regarder.</p>}
+          {isVideo && <p className="mt-2 text-xs leading-relaxed text-[#9B9287]">Conseil : 60&#8239;s max, c’est mieux — plus léger à envoyer, plus agréable à regarder.</p>}
         </div>
 
         {/* Légende */}

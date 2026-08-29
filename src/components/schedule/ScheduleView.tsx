@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { CalendarClock, Check, MapPin, Repeat, Trash2 } from 'lucide-react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { CalendarClock, Check, MapPin, Repeat, Trash2, Upload } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import { useLiveData } from '@/hooks/useLiveData'
@@ -19,6 +19,9 @@ import {
   timeToMinutes, shortTime, localClockIn, weekdayLabel,
 } from '@/lib/schedule'
 
+/** Chargé seulement quand on ouvre l'import : lecteurs de fichiers hors du paquet initial */
+const ScheduleImport = lazy(() => import('@/components/schedule/ScheduleImport'))
+
 type Who = 'me' | 'partner'
 const HOUR_PX = 44
 const DEFAULT_START_H = 7
@@ -36,6 +39,7 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
   const [loaded, setLoaded] = useState(false)
   const [now, setNow] = useState(() => new Date())
   const [mobileDay, setMobileDay] = useState(() => localClockIn(profile?.timezone ?? 'UTC').weekday)
+  const [importing, setImporting] = useState(false)
 
   // Formulaire
   const [open, setOpen] = useState(false)
@@ -200,30 +204,51 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
       : <div className={cls} style={style} aria-label={label}>{inner}</div>
   }
 
+  // L'import prend toute la place : relire une année de créneaux dans une modale
+  // étroite serait intenable, et la relecture n'est pas une étape secondaire.
+  if (importing) {
+    return (
+      <Suspense fallback={<p className="text-[13px] text-[#9B9287]">Ouverture de l’import…</p>}>
+        <ScheduleImport
+          existing={slots.filter((s) => s.user_id === profile?.id)}
+          onClose={() => setImporting(false)}
+          onImported={fetchSlots}
+        />
+      </Suspense>
+    )
+  }
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 max-md:space-y-6">
       <CurrentActivityBanner />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex w-fit gap-1 p-1 rounded-full bg-white/[0.04] shadow-[inset_0_0_0_1px_rgba(240,234,224,0.06)]" role="tablist" aria-label="Emploi du temps de">
-          {([{ key: 'me', label: 'Moi' }, { key: 'partner', label: partnerProfile?.display_name ?? 'Partenaire' }] as { key: Who; label: string }[]).map(({ key, label }) => {
-            const active = who === key
-            const disabled = key === 'partner' && !partnerProfile
-            return (
-              <button
-                key={key}
-                role="tab"
-                aria-selected={active}
-                disabled={disabled}
-                onClick={() => setWho(key)}
-                className={`min-h-11 px-4 rounded-full text-[13px] font-medium whitespace-nowrap transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
-                  active ? 'bg-white/[0.08] text-[#F0EAE0] shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_0_0_1px_rgba(212,165,116,0.25)]' : 'text-[#9B9287] hover:text-[#F0EAE0]'
-                }`}
-              >
-                {label}
-              </button>
-            )
-          })}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex w-fit gap-1 p-1 rounded-full bg-white/[0.04] shadow-[inset_0_0_0_1px_rgba(240,234,224,0.06)]" role="tablist" aria-label="Emploi du temps de">
+            {([{ key: 'me', label: 'Moi' }, { key: 'partner', label: partnerProfile?.display_name ?? 'Partenaire' }] as { key: Who; label: string }[]).map(({ key, label }) => {
+              const active = who === key
+              const disabled = key === 'partner' && !partnerProfile
+              return (
+                <button
+                  key={key}
+                  role="tab"
+                  aria-selected={active}
+                  disabled={disabled}
+                  onClick={() => setWho(key)}
+                  className={`min-h-11 px-4 rounded-full text-[13px] font-medium whitespace-nowrap transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                    active ? 'bg-white/[0.08] text-[#F0EAE0] shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_0_0_1px_rgba(212,165,116,0.25)]' : 'text-[#9B9287] hover:text-[#F0EAE0]'
+                  }`}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+          {isMine && (
+            <button onClick={() => setImporting(true)} className={`${BTN_GHOST} px-4`}>
+              <Upload size={14} aria-hidden="true" /> Importer un fichier
+            </button>
+          )}
         </div>
         <p className="inline-flex items-center gap-1.5 text-[12px] text-[#9B9287]">
           <Repeat size={12} aria-hidden="true" /> Ces créneaux se répètent chaque semaine.
@@ -238,7 +263,14 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
           text={isMine
             ? `Ajoute tes cours, ton travail, ton sport : ${partnerProfile?.display_name ?? 'ton partenaire'} saura toujours où tu en es de ta journée.`
             : 'Dès que des créneaux seront ajoutés, tu les verras ici.'}
-          action={isMine ? <button onClick={() => openCreate()} className={BTN_PRIMARY}>Ajouter un créneau</button> : undefined}
+          action={isMine ? (
+            <div className="flex flex-wrap justify-center gap-2">
+              <button onClick={() => openCreate()} className={BTN_PRIMARY}>Ajouter un créneau</button>
+              <button onClick={() => setImporting(true)} className={BTN_GHOST}>
+                <Upload size={14} aria-hidden="true" /> Importer un fichier
+              </button>
+            </div>
+          ) : undefined}
         />
       ) : (
         <>
@@ -303,7 +335,7 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
           </div>
 
           {/* ─── Mobile : sélecteur de jour + liste ─── */}
-          <div className="md:hidden space-y-3">
+          <div className="md:hidden space-y-3 max-md:space-y-4">
             {/* Sept colonnes contraintes par la largeur d'écran : gouttière réduite à 2 px
                 pour que chaque jour reste au moins carré 44 x 44 px dès 360 px de large. */}
             <div className="grid grid-cols-7 gap-0.5" role="tablist" aria-label="Jour">
@@ -337,7 +369,7 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
               {daySlots(mobileDay).length === 0 ? (
                 <p className="text-[13px] text-[#9B9287]">Rien ce jour-là.</p>
               ) : (
-                <ul className="space-y-2">
+                <ul className="space-y-2 max-md:space-y-2.5">
                   {daySlots(mobileDay).map((s) => (
                     <li key={s.id} className="min-h-[52px]">{renderSlot(s)}</li>
                   ))}
@@ -353,7 +385,7 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
 
       {open && (
         <Modal title={editing ? 'Modifier le créneau' : 'Nouveau créneau'} description="Se répète chaque semaine, aux jours cochés." onClose={() => setOpen(false)}>
-          <form onSubmit={save} className="space-y-4" noValidate>
+          <form onSubmit={save} className="space-y-4 max-md:space-y-5" noValidate>
             <div>
               <label htmlFor="slot-title" className={LABEL}>Titre</label>
               <input id="slot-title" type="text" placeholder="Ex : Cours de maths, Boulot, Sport…" value={title} onChange={(e) => setTitle(e.target.value)} className={INPUT} maxLength={60} required />

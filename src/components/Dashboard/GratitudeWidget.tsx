@@ -104,7 +104,7 @@ export default function GratitudeWidget() {
       <div className={`${CARD} hover:bg-[#252118] group`}>
         <div className={CARD_EDGE} aria-hidden="true" />
         {header('Gratitude')}
-        <ul className="space-y-2 mb-3">
+        <ul className="space-y-2 max-md:space-y-2.5 mb-3">
           {myItems.map((item, i) => (
             <li key={i} className="flex items-start gap-2.5 text-sm">
               <Sparkles size={12} className="text-[#E8B86D] mt-0.5 shrink-0 opacity-70" aria-hidden="true" />
@@ -119,7 +119,7 @@ export default function GratitudeWidget() {
           {partnerItems.length > 0 ? (
             <>
               <p className="text-[11px] text-[#D99AAD] font-medium uppercase tracking-[0.18em] mb-2">{partnerProfile.display_name}</p>
-              <ul className="space-y-2">
+              <ul className="space-y-2 max-md:space-y-2.5">
                 {partnerItems.map((item, i) => (
                   <li key={i} className="flex items-start gap-2.5 text-sm">
                     <Sparkles size={12} className="text-[#C2788E] mt-0.5 shrink-0 opacity-70" aria-hidden="true" />
@@ -129,7 +129,7 @@ export default function GratitudeWidget() {
               </ul>
             </>
           ) : (
-            <p className="text-xs tracking-wide text-[#9B9287] text-center">{partnerProfile.display_name} n'a pas encore rempli aujourd'hui</p>
+            <p className="text-xs leading-relaxed tracking-wide text-[#9B9287] text-center">{partnerProfile.display_name} n'a pas encore rempli aujourd'hui</p>
           )}
         </div>
       </div>
@@ -146,8 +146,8 @@ export default function GratitudeWidget() {
           <p className="text-[#C2788E] text-sm font-medium leading-relaxed">Merci pour ta gratitude</p>
         </div>
       ) : showForm ? (
-        <div className="space-y-2.5 animate-slide-up">
-          <p className="text-xs tracking-wide text-[#9B9287] mb-2">3 choses que tu apprécies aujourd'hui</p>
+        <div className="space-y-2.5 max-md:space-y-3 animate-slide-up">
+          <p className="text-xs leading-relaxed tracking-wide text-[#9B9287] mb-2">3 choses que tu apprécies aujourd'hui</p>
           {inputs.map((val, i) => (
             <div key={i} className="flex items-center gap-2.5">
               <span className="text-[#E8B86D] text-xs shrink-0 font-medium" aria-hidden="true">{i + 1}.</span>
@@ -182,7 +182,7 @@ export default function GratitudeWidget() {
         </button>
       )}
       {!showForm && !saved && partnerItems.length > 0 && (
-        <p className="text-xs text-[#9B9287] text-center mt-3">{partnerProfile.display_name} a déjà rempli la sienne — remplis la tienne pour la découvrir.</p>
+        <p className="text-xs leading-relaxed text-[#9B9287] text-center mt-3">{partnerProfile.display_name} a déjà rempli la sienne — remplis la tienne pour la découvrir.</p>
       )}
     </div>
   )

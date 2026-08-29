@@ -1,4 +1,5 @@
 import { useState, useCallback, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Plus, X, Clock, Lock, Mail, Hourglass, Clapperboard, CalendarDays } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
@@ -33,7 +34,11 @@ const canReveal = (c: Capsule) => {
 
 export default function Memories() {
   const { profile, partnerProfile } = useAuthStore()
-  const [tab, setTab] = useState<Tab>('vlog')
+  // L'onglet vit dans l'URL : une notification « capsule prête » ouvre
+  // directement /memories?tab=capsules au lieu d'atterrir sur le vlog.
+  const [params, setParams] = useSearchParams()
+  const tab: Tab = params.get('tab') === 'capsules' ? 'capsules' : 'vlog'
+  const setTab = (t: Tab) => setParams(t === 'vlog' ? {} : { tab: t }, { replace: true })
   const [capsules, setCapsules] = useState<Capsule[]>([])
   const [showCapsuleForm, setShowCapsuleForm] = useState(false)
   const [showVlogComposer, setShowVlogComposer] = useState(false)
@@ -106,7 +111,7 @@ export default function Memories() {
     )
 
   return (
-    <div className="px-5 md:px-8 py-6 max-w-3xl lg:max-w-[1080px] mx-auto space-y-6 reveal">
+    <div className="px-5 md:px-8 py-6 max-md:py-7 max-w-3xl lg:max-w-[1080px] mx-auto space-y-6 max-md:space-y-7 reveal">
       <PageHeader
         eyebrow="Votre histoire"
         title="Souvenirs"
@@ -142,7 +147,7 @@ export default function Memories() {
               text="Écrivez un mot qui ne s'ouvrira qu'à une date choisie — même le serveur le garde scellé jusque-là."
             />
           ) : (
-            <ul className="space-y-3">
+            <ul className="space-y-3 max-md:space-y-4">
               {capsules.map((capsule) => {
                 const revealable = canReveal(capsule)
                 const isMine = capsule.sender_id === profile?.id
@@ -209,7 +214,7 @@ export default function Memories() {
 
           {showCapsuleForm && (
             <Modal title="Nouvelle capsule temporelle" description={`Écris un message pour ${partnerName} — il/elle pourra le lire uniquement à la date choisie.`} onClose={() => setShowCapsuleForm(false)}>
-              <form onSubmit={addCapsule} className="space-y-4">
+              <form onSubmit={addCapsule} className="space-y-4 max-md:space-y-5">
                 <div>
                   <label htmlFor="cap-content" className={LABEL}>Ton message</label>
                   <textarea id="cap-content" value={capContent} onChange={(e) => setCapContent(e.target.value)} rows={5} className={`${INPUT} resize-none`} maxLength={5000} required placeholder="Ce que tu veux lui dire, à lire plus tard…" />

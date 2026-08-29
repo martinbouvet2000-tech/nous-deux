@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Crosshair, Heart, MapPin, Navigation, User, Clock } from 'lucide-react'
@@ -20,7 +20,28 @@ const TILE_URL = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
 const TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
 const PARIS: L.LatLngTuple = [48.8566, 2.3522]
 const GOLD = '#D4A574'
+const CREAM = '#F0EAE0'
 const TICK_MS = 30_000
+
+/* ── Molette ──
+ * Un cran de molette faisait sauter un niveau de zoom entier : sur un
+ * ordinateur, la carte passait du quartier au continent en trois crans.
+ * `zoomSnap` autorise désormais des quarts de niveau, et il faut bien plus de
+ * pixels de défilement pour franchir un niveau complet. Le pincement à deux
+ * doigts n'emprunte pas ce chemin (handler `touchZoom`) : il reste tel quel,
+ * juste un peu plus fluide puisqu'il n'est plus obligé de s'arrêter sur un
+ * niveau entier.
+ */
+const ZOOM_SNAP = 0.25
+const ZOOM_DELTA = 0.5
+const WHEEL_PX_PER_ZOOM_LEVEL = 300
+const WHEEL_DEBOUNCE_MS = 60
+/** Durée d'affichage du rappel « clique d'abord sur la carte ». */
+const WHEEL_HINT_MS = 2400
+
+/** Zoom minimal quand on centre sur quelqu'un, et plafond de la vue initiale. */
+const FOCUS_ZOOM = 15
+const FIT_MAX_ZOOM = 16
 
 /** Styles Leaflet restylés au thème sombre + marqueurs personnalisés */
 const MAP_CSS = `
@@ -59,9 +80,12 @@ const MAP_CSS = `
   70% { transform: scale(1.9); opacity: 0; }
   100% { transform: scale(1.9); opacity: 0; }
 }
+.awy-wheel-hint { animation: awy-hint-in 200ms ease-out both; }
+@keyframes awy-hint-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   .awy-pin--partner::before { animation: none; transform: scale(1.1); opacity: .35; }
   .awy-marker-move { transition: none; }
+  .awy-wheel-hint { animation: none; }
 }
 `
 
@@ -106,6 +130,43 @@ function isToday(iso: string, dayStart: number): boolean {
   return new Date(iso).getTime() >= dayStart
 }
 
+/**
+ * Cercle de précision : le halo translucide autour d'un marqueur a exactement
+ * le rayon annoncé par le GPS (colonne `locations.accuracy`). C'est la façon
+ * honnête d'afficher une position — « quelque part dans ce cercle » plutôt
+ * qu'une punaise au mètre près qui laisserait croire à une exactitude qu'on n'a
+ * pas. Sans précision enregistrée, pas de cercle : on n'invente pas de rayon.
+ */
+function syncAccuracyCircle(
+  map: L.Map,
+  ref: RefObject<L.Circle | null>,
+  point: LocationPoint | null,
+  color: string,
+): void {
+  const radius = point?.accuracy
+  if (!point || radius == null || !Number.isFinite(radius) || radius <= 0) {
+    ref.current?.remove()
+    ref.current = null
+    return
+  }
+  const ll: L.LatLngTuple = [point.lat, point.lng]
+  if (!ref.current) {
+    ref.current = L.circle(ll, {
+      radius,
+      // Décoratif : il ne doit jamais voler un clic au marqueur ni à la carte.
+      interactive: false,
+      color,
+      weight: 1,
+      opacity: 0.3,
+      fillColor: color,
+      fillOpacity: 0.07,
+    }).addTo(map)
+    return
+  }
+  ref.current.setLatLng(ll)
+  ref.current.setRadius(radius)
+}
+
 /* ─────────────────────────── Page ─────────────────────────── */
 
 export default function MapPage() {
@@ -127,8 +188,14 @@ export default function MapPage() {
   const meMarkerRef = useRef<L.Marker | null>(null)
   const polylineRef = useRef<L.Polyline | null>(null)
   const startDotRef = useRef<L.CircleMarker | null>(null)
+  const partnerHaloRef = useRef<L.Circle | null>(null)
+  const meHaloRef = useRef<L.Circle | null>(null)
   const viewSetRef = useRef(false)
   const moveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Rappel discret quand on tourne la molette sans avoir pris la carte en main.
+  const [wheelHint, setWheelHint] = useState(false)
+  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   /* ── Données ── */
   const fetchAll = useCallback(async () => {
@@ -193,10 +260,41 @@ export default function MapPage() {
       zoomControl: true,
       center: PARIS,
       zoom: 5,
+      zoomSnap: ZOOM_SNAP,
+      zoomDelta: ZOOM_DELTA,
+      wheelPxPerZoomLevel: WHEEL_PX_PER_ZOOM_LEVEL,
+      wheelDebounceTime: WHEEL_DEBOUNCE_MS,
+      // La molette n'est armée qu'une fois la carte prise en main (voir plus bas).
+      scrollWheelZoom: false,
     })
-    L.tileLayer(TILE_URL, { maxZoom: 19, subdomains: 'abcd' }).addTo(map)
+    // CARTO ne sert plus de tuile au-delà de 19 : on autorise quand même un
+    // cran de plus en étirant la dernière, de quoi lire un cercle de précision
+    // de quelques mètres sans réclamer une tuile qui n'existe pas.
+    L.tileLayer(TILE_URL, { maxZoom: 20, maxNativeZoom: 19, subdomains: 'abcd' }).addTo(map)
     L.control.attribution({ position: 'bottomright', prefix: false }).addAttribution(TILE_ATTRIBUTION).addTo(map)
     mapRef.current = map
+
+    // La carte occupe les deux tiers de la hauteur d'écran. Si la molette
+    // zoomait en permanence, faire défiler la page en passant au-dessus
+    // deviendrait un piège : la page se fige et la carte part en vrille. On
+    // n'arme donc le zoom molette qu'après un clic, un toucher ou une
+    // tabulation sur la carte, et on le désarme dès qu'on la quitte. Le
+    // pincement à deux doigts, lui, n'est jamais désarmé.
+    const armWheel = () => {
+      map.scrollWheelZoom.enable()
+      setWheelHint(false)
+    }
+    const disarmWheel = () => map.scrollWheelZoom.disable()
+    const onWheel = () => {
+      if (map.scrollWheelZoom.enabled()) return
+      setWheelHint(true)
+      if (hintTimerRef.current) clearTimeout(hintTimerRef.current)
+      hintTimerRef.current = setTimeout(() => setWheelHint(false), WHEEL_HINT_MS)
+    }
+    map.on('click focus', armWheel)
+    map.on('blur', disarmWheel)
+    el.addEventListener('pointerleave', disarmWheel)
+    el.addEventListener('wheel', onWheel, { passive: true })
 
     const t = setTimeout(() => map.invalidateSize(), 50)
     const onResize = () => map.invalidateSize()
@@ -206,7 +304,10 @@ export default function MapPage() {
 
     return () => {
       clearTimeout(t)
+      if (hintTimerRef.current) clearTimeout(hintTimerRef.current)
       window.removeEventListener('resize', onResize)
+      el.removeEventListener('pointerleave', disarmWheel)
+      el.removeEventListener('wheel', onWheel)
       ro?.disconnect()
       map.remove()
       mapRef.current = null
@@ -214,6 +315,8 @@ export default function MapPage() {
       meMarkerRef.current = null
       polylineRef.current = null
       startDotRef.current = null
+      partnerHaloRef.current = null
+      meHaloRef.current = null
       viewSetRef.current = false
     }
   }, [hasPartner])
@@ -253,6 +356,10 @@ export default function MapPage() {
       meMarkerRef.current = null
     }
 
+    // Halos de précision, sous les deux marqueurs
+    syncAccuracyCircle(map, partnerHaloRef, lastPartner, GOLD)
+    syncAccuracyCircle(map, meHaloRef, lastMe, CREAM)
+
     // Tracé du jour du partenaire
     const path: L.LatLngTuple[] = partnerToday.map((p) => [p.lat, p.lng])
     if (path.length >= 1) {
@@ -275,11 +382,14 @@ export default function MapPage() {
     if (!viewSetRef.current && loaded) {
       viewSetRef.current = true
       if (lastPartner && lastMe) {
-        map.fitBounds(L.latLngBounds([lastPartner.lat, lastPartner.lng], [lastMe.lat, lastMe.lng]).pad(0.25), { maxZoom: 14 })
+        // Deux positions dans la même ville : l'ancien plafond de 14 bridait la
+        // vue alors qu'on avait toute la place de s'approcher. 16 laisse voir la
+        // rue, et `zoomSnap` au quart de niveau ajuste le cadrage au plus juste.
+        map.fitBounds(L.latLngBounds([lastPartner.lat, lastPartner.lng], [lastMe.lat, lastMe.lng]).pad(0.25), { maxZoom: FIT_MAX_ZOOM })
       } else if (lastPartner) {
-        map.setView([lastPartner.lat, lastPartner.lng], 13)
+        map.setView([lastPartner.lat, lastPartner.lng], FOCUS_ZOOM)
       } else if (lastMe) {
-        map.setView([lastMe.lat, lastMe.lng], 13)
+        map.setView([lastMe.lat, lastMe.lng], FOCUS_ZOOM)
       } else if (partnerProfile?.location_lat != null && partnerProfile?.location_lng != null) {
         map.setView([partnerProfile.location_lat, partnerProfile.location_lng], 11)
       } else {
@@ -291,13 +401,18 @@ export default function MapPage() {
   const centerOnPartner = () => {
     const map = mapRef.current
     if (!map || !lastPartner) return
-    map.flyTo([lastPartner.lat, lastPartner.lng], Math.max(map.getZoom(), 14), { duration: 0.8 })
+    // Vol animé seulement si personne n'a demandé moins de mouvement.
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      map.setView([lastPartner.lat, lastPartner.lng], Math.max(map.getZoom(), FOCUS_ZOOM), { animate: false })
+      return
+    }
+    map.flyTo([lastPartner.lat, lastPartner.lng], Math.max(map.getZoom(), FOCUS_ZOOM), { duration: 0.8 })
   }
 
   /* ── Rendu ── */
   if (!partnerProfile) {
     return (
-      <div className="px-5 md:px-8 py-6 max-w-3xl lg:max-w-[1080px] mx-auto space-y-5 reveal">
+      <div className="px-5 md:px-8 py-6 max-md:py-7 max-w-3xl lg:max-w-[1080px] mx-auto space-y-5 max-md:space-y-6 reveal">
         <PageHeader eyebrow="Où es-tu ?" title="Carte" accent="à deux" subtitle="Vos deux positions, sur une même carte." />
         <EmptyState icon={MapPin} title="Personne à retrouver pour l’instant" text="Lie ton/ta partenaire dans les Réglages pour voir vos positions sur la carte." />
       </div>
@@ -305,7 +420,7 @@ export default function MapPage() {
   }
 
   return (
-    <div className="px-5 md:px-8 py-6 max-w-3xl lg:max-w-[1080px] mx-auto space-y-5 reveal">
+    <div className="px-5 md:px-8 py-6 max-md:py-7 max-w-3xl lg:max-w-[1080px] mx-auto space-y-5 max-md:space-y-6 reveal">
       <style>{MAP_CSS}</style>
       <PageHeader
         eyebrow="Où es-tu ?"
@@ -314,7 +429,7 @@ export default function MapPage() {
         subtitle={`La position de ${partnerName} et la tienne, en temps réel, sur une même carte.`}
       />
 
-      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-6 lg:items-start space-y-5 lg:space-y-0">
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-6 lg:items-start space-y-5 max-md:space-y-6 lg:space-y-0">
         {/* ─── Carte ─── */}
         <div className="space-y-3">
           <div className="lux-card relative rounded-[20px] overflow-hidden awy-map">
@@ -328,6 +443,15 @@ export default function MapPage() {
             {!partnerShares && (
               <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[500] max-w-[calc(100%-1.5rem)] px-4 py-2 rounded-full bg-[#110F0E]/85 backdrop-blur-md shadow-[inset_0_0_0_1px_rgba(240,234,224,0.08)] text-[13px] text-[#9B9287] text-center" role="status">
                 {partnerName} ne partage pas sa position pour l’instant
+              </div>
+            )}
+
+            {wheelHint && (
+              <div
+                className="awy-wheel-hint absolute bottom-4 left-1/2 -translate-x-1/2 z-[500] pointer-events-none max-w-[calc(100%-6rem)] px-4 py-2 rounded-full bg-[#110F0E]/85 backdrop-blur-md shadow-[inset_0_0_0_1px_rgba(240,234,224,0.08)] text-[13px] text-[#9B9287] text-center"
+                role="status"
+              >
+                Clique sur la carte pour zoomer à la molette
               </div>
             )}
 
@@ -348,7 +472,7 @@ export default function MapPage() {
         </div>
 
         {/* ─── Colonne latérale ─── */}
-        <aside className="space-y-5" aria-label="Détails des positions">
+        <aside className="space-y-5 max-md:space-y-6" aria-label="Détails des positions">
           {/* Partenaire */}
           <section className={CARD} onMouseMove={shine} onMouseLeave={unshine} aria-labelledby="map-partner-title">
             <div className={CARD_EDGE} aria-hidden="true" />
@@ -400,7 +524,13 @@ export default function MapPage() {
             <div className="mt-4">
               <ShareLocationToggle compact />
             </div>
-            <dl className="mt-4 grid grid-cols-2 gap-3">
+            <dl className="mt-4 grid grid-cols-3 gap-3">
+              <div>
+                <dt className={EYEBROW}>Précision</dt>
+                <dd className="num font-display text-[20px] text-[#F0EAE0] mt-1">
+                  {lastMe?.accuracy != null ? `±${formatDistance(lastMe.accuracy)}` : '—'}
+                </dd>
+              </div>
               <div>
                 <dt className={EYEBROW}>Aujourd’hui</dt>
                 <dd className="num font-display text-[20px] text-[#F0EAE0] mt-1">{myToday.length >= 2 ? formatDistance(myDistance) : '—'}</dd>

@@ -74,7 +74,7 @@ export default function Modal({ title, description, onClose, children, alert = f
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
-        className="lux-card relative overflow-hidden rounded-[28px] sm:rounded-[24px] p-5 md:p-6 w-full max-w-md space-y-4 max-h-[88dvh] overflow-y-auto outline-none shadow-[0_-24px_60px_rgba(0,0,0,0.6)]"
+        className="lux-card relative overflow-hidden rounded-[28px] sm:rounded-[24px] p-5 max-md:p-5.5 md:p-6 w-full max-w-md space-y-4 max-md:space-y-5 max-h-[88dvh] overflow-y-auto outline-none shadow-[0_-24px_60px_rgba(0,0,0,0.6)]"
         style={{ animation: 'sheetIn 420ms cubic-bezier(0.2,0,0,1)' }}
       >
         <div className={CARD_EDGE} aria-hidden="true" />

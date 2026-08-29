@@ -63,6 +63,7 @@ export default function ShareLocationToggle({ compact = false }: { compact?: boo
       </button>
       <p className="text-xs text-[#9B9287] mt-1.5 leading-relaxed">
         Seul·e {partnerName} la voit. Parcours conservé 48 h, puis effacé.
+        {on ? ' Ta position n’est relevée que lorsque l’app est ouverte.' : ''}
       </p>
     </div>
   )

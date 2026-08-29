@@ -8,11 +8,15 @@ export const BTN_GHOST =
 export const BTN_DANGER =
   'inline-flex items-center justify-center gap-2 min-h-11 px-5 py-2 rounded-full text-sm font-medium text-[#FFF2F4] bg-[#B4475E] shadow-[0_10px_30px_-14px_rgba(180,71,94,0.8)] hover:bg-[#C2536A] hover:-translate-y-px active:scale-[0.98] transition-all duration-200 ease-out disabled:opacity-60 disabled:cursor-not-allowed'
 
+/** Champ de saisie. Pas de classe de taille de texte ici : `src/index.css` fixe
+ *  16 px au tactile (sinon Safari iOS zoome au focus et ne dézoome jamais) et
+ *  14 px dès qu'un pointeur fin existe. Ne jamais ajouter `text-sm`/`text-xs` ici
+ *  ni sur un champ : l'utilitaire l'emporterait sur cette garantie. */
 export const INPUT =
-  'w-full min-h-11 bg-white/[0.04] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07)] rounded-xl px-4 py-3 text-sm text-[#F0EAE0] placeholder-[#9B9287] outline-none transition-all duration-200 ease-out focus:bg-white/[0.06] focus:shadow-[inset_0_0_0_1px_rgba(232,201,160,0.7)]'
+  'w-full min-h-11 bg-white/[0.04] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07)] rounded-xl px-4 py-3 text-[#F0EAE0] placeholder-[#9B9287] outline-none transition-all duration-200 ease-out focus:bg-white/[0.06] focus:shadow-[inset_0_0_0_1px_rgba(232,201,160,0.7)]'
 
 export const CARD =
-  'lux-card relative overflow-hidden rounded-[20px] p-5 md:p-6 transition-all duration-500 ease-out'
+  'lux-card relative overflow-hidden rounded-[20px] p-5 max-md:p-5.5 md:p-6 transition-all duration-500 ease-out'
 
 export const CARD_EDGE =
   'absolute top-0 left-[15%] right-[15%] h-px bg-gradient-to-r from-transparent via-[rgba(212,165,116,0.22)] to-transparent'
@@ -20,7 +24,7 @@ export const CARD_EDGE =
 export const ICON_BTN =
   'inline-flex items-center justify-center w-11 h-11 rounded-full text-[#9B9287] hover:text-[#F0EAE0] hover:bg-white/[0.06] transition-all duration-200 ease-out'
 
-export const LABEL = 'block text-[11px] font-medium tracking-[0.12em] uppercase text-[#9B9287] mb-2'
+export const LABEL = 'block text-[11px] font-medium tracking-[0.12em] uppercase text-[#9B9287] mb-2 max-md:mb-2.5'
 
 /** Sélecteur natif : chevron or dessiné en CSS, pas de flèche système */
 export const SELECT =

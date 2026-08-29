@@ -11,6 +11,7 @@ import { SELECT, BTN_PRIMARY, BTN_GHOST, INPUT, LABEL, CARD, CARD_EDGE, ICON_BTN
 import PageHeader from '@/components/ui/PageHeader'
 import ShareLocationToggle from '@/components/map/ShareLocationToggle'
 import InstallAppButton from '@/components/settings/InstallAppButton'
+import NotificationsToggle from '@/components/settings/NotificationsToggle'
 
 export default function SettingsPage() {
   const { profile, partnerProfile, user, signOut, fetchProfile, linkPartner, unlinkPartner, deleteAccount, requestPasswordReset } = useAuthStore()
@@ -207,14 +208,14 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="px-5 md:px-8 py-6 max-w-3xl lg:max-w-[1000px] mx-auto reveal">
+    <div className="px-5 md:px-8 py-6 max-md:py-7 max-w-3xl lg:max-w-[1000px] mx-auto reveal">
       <PageHeader eyebrow="Ton espace" title="Réglages" subtitle="Ton profil, votre lien, ta sécurité et tes données." />
-      <div className="grid gap-5 lg:grid-cols-2 lg:items-start mt-4">
-      <div className="space-y-5">
+      <div className="grid gap-5 max-md:gap-6 lg:grid-cols-2 lg:items-start mt-4">
+      <div className="space-y-5 max-md:space-y-6">
 
       {/* ─── Partenaire : invitation ─── */}
       {!partnerProfile && (
-        <section className={`${CARD} space-y-4`} aria-labelledby="invite-title">
+        <section className={`${CARD} space-y-4 max-md:space-y-5`} aria-labelledby="invite-title">
           <div className={CARD_EDGE} aria-hidden="true" />
           <div className="absolute inset-0 bg-gradient-to-br from-[rgba(212,165,116,0.04)] to-[rgba(194,120,142,0.03)] pointer-events-none" aria-hidden="true" />
           <h2 id="invite-title" className={`${CARD_TITLE} relative`}>
@@ -289,7 +290,7 @@ export default function SettingsPage() {
       )}
 
       {/* ─── Profil ─── */}
-      <form onSubmit={saveProfile} className={`${CARD} space-y-4`} aria-labelledby="profile-title">
+      <form onSubmit={saveProfile} className={`${CARD} space-y-4 max-md:space-y-5`} aria-labelledby="profile-title">
         <div className={CARD_EDGE} aria-hidden="true" />
         <h2 id="profile-title" className={CARD_TITLE}>
           <User size={16} className="text-[#D4A574]" aria-hidden="true" /> Mon profil
@@ -336,7 +337,7 @@ export default function SettingsPage() {
           <p id="pf-since-echo" className="text-xs text-[#D4A574]/90 mt-1.5 min-h-4" aria-live="polite">
             {relationshipEcho && `Depuis le ${relationshipEcho}.`}
           </p>
-          <p className="text-xs text-[#9B9287] mt-1">Sert au compteur «&#8239;Jour N ensemble&#8239;» sur l’accueil.</p>
+          <p className="text-xs leading-relaxed text-[#9B9287] mt-1">Sert au compteur «&#8239;Jour N ensemble&#8239;» sur l’accueil.</p>
         </div>
 
         <button type="submit" disabled={saving || !dirty} className={`${BTN_PRIMARY} w-full py-3`}>
@@ -349,15 +350,16 @@ export default function SettingsPage() {
       </form>
       </div>
 
-      <div className="space-y-5">
+      <div className="space-y-5 max-md:space-y-6">
       {/* ─── Compte & sécurité ─── */}
       <section className={`${CARD} space-y-3`} aria-labelledby="account-title">
         <div className={CARD_EDGE} aria-hidden="true" />
         <h2 id="account-title" className={CARD_TITLE}>
           <ShieldCheck size={16} className="text-[#D4A574]" aria-hidden="true" /> Compte & données
         </h2>
-        <p className="text-xs text-[#9B9287]">Connecté·e en tant que <span className="text-[#F0EAE0]/80">{user?.email}</span></p>
+        <p className="text-xs leading-relaxed text-[#9B9287]">Connecté·e en tant que <span className="text-[#F0EAE0]/80">{user?.email}</span></p>
         <InstallAppButton />
+        <NotificationsToggle />
         <ul className="divide-y divide-white/[0.06] -mx-1">
           {[
             { icon: KeyRound, label: 'Changer mon mot de passe', onClick: handleChangePassword },
