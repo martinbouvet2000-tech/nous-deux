@@ -1,0 +1,116 @@
+name: Reparer l arborescence
+
+# Reparation ponctuelle et auto-effacante.
+#
+# Un depot par glisser-deposer a aplati l arborescence : 41 fichiers corrects se
+# sont retrouves a la racine au lieu de leur dossier. Leur contenu a ete verifie
+# un a un par empreinte SHA-256 avant d ecrire ce script. Il les remet a leur
+# place, retire deux lignes qui referencent un composant pas encore livre (sinon
+# le build echouerait), puis se supprime lui-meme.
+#
+# Il se declenche des son ajout et ne s execute qu une fois : s il ne trouve plus
+# rien a deplacer, il s arrete sans rien commiter.
+
+on:
+  push:
+    branches: [master]
+    paths: ['.github/workflows/reparer-arborescence.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  reparer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Remettre chaque fichier a sa place
+        run: |
+          set -euo pipefail
+          deplacer() {
+            src="$1"; dst="$2"
+            if [ -f "$src" ]; then
+              mkdir -p "$(dirname "$dst")"
+              git mv -f "$src" "$dst"
+              echo "  deplace : $src -> $dst"
+            else
+              echo "  deja en place : $src"
+            fi
+          }
+          deplacer push-sw.js public/push-sw.js
+          deplacer App.tsx src/App.tsx
+          deplacer champsMobile.test.ts src/__tests__/champsMobile.test.ts
+          deplacer GratitudeWidget.tsx src/components/Dashboard/GratitudeWidget.tsx
+          deplacer LoveNoteWidget.tsx src/components/Dashboard/LoveNoteWidget.tsx
+          deplacer ScheduleImport.test.tsx src/components/__tests__/ScheduleImport.test.tsx
+          deplacer ShareLocationToggle.tsx src/components/map/ShareLocationToggle.tsx
+          deplacer ScheduleImport.tsx src/components/schedule/ScheduleImport.tsx
+          deplacer ScheduleView.tsx src/components/schedule/ScheduleView.tsx
+          deplacer NotificationsToggle.tsx src/components/settings/NotificationsToggle.tsx
+          deplacer Modal.tsx src/components/ui/Modal.tsx
+          deplacer VlogComposer.tsx src/components/vlog/VlogComposer.tsx
+          deplacer useLocationSharing.test.tsx src/hooks/__tests__/useLocationSharing.test.tsx
+          deplacer useLocationSharing.ts src/hooks/useLocationSharing.ts
+          deplacer index.css src/index.css
+          deplacer geo.test.ts src/lib/__tests__/geo.test.ts
+          deplacer push.test.ts src/lib/__tests__/push.test.ts
+          deplacer pushMessages.test.ts src/lib/__tests__/pushMessages.test.ts
+          deplacer scheduleImportFiles.test.ts src/lib/__tests__/scheduleImportFiles.test.ts
+          deplacer scheduleImportParse.test.ts src/lib/__tests__/scheduleImportParse.test.ts
+          deplacer geo.ts src/lib/geo.ts
+          deplacer push.ts src/lib/push.ts
+          deplacer pushMessages.ts src/lib/pushMessages.ts
+          deplacer schedule.ts src/lib/schedule.ts
+          deplacer csv.ts src/lib/scheduleImport/csv.ts
+          deplacer index.ts src/lib/scheduleImport/index.ts
+          deplacer parse.ts src/lib/scheduleImport/parse.ts
+          deplacer pdf.ts src/lib/scheduleImport/pdf.ts
+          deplacer sheet.ts src/lib/scheduleImport/sheet.ts
+          deplacer ui.ts src/lib/ui.ts
+          deplacer Activities.tsx src/pages/Activities.tsx
+          deplacer CalendarPage.tsx src/pages/CalendarPage.tsx
+          deplacer Dashboard.tsx src/pages/Dashboard.tsx
+          deplacer Login.tsx src/pages/Login.tsx
+          deplacer MapPage.tsx src/pages/MapPage.tsx
+          deplacer Memories.tsx src/pages/Memories.tsx
+          deplacer ResetPassword.tsx src/pages/ResetPassword.tsx
+          deplacer SettingsPage.tsx src/pages/SettingsPage.tsx
+          deplacer Todos.tsx src/pages/Todos.tsx
+          deplacer 'index (1).ts' supabase/functions/send-push/index.ts
+          deplacer 20260828190000_notifications_push.sql supabase/migrations/20260828190000_notifications_push.sql
+
+      - name: Retirer la reference au composant non livre
+        run: |
+          set -euo pipefail
+          f=src/pages/SettingsPage.tsx
+          grep -v -F "import BackgroundLocationTokens from '@/components/settings/BackgroundLocationTokens'" "$f" > "$f.a"
+          perl -0777 -pe 's/\n\n[ ]*\{\/\* [^\n]*Position en arri[^\n]*\*\/\}\n[ ]*<BackgroundLocationTokens \/>//' "$f.a" > "$f.b"
+          mv "$f.b" "$f"
+          rm -f "$f.a"
+          obtenu=$(sha256sum "$f" | cut -d' ' -f1)
+          attendu=91be149cabded17b9fccc092cfe8269ce7b700cc9480d685c249bdeb7e3b3f70
+          echo "empreinte obtenue  : $obtenu"
+          echo "empreinte attendue : $attendu"
+          if [ "$obtenu" != "$attendu" ]; then
+            echo "::error::SettingsPage.tsx ne correspond pas a la version attendue. Rien n a ete commite."
+            exit 1
+          fi
+          git add "$f"
+
+      - name: Retirer ce workflow
+        run: git rm -f .github/workflows/reparer-arborescence.yml
+
+      - name: Commiter et pousser
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Rien a reparer, le depot est deja propre."
+            exit 0
+          fi
+          git commit -m "fix: remettre les 41 fichiers a leur place apres un depot aplati"
+          git push
