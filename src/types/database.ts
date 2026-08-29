@@ -239,3 +239,20 @@ export interface ScheduleSlot {
   color: string
   created_at: string
 }
+
+/**
+ * Un jeton de position en arrière-plan : une ligne par raccourci de téléphone.
+ * Le jeton en clair n’est jamais stocké — seule son empreinte SHA-256, côté
+ * base — et il n’est donc jamais renvoyé ici.
+ */
+export interface LocationToken {
+  id: string
+  user_id: string
+  /** « iPhone de Martin », « Tasker »… facultatif. */
+  label: string | null
+  created_at: string
+  /** Dernier appel accepté par la fonction Edge, ou null s’il n’a jamais servi. */
+  last_used_at: string | null
+  /** Renseigné dès la révocation : le raccourci n’est plus accepté. */
+  revoked_at: string | null
+}
