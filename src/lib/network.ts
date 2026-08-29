@@ -14,7 +14,8 @@
  *     l'écran montre des données datées plutôt que rien.
  *
  * Les écritures ne sont jamais rejouées depuis le cache : hors ligne elles
- * échouent franchement, et `lib/db.run` affiche « Pas de connexion ».
+ * échouent franchement, en silence — c'est la bannière hors-ligne qui informe,
+ * pas une avalanche de messages (voir le garde-fou dans `lib/db.run`).
  */
 
 import { readCache, writeCache } from '@/lib/offlineCache'
