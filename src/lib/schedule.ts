@@ -58,6 +58,51 @@ export function localClockIn(tz: string, now: Date = new Date()): { weekday: num
   }
 }
 
+/**
+ * Créneaux rangés par jour (1 = lundi … 7 = dimanche), déjà triés par heure de
+ * début. Un emploi du temps importé peut compter plusieurs centaines de lignes :
+ * refiltrer la liste entière une fois par jour affiché, à chaque rendu — et il y
+ * en a un par minute, l’horloge avance — c’est sept parcours au lieu d’un.
+ */
+export function indexByWeekday(slots: ScheduleSlot[]): Map<number, ScheduleSlot[]> {
+  const byDay = new Map<number, ScheduleSlot[]>()
+  for (const d of WEEKDAYS) byDay.set(d, [])
+  for (const s of slots) byDay.get(s.weekday)?.push(s)
+  for (const list of byDay.values()) list.sort((a, b) => timeToMinutes(a.start_time) - timeToMinutes(b.start_time))
+  return byDay
+}
+
+/**
+ * Identifiants réellement supprimables : ceux qui sont cochés ET qui
+ * m’appartiennent. La règle d’accès « schedule delete own » refuserait de toute
+ * façon un créneau du partenaire (`using (user_id = auth.uid())`) : on ne le lui
+ * demande jamais. L’ordre suit celui de la liste, pour qu’un échec en cours de
+ * route puisse dire exactement ce qui est parti.
+ */
+export function deletableIds(
+  slots: ScheduleSlot[],
+  selected: ReadonlySet<string>,
+  userId: string | null | undefined,
+): string[] {
+  if (!userId) return []
+  return slots.filter((s) => s.user_id === userId && selected.has(s.id)).map((s) => s.id)
+}
+
+/** « 1 créneau », « 3 créneaux » — l’accord au singulier compte autant que le reste */
+export function slotCount(n: number): string {
+  return `${n} créneau${n > 1 ? 'x' : ''}`
+}
+
+/**
+ * Phrase d’un échec partiel de suppression. Dire le chiffre exact plutôt que
+ * « une erreur est survenue » : c’est la seule façon de savoir ce qu’il reste à
+ * faire. Même motif que `partialFailureMessage` du côté import.
+ */
+export function partialDeleteMessage(deleted: number, total: number): string {
+  const many = deleted > 1
+  return `${deleted} créneau${many ? 'x' : ''} sur ${total} ${many ? 'ont' : 'a'} été supprimé${many ? 's' : ''}.`
+}
+
 export interface CurrentSlotResult {
   /** Créneau en cours (ou null) */
   current: ScheduleSlot | null

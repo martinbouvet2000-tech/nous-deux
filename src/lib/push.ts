@@ -264,15 +264,40 @@ export async function desactiverNotifications(): Promise<ResultatPush> {
     } catch (err) {
       console.error('[push] désabonnement', err)
     }
+    // La ligne n'existe plus : un futur réabonnement doit pouvoir la réécrire.
+    oublierRafraichissements()
   }
 
   return { ok: true, etat: 'a-activer', message: 'Les notifications sont coupées sur cet appareil.' }
 }
 
 /**
+ * Abonnements déjà remis à jour pendant cette session d'onglet.
+ *
+ * Le rafraîchissement est demandé de deux endroits — au démarrage de l'app, et
+ * par le réglage « Notifications » chaque fois qu'il se monte. Sans cette
+ * mémoire, ouvrir les Réglages réécrivait la même ligne à chaque passage : des
+ * écritures pour rien, et une trace inutile dans la base. Une par session
+ * suffit : le navigateur ne fait pas tourner son abonnement en cours de route,
+ * et un vrai changement passe de toute façon par `activerNotifications`.
+ *
+ * La clé porte l'endpoint : deux comptes sur le même appareil, ou un abonnement
+ * effectivement renouvelé, restent bien deux écritures distinctes.
+ */
+const abonnementsRafraichis = new Set<string>()
+
+/** Repart de zéro — pour les tests, et à la déconnexion d'un appareil. */
+export function oublierRafraichissements(): void {
+  abonnementsRafraichis.clear()
+}
+
+/**
  * Remet la ligne à jour au démarrage : un navigateur peut faire tourner son
  * abonnement (`pushsubscriptionchange`) sans que l'app le sache. Silencieux —
  * jamais de demande de permission ici, jamais de message d'erreur à l'écran.
+ *
+ * Une seule écriture par abonnement et par session, quel que soit le nombre
+ * d'appels : voir `abonnementsRafraichis`.
  */
 export async function rafraichirAbonnement(userId: string): Promise<void> {
   try {
@@ -280,7 +305,15 @@ export async function rafraichirAbonnement(userId: string): Promise<void> {
     if (evaluerEtatPush(ctx) !== 'active') return
     const reg = await serviceWorkerPret()
     const sub = await reg?.pushManager.getSubscription()
-    if (sub) await enregistrerAbonnement(userId, sub)
+    if (!sub) return
+    const cle = `${userId}|${sub.endpoint}`
+    if (abonnementsRafraichis.has(cle)) return
+    // Marqué avant l'appel : deux rafraîchissements lancés en même temps (le
+    // démarrage et l'ouverture des Réglages) ne doivent pas écrire deux fois.
+    abonnementsRafraichis.add(cle)
+    const range = await enregistrerAbonnement(userId, sub)
+    // Échec réseau : on autorise un nouvel essai plus tard dans la session.
+    if (!range) abonnementsRafraichis.delete(cle)
   } catch {
     // Rafraîchissement de confort : son échec ne concerne pas l'utilisateur.
   }

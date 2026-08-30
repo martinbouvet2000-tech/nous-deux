@@ -3,6 +3,7 @@ import { parseCsv, detectDelimiter } from '@/lib/scheduleImport/csv'
 import {
   parseTime, parseTimeRange, parseWeekdayCell, findWeekday, weekdayHeader, weekdayFromDate,
   parseMatrix, slotsFromLines, toDrafts, reviewSlots, toInsertRows, trimMatrix, normalize,
+  unselectRevealedDuplicates, partialFailureMessage,
 } from '@/lib/scheduleImport/parse'
 import { colorForTitle } from '@/lib/schedule'
 
@@ -194,6 +195,16 @@ describe('disposition « grille »', () => {
     expect(slots).toHaveLength(4)
     expect(slots.find((s) => s.weekday === 2)).toMatchObject({ start: '09:00', end: '10:00', title: 'Physique' })
   })
+
+  it('dit que la grille était transposée, pour ne pas annoncer l’inverse de ce qui a été lu', () => {
+    const droite = fromCsv(grille)
+    expect(droite.layout).toBe('grid')
+    expect(droite.transposed).toBeUndefined()
+
+    const couchee = fromCsv(['Jour;8h00-9h00;9h00-10h00', 'Lundi;Maths;Anglais', 'Mardi;;Physique', 'Mercredi;Sport;'].join('\n'))
+    expect(couchee.layout).toBe('grid')
+    expect(couchee.transposed).toBe(true)
+  })
 })
 
 describe('fichiers illisibles', () => {
@@ -304,5 +315,88 @@ describe('relecture : ce qui cloche est signalé', () => {
     const [row] = reviewSlots(toDrafts([{ weekday: 1, start: '08:00', end: '09:00', title: long }]))
     expect(row?.draft.title).toHaveLength(60)
     expect(row?.issues).toContain('title-truncated')
+  })
+})
+
+describe('relecture : un doublon arrive décoché', () => {
+  const draft = (over: Partial<ReturnType<typeof toDrafts>[number]>) => ({
+    key: 'k', weekday: 1, start: '08:00', end: '09:00', title: 'Maths',
+    location: null, occurrences: 1, uncertain: false, selected: true, ...over,
+  })
+  const enBase = [{ weekday: 1, start_time: '08:00:00', end_time: '09:00:00', title: 'Maths' }]
+
+  it('décoche d’office une ligne déjà présente dans l’emploi du temps', () => {
+    // Le cas du ré-import : sans ça, redéposer le même fichier proposait de
+    // tout ajouter une deuxième fois, toutes cases cochées.
+    const drafts = [draft({ key: 'a' }), draft({ key: 'b', title: 'Anglais', start: '10:00', end: '11:00' })]
+    const apres = unselectRevealedDuplicates(drafts, enBase, new Set())
+    expect(apres.find((d) => d.key === 'a')?.selected).toBe(false)
+    expect(apres.find((d) => d.key === 'b')?.selected).toBe(true)
+    // Le doublon reste signalé : on peut toujours le cocher exprès.
+    expect(reviewSlots(apres, enBase)[0]?.issues).toContain('duplicate')
+    expect(reviewSlots(apres, enBase)[0]?.blocking).toBe(false)
+  })
+
+  it('n’écrase jamais un choix explicite lors d’une relecture suivante', () => {
+    const traites = new Set<string>()
+    const [decoche] = unselectRevealedDuplicates([draft({ key: 'a' })], enBase, traites)
+    expect(decoche?.selected).toBe(false)
+
+    // La personne coche sciemment ce doublon, puis corrige un intitulé ailleurs :
+    // sa case ne doit pas se re-décocher toute seule.
+    const recoche = [{ ...(decoche as ReturnType<typeof draft>), selected: true }]
+    const apres = unselectRevealedDuplicates(recoche, enBase, traites)
+    expect(apres[0]?.selected).toBe(true)
+    expect(apres).toBe(recoche)
+  })
+
+  it('rend le tableau reçu quand il n’y a rien à décocher', () => {
+    const drafts = [draft({ key: 'a' })]
+    expect(unselectRevealedDuplicates(drafts, [], new Set())).toBe(drafts)
+  })
+})
+
+describe('chevauchements : indexés par jour', () => {
+  const draft = (over: Partial<ReturnType<typeof toDrafts>[number]>) => ({
+    key: 'k', weekday: 1, start: '08:00', end: '09:00', title: 'Maths',
+    location: null, occurrences: 1, uncertain: false, selected: true, ...over,
+  })
+
+  it('ne confond pas deux jours différents aux mêmes heures', () => {
+    const rows = reviewSlots(
+      [1, 2, 3, 4, 5, 6, 7].map((weekday) => draft({ key: `j${weekday}`, weekday })),
+    )
+    expect(rows.every((r) => !r.issues.includes('overlap'))).toBe(true)
+  })
+
+  it('signale les trois lignes d’un même empilement', () => {
+    const rows = reviewSlots([
+      draft({ key: 'a', start: '08:00', end: '12:00' }),
+      draft({ key: 'b', start: '09:00', end: '10:00', title: 'Anglais' }),
+      draft({ key: 'c', start: '11:00', end: '13:00', title: 'Sport' }),
+    ])
+    expect(rows.every((r) => r.issues.includes('overlap'))).toBe(true)
+  })
+
+  it('laisse tranquille une journée entièrement consécutive', () => {
+    const suite = Array.from({ length: 30 }, (_, i) =>
+      draft({ key: `s${i}`, start: `${String(7 + Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`, end: `${String(7 + Math.floor((i + 1) / 2)).padStart(2, '0')}:${(i + 1) % 2 ? '30' : '00'}`, title: `Cours ${i}` }),
+    )
+    expect(reviewSlots(suite).some((r) => r.issues.includes('overlap'))).toBe(false)
+  })
+})
+
+describe('phrase d’un enregistrement interrompu', () => {
+  it('accorde « créneaux » et « ajoutés » séparément', () => {
+    // « créneau**x** » prend un x, « ajouté**s** » prend un s : la confusion
+    // des deux donnait « ont été ajoutéx » à l’écran.
+    expect(partialFailureMessage(200, 250)).toBe('200 créneaux sur 250 ont été ajoutés avant l’échec.')
+    expect(partialFailureMessage(1, 250)).toBe('1 créneau sur 250 a été ajouté avant l’échec.')
+    expect(partialFailureMessage(0, 3)).toBe('0 créneau sur 3 a été ajouté avant l’échec.')
+    expect(partialFailureMessage(2, 2)).toBe('2 créneaux sur 2 ont été ajoutés avant l’échec.')
+  })
+
+  it('n’écrit jamais « ajoutéx »', () => {
+    for (const n of [0, 1, 2, 7, 200]) expect(partialFailureMessage(n, 250)).not.toContain('ajoutéx')
   })
 })

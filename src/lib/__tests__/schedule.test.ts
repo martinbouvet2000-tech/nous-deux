@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { getCurrentSlot, localClockIn, timeToMinutes, slotIconKind, currentSlotPhrase } from '../schedule'
+import {
+  getCurrentSlot, localClockIn, timeToMinutes, slotIconKind, currentSlotPhrase,
+  deletableIds, indexByWeekday, partialDeleteMessage, slotCount,
+} from '../schedule'
 import type { ScheduleSlot } from '@/types/database'
 
 const slot = (id: string, weekday: number, start: string, end: string, title = id): ScheduleSlot => ({
@@ -76,5 +79,42 @@ describe('helpers', () => {
   it('currentSlotPhrase', () => {
     expect(currentSlotPhrase('Clarisse', 'Cours de maths')).toBe('Clarisse est en cours de maths')
     expect(currentSlotPhrase('Clarisse', 'Sport')).toBe('Clarisse : Sport')
+  })
+})
+
+describe('sélection multiple de créneaux', () => {
+  const mien = (id: string, weekday: number, start = '08:00:00') => slot(id, weekday, start, '09:00:00')
+  const sien = (id: string, weekday: number) => ({ ...slot(id, weekday, '08:00:00', '09:00:00'), user_id: 'partenaire' })
+
+  it('range les créneaux par jour, triés par heure de début', () => {
+    const index = indexByWeekday([mien('tard', 1, '18:00:00'), mien('tot', 1, '07:00:00'), mien('mardi', 2)])
+    expect(index.get(1)?.map((s) => s.id)).toEqual(['tot', 'tard'])
+    expect(index.get(2)?.map((s) => s.id)).toEqual(['mardi'])
+    // Les sept jours existent toujours, même vides : pas de `undefined` à l'affichage.
+    expect(index.get(5)).toEqual([])
+  })
+
+  it('ne rend supprimable que ce qui est coché ET qui m’appartient', () => {
+    const slots = [mien('a', 1), sien('b', 1), mien('c', 2)]
+    // Même en cochant l'identifiant du partenaire, il ne partira jamais.
+    expect(deletableIds(slots, new Set(['a', 'b', 'c']), 'u')).toEqual(['a', 'c'])
+    expect(deletableIds(slots, new Set(['b']), 'u')).toEqual([])
+    expect(deletableIds(slots, new Set(['a']), null)).toEqual([])
+    expect(deletableIds(slots, new Set(), 'u')).toEqual([])
+  })
+
+  it('garde l’ordre de la liste, pour savoir ce qui est parti après un échec', () => {
+    const slots = [mien('a', 1), mien('b', 1), mien('c', 1)]
+    expect(deletableIds(slots, new Set(['c', 'a']), 'u')).toEqual(['a', 'c'])
+  })
+
+  it('accorde le décompte et la phrase d’échec partiel', () => {
+    expect(slotCount(0)).toBe('0 créneau')
+    expect(slotCount(1)).toBe('1 créneau')
+    expect(slotCount(40)).toBe('40 créneaux')
+    expect(partialDeleteMessage(40, 60)).toBe('40 créneaux sur 60 ont été supprimés.')
+    expect(partialDeleteMessage(1, 3)).toBe('1 créneau sur 3 a été supprimé.')
+    expect(partialDeleteMessage(0, 2)).toBe('0 créneau sur 2 a été supprimé.')
+    expect(partialDeleteMessage(0, 2)).not.toContain('supprimér')
   })
 })

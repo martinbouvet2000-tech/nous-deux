@@ -200,6 +200,30 @@ describe('import de bout en bout', () => {
     expect(outcome.notice).toContain('CSV')
   })
 
+  it('annonce le sens réel d’une grille, colonnes comme lignes', async () => {
+    const colonnes = [
+      'Horaire;Lundi;Mardi;Mercredi',
+      '8h00-9h00;Maths;;Anglais',
+      '9h00-10h00;;Physique;',
+    ].join('\n')
+    const droite = await importSchedule(file('edt.csv', colonnes))
+    expect(droite.layout).toBe('grid')
+    expect(droite.notice).toContain('les jours en colonnes, les heures en lignes')
+
+    // Le même emploi du temps couché : le message doit suivre, sinon il fait
+    // douter de tout ce qui est affiché en dessous.
+    const lignes = [
+      'Jour;8h00-9h00;9h00-10h00',
+      'Lundi;Maths;',
+      'Mardi;;Physique',
+      'Mercredi;Anglais;',
+    ].join('\n')
+    const couchee = await importSchedule(file('edt.csv', lignes))
+    expect(couchee.layout).toBe('grid')
+    expect(couchee.notice).toContain('les jours en lignes, les heures en colonnes')
+    expect(couchee.notice).not.toContain('les jours en colonnes')
+  })
+
   it('refuse un fichier vide', async () => {
     await expect(importSchedule(file('edt.csv', ''))).rejects.toMatchObject({ message: 'Ce fichier est vide.' })
   })

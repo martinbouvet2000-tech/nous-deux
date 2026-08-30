@@ -1,14 +1,17 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('@/lib/supabase', () => ({
   supabase: { from: vi.fn(), rpc: vi.fn(), auth: {} },
 }))
 
+import { supabase } from '@/lib/supabase'
 import {
   base64UrlVersOctets,
   octetsVersBase64Url,
   evaluerEtatPush,
   etatActionnable,
+  oublierRafraichissements,
+  rafraichirAbonnement,
   MESSAGE_ETAT,
   type ContextePush,
   type EtatPush,
@@ -137,5 +140,73 @@ describe('messages du réglage', () => {
     for (const etat of etats) {
       expect(MESSAGE_ETAT[etat].toLowerCase()).not.toContain('contenu de')
     }
+  })
+})
+
+describe('rafraîchissement de l’abonnement', () => {
+  const upsert = vi.fn(
+    (_ligne: Record<string, unknown>): Promise<{ error: { message: string } | null }> =>
+      Promise.resolve({ error: null }),
+  )
+
+  /** Un navigateur d’où les notifications marchent : service worker, Push, permission accordée. */
+  function navigateurAbonne(endpoint = 'https://push.exemple/abc') {
+    const sub = {
+      endpoint,
+      getKey: () => new Uint8Array([1, 2, 3, 4]).buffer,
+      unsubscribe: () => Promise.resolve(true),
+    }
+    const registration = { pushManager: { getSubscription: () => Promise.resolve(sub) } }
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: { ready: Promise.resolve(registration) },
+      configurable: true,
+    })
+    vi.stubGlobal('PushManager', class {})
+    vi.stubGlobal('Notification', { permission: 'granted' })
+  }
+
+  beforeEach(() => {
+    upsert.mockClear()
+    oublierRafraichissements()
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ upsert })
+    navigateurAbonne()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    Reflect.deleteProperty(navigator, 'serviceWorker')
+  })
+
+  it('n’écrit la ligne qu’une fois par session, même appelé de partout', async () => {
+    // Au démarrage (App.tsx), puis à chaque venue sur Réglages : la même ligne
+    // était réécrite à chaque fois, pour rien.
+    await rafraichirAbonnement('martin')
+    await rafraichirAbonnement('martin')
+    await Promise.all([rafraichirAbonnement('martin'), rafraichirAbonnement('martin')])
+    expect(upsert).toHaveBeenCalledTimes(1)
+    expect(upsert.mock.calls[0]?.[0]).toMatchObject({ user_id: 'martin', endpoint: 'https://push.exemple/abc' })
+  })
+
+  it('réécrit pour un autre compte ou un autre abonnement', async () => {
+    await rafraichirAbonnement('martin')
+    await rafraichirAbonnement('clarisse')
+    expect(upsert).toHaveBeenCalledTimes(2)
+
+    navigateurAbonne('https://push.exemple/nouveau')
+    await rafraichirAbonnement('martin')
+    expect(upsert).toHaveBeenCalledTimes(3)
+  })
+
+  it('n’écrit rien quand les notifications ne sont pas actives', async () => {
+    vi.stubGlobal('Notification', { permission: 'default' })
+    await rafraichirAbonnement('martin')
+    expect(upsert).not.toHaveBeenCalled()
+  })
+
+  it('laisse une seconde chance si l’écriture a échoué', async () => {
+    upsert.mockResolvedValueOnce({ error: { message: 'réseau' } })
+    await rafraichirAbonnement('martin')
+    await rafraichirAbonnement('martin')
+    expect(upsert).toHaveBeenCalledTimes(2)
   })
 })

@@ -589,6 +589,12 @@ function findRangeInside(text: string): { start: string; end: string; raw: strin
 export interface MatrixResult {
   slots: RawSlot[]
   layout: Layout
+  /**
+   * Grille lue à l'envers : les jours en LIGNES, les heures en colonnes.
+   * Absent quand la grille est dans le sens habituel — l'écran de relecture
+   * annonce ce qui a vraiment été reconnu, pas la disposition la plus courante.
+   */
+  transposed?: true
 }
 
 /** Retire les lignes et colonnes entièrement vides, qui faussent toute détection */
@@ -633,7 +639,7 @@ export function parseMatrix(input: string[][]): MatrixResult {
     const flippedGrid = detectGrid(flipped)
     if (flippedGrid) {
       const slots = slotsFromGrid(flipped, flippedGrid)
-      if (slots.length > 0) return { slots, layout: 'grid' }
+      if (slots.length > 0) return { slots, layout: 'grid', transposed: true }
     }
   }
   return { slots: [], layout: 'none' }
@@ -680,11 +686,62 @@ export function toDrafts(raws: RawSlot[]): SlotDraft[] {
 
 const HHMM_RE = /^\d{2}:\d{2}$/
 
+/** Empreinte d'un créneau : ce qui fait qu'il est « le même » qu'un autre */
+function fingerprint(weekday: number, start: string, end: string, title: string): string {
+  return `${weekday}|${start}|${end}|${normalize(title)}`
+}
+
+/** Empreintes des créneaux déjà enregistrés — la comparaison devient immédiate */
+export function knownSlotKeys(existing: ExistingSlot[]): Set<string> {
+  return new Set(
+    existing.map((s) => fingerprint(s.weekday, s.start_time.slice(0, 5), s.end_time.slice(0, 5), s.title)),
+  )
+}
+
+/** Cette ligne est-elle déjà dans l'emploi du temps ? */
+export function isDuplicateDraft(draft: SlotDraft, known: ReadonlySet<string>): boolean {
+  if (draft.weekday === null || known.size === 0) return false
+  return known.has(fingerprint(draft.weekday, draft.start, draft.end, draft.title))
+}
+
+/**
+ * Décoche les doublons que la relecture vient de révéler.
+ *
+ * `toDrafts` décoche d'office tout ce qui est douteux — rien ne part en base
+ * sans un regard — mais il ne connaît pas l'emploi du temps déjà enregistré :
+ * un doublon n'apparaît qu'à la relecture, une fois les créneaux existants en
+ * main. Sans ça, ré-importer le même fichier proposait de tout ajouter une
+ * seconde fois, toutes cases cochées.
+ *
+ * Le décochage a lieu à la PREMIÈRE relecture qui révèle le doublon, et à elle
+ * seule : `traites` retient les clés déjà vues, pour qu'un doublon coché
+ * sciemment (on peut vouloir dupliquer un créneau) ne se re-décoche jamais tout
+ * seul, même après une correction ailleurs dans la liste. `traites` est un
+ * ensemble mutable, tenu par l'appelant d'une relecture à l'autre.
+ *
+ * Renvoie le tableau reçu — la même référence — quand il n'y a rien à changer.
+ */
+export function unselectRevealedDuplicates(
+  drafts: SlotDraft[],
+  existing: ExistingSlot[],
+  traites: Set<string>,
+): SlotDraft[] {
+  const known = knownSlotKeys(existing)
+  if (known.size === 0) return drafts
+  let change = false
+  const suite = drafts.map((draft) => {
+    if (traites.has(draft.key) || !isDuplicateDraft(draft, known)) return draft
+    traites.add(draft.key)
+    if (!draft.selected) return draft
+    change = true
+    return { ...draft, selected: false }
+  })
+  return change ? suite : drafts
+}
+
 /** Contrôle complet — rejoué à chaque correction dans l'écran de relecture */
 export function reviewSlots(drafts: SlotDraft[], existing: ExistingSlot[] = []): ReviewedSlot[] {
-  const known = new Set(
-    existing.map((s) => `${s.weekday}|${s.start_time.slice(0, 5)}|${s.end_time.slice(0, 5)}|${normalize(s.title)}`),
-  )
+  const known = knownSlotKeys(existing)
 
   const reviewed: ReviewedSlot[] = drafts.map((draft) => {
     const issues: IssueCode[] = []
@@ -699,29 +756,65 @@ export function reviewSlots(drafts: SlotDraft[], existing: ExistingSlot[] = []):
       if (span <= 0) issues.push('end-before-start')
       else if (span > 8 * 60) issues.push('duration-long')
     }
-    if (draft.weekday !== null && known.has(`${draft.weekday}|${draft.start}|${draft.end}|${normalize(draft.title)}`)) {
-      issues.push('duplicate')
-    }
+    if (isDuplicateDraft(draft, known)) issues.push('duplicate')
     if (draft.uncertain) issues.push('uncertain')
     return { draft, issues, blocking: issues.some((i) => BLOCKING.has(i)) }
   })
 
   // Chevauchements : seulement entre lignes cochées et valides, sinon on
   // signalerait des conflits que l'utilisateur a déjà écartés.
-  const active = reviewed.filter((r) => r.draft.selected && !r.blocking)
-  for (let i = 0; i < active.length; i++) {
-    for (let j = i + 1; j < active.length; j++) {
-      const a = active[i] as ReviewedSlot, b = active[j] as ReviewedSlot
-      if (a.draft.weekday !== b.draft.weekday) continue
-      const overlap =
-        timeToMinutes(a.draft.start) < timeToMinutes(b.draft.end) &&
-        timeToMinutes(b.draft.start) < timeToMinutes(a.draft.end)
-      if (!overlap) continue
-      if (!a.issues.includes('overlap')) a.issues.push('overlap')
-      if (!b.issues.includes('overlap')) b.issues.push('overlap')
+  //
+  // Rangés par jour, puis balayés dans l'ordre des débuts : deux créneaux de
+  // jours différents ne peuvent pas se chevaucher, et sur un même jour il suffit
+  // de comparer chaque ligne à celles encore ouvertes. Comparer toutes les
+  // paires coûtait ~31 000 comparaisons sur une année de cours — à chaque frappe.
+  const parJour = new Map<number, Plage[]>()
+  for (const row of reviewed) {
+    if (!row.draft.selected || row.blocking) continue
+    const jour = row.draft.weekday as number
+    const plage: Plage = { row, debut: timeToMinutes(row.draft.start), fin: timeToMinutes(row.draft.end) }
+    const liste = parJour.get(jour)
+    if (liste) liste.push(plage)
+    else parJour.set(jour, [plage])
+  }
+  for (const liste of parJour.values()) {
+    if (liste.length < 2) continue
+    liste.sort((a, b) => a.debut - b.debut)
+    /** Créneaux commencés et pas encore finis : ce sont les seuls à pouvoir chevaucher */
+    const ouverts: Plage[] = []
+    for (const plage of liste) {
+      for (let k = ouverts.length - 1; k >= 0; k--) {
+        if ((ouverts[k] as Plage).fin <= plage.debut) ouverts.splice(k, 1)
+      }
+      for (const ouvert of ouverts) { signaler(ouvert.row); signaler(plage.row) }
+      ouverts.push(plage)
     }
   }
   return reviewed
+}
+
+/** Un créneau ramené à ses deux bornes en minutes, pour le balayage ci-dessus */
+interface Plage {
+  row: ReviewedSlot
+  debut: number
+  fin: number
+}
+
+function signaler(row: ReviewedSlot): void {
+  if (!row.issues.includes('overlap')) row.issues.push('overlap')
+}
+
+/**
+ * Phrase d'un enregistrement interrompu en cours de route.
+ *
+ * Elle vit ici, dans un module pur, parce qu'elle porte deux accords différents
+ * dans la même phrase : « créneau**x** » prend un x, « ajouté**s** » prend un s.
+ * Les confondre donnait « 200 créneaux sur 250 ont été ajoutéx » — une faute
+ * bien visible, au pire moment. Un test la relit au singulier et au pluriel.
+ */
+export function partialFailureMessage(inserted: number, total: number): string {
+  const many = inserted > 1
+  return `${inserted} créneau${many ? 'x' : ''} sur ${total} ${many ? 'ont' : 'a'} été ajouté${many ? 's' : ''} avant l’échec.`
 }
 
 /** Lignes prêtes pour `schedule_slots` — uniquement ce qui est coché et valide */

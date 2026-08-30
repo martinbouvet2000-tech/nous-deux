@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useRef, useState, type DragEvent } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import {
   AlertTriangle, ArrowLeft, Check, CheckCircle2, FileSpreadsheet, Info, Repeat, Upload,
 } from 'lucide-react'
@@ -12,8 +12,8 @@ import { resolveTimezone } from '@/lib/today'
 import { colorForTitle, WEEKDAYS, weekdayLabel } from '@/lib/schedule'
 import { BTN_GHOST, BTN_PRIMARY, CARD, CARD_EDGE, ICON_BTN, SELECT } from '@/lib/ui'
 import {
-  ISSUE_LABEL, LOCATION_MAX, TITLE_MAX, reviewSlots, toInsertRows,
-  type ReviewedSlot, type SlotDraft,
+  ISSUE_LABEL, LOCATION_MAX, TITLE_MAX, partialFailureMessage, reviewSlots, toInsertRows,
+  unselectRevealedDuplicates, type ReviewedSlot, type SlotDraft,
 } from '@/lib/scheduleImport/parse'
 import type { Confidence, ImportOutcome } from '@/lib/scheduleImport'
 
@@ -54,24 +54,124 @@ function readError(err: unknown): { message: string; hint: string | null } {
   }
 }
 
-/** Une ligne de l'écran de relecture, mémorisée : un import peut en compter des centaines */
-const Row = memo(function Row({
-  row, index, hasLocation, onChange,
-}: {
-  row: ReviewedSlot
+interface FieldsProps {
+  slotKey: string
   index: number
+  weekday: number | null
+  start: string
+  end: string
+  title: string
+  location: string | null
   hasLocation: boolean
   onChange: (key: string, patch: Partial<SlotDraft>) => void
-}) {
-  const { draft, issues, blocking } = row
-  const id = `slot-${draft.key}`
-  const name = draft.title.trim() || 'sans intitulé'
+}
+
+/**
+ * Les champs éditables d'une ligne, à part de sa case à cocher.
+ *
+ * Mémorisés sur des valeurs simples : cocher ou décocher ne touche à aucun
+ * d'eux, et « Tout cocher » n'a donc que 250 cases à repeindre au lieu de 250
+ * formulaires — cinq contrôles chacun — à reconstruire.
+ */
+const Fields = memo(function Fields({
+  slotKey, index, weekday, start, end, title, location, hasLocation, onChange,
+}: FieldsProps) {
   const columns = hasLocation
     ? 'sm:grid-cols-[128px_104px_104px_minmax(0,1fr)_150px]'
     : 'sm:grid-cols-[128px_104px_104px_minmax(0,1fr)]'
 
   return (
+    <div className={`min-w-0 flex-1 grid grid-cols-2 gap-1.5 ${columns}`}>
+      <select
+        id={`slot-${slotKey}-day`}
+        aria-label={`Jour du créneau ${index + 1}`}
+        value={weekday ?? ''}
+        onChange={(e) => onChange(slotKey, { weekday: e.target.value ? Number(e.target.value) : null })}
+        className={`${CELL} ${SELECT} col-span-2 sm:col-span-1`}
+      >
+        <option value="">Jour…</option>
+        {WEEKDAYS.map((d) => (
+          <option key={d} value={d}>{weekdayLabel(d, true)}</option>
+        ))}
+      </select>
+      <input
+        type="time"
+        lang="fr-FR"
+        aria-label={`Début du créneau ${index + 1}`}
+        value={start}
+        onChange={(e) => onChange(slotKey, { start: e.target.value })}
+        className={CELL}
+      />
+      <input
+        type="time"
+        lang="fr-FR"
+        aria-label={`Fin du créneau ${index + 1}`}
+        value={end}
+        onChange={(e) => onChange(slotKey, { end: e.target.value })}
+        className={CELL}
+      />
+      <input
+        type="text"
+        aria-label={`Intitulé du créneau ${index + 1}`}
+        value={title}
+        maxLength={TITLE_MAX}
+        placeholder="Intitulé"
+        onChange={(e) => onChange(slotKey, { title: e.target.value })}
+        className={`${CELL} col-span-2 sm:col-span-1`}
+      />
+      {hasLocation && (
+        <input
+          type="text"
+          aria-label={`Lieu du créneau ${index + 1}`}
+          value={location ?? ''}
+          maxLength={LOCATION_MAX}
+          placeholder="Lieu"
+          onChange={(e) => onChange(slotKey, { location: e.target.value || null })}
+          className={`${CELL} col-span-2 sm:col-span-1`}
+        />
+      )}
+    </div>
+  )
+})
+
+/**
+ * Ces deux lignes de relecture se ressemblent-elles assez pour ne rien re-rendre ?
+ *
+ * `reviewSlots` refabrique un objet `ReviewedSlot` par ligne à chaque contrôle,
+ * mais le brouillon qu'il enveloppe, lui, ne change QUE sur la ligne qu'on est
+ * en train de corriger. On compare donc le brouillon par référence et les
+ * défauts par contenu (jamais plus de trois) : sans ça, taper une lettre
+ * re-rendait les 250 lignes de l'écran, et la frappe se voyait.
+ */
+function sameRow(a: RowProps, b: RowProps): boolean {
+  if (a.index !== b.index || a.hasLocation !== b.hasLocation || a.onChange !== b.onChange) return false
+  if (a.row.draft !== b.row.draft || a.row.blocking !== b.row.blocking) return false
+  if (a.row.issues.length !== b.row.issues.length) return false
+  return a.row.issues.every((code, i) => code === b.row.issues[i])
+}
+
+interface RowProps {
+  row: ReviewedSlot
+  index: number
+  hasLocation: boolean
+  onChange: (key: string, patch: Partial<SlotDraft>) => void
+}
+
+/** Une ligne de l'écran de relecture, mémorisée : un import peut en compter des centaines */
+const Row = memo(function Row({
+  row, index, hasLocation, onChange,
+}: RowProps) {
+  const { draft, issues, blocking } = row
+  const name = draft.title.trim() || 'sans intitulé'
+
+  return (
     <li
+      // `content-visibility: auto` laisse le navigateur ignorer la mise en page et
+      // le dessin des lignes hors de l'écran. Sur un import d'une année (250
+      // lignes), « Tout cocher » ne repeint plus que ce qui est visible.
+      // `contain-intrinsic-size` donne une hauteur estimée pour que la barre de
+      // défilement ne saute pas.
+      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 88px' }}
       className={`rounded-xl p-2.5 max-md:p-3 transition-colors duration-200 ${
         blocking
           ? 'bg-[#F0A5AD]/[0.05] shadow-[inset_0_0_0_1px_rgba(240,165,173,0.30)]'
@@ -93,59 +193,26 @@ const Row = memo(function Row({
             boxShadow: draft.selected ? 'none' : 'inset 0 0 0 1.5px rgba(240,234,224,0.22)',
           }}
         >
-          {draft.selected && <Check size={14} className="text-[#110F0E]" aria-hidden="true" />}
+          {/* Toujours monté, seulement masqué : cocher ou décocher 250 lignes d'un
+              coup ne doit pas créer puis détruire 250 icônes. */}
+          <Check
+            size={14}
+            className={`text-[#110F0E] ${draft.selected ? '' : 'invisible'}`}
+            aria-hidden="true"
+          />
         </button>
 
-        <div className={`min-w-0 flex-1 grid grid-cols-2 gap-1.5 ${columns}`}>
-          <select
-            id={`${id}-day`}
-            aria-label={`Jour du créneau ${index + 1}`}
-            value={draft.weekday ?? ''}
-            onChange={(e) => onChange(draft.key, { weekday: e.target.value ? Number(e.target.value) : null })}
-            className={`${CELL} ${SELECT} col-span-2 sm:col-span-1`}
-          >
-            <option value="">Jour…</option>
-            {WEEKDAYS.map((d) => (
-              <option key={d} value={d}>{weekdayLabel(d, true)}</option>
-            ))}
-          </select>
-          <input
-            type="time"
-            lang="fr-FR"
-            aria-label={`Début du créneau ${index + 1}`}
-            value={draft.start}
-            onChange={(e) => onChange(draft.key, { start: e.target.value })}
-            className={CELL}
-          />
-          <input
-            type="time"
-            lang="fr-FR"
-            aria-label={`Fin du créneau ${index + 1}`}
-            value={draft.end}
-            onChange={(e) => onChange(draft.key, { end: e.target.value })}
-            className={CELL}
-          />
-          <input
-            type="text"
-            aria-label={`Intitulé du créneau ${index + 1}`}
-            value={draft.title}
-            maxLength={TITLE_MAX}
-            placeholder="Intitulé"
-            onChange={(e) => onChange(draft.key, { title: e.target.value })}
-            className={`${CELL} col-span-2 sm:col-span-1`}
-          />
-          {hasLocation && (
-            <input
-              type="text"
-              aria-label={`Lieu du créneau ${index + 1}`}
-              value={draft.location ?? ''}
-              maxLength={LOCATION_MAX}
-              placeholder="Lieu"
-              onChange={(e) => onChange(draft.key, { location: e.target.value || null })}
-              className={`${CELL} col-span-2 sm:col-span-1`}
-            />
-          )}
-        </div>
+        <Fields
+          slotKey={draft.key}
+          index={index}
+          weekday={draft.weekday}
+          start={draft.start}
+          end={draft.end}
+          title={draft.title}
+          location={draft.location}
+          hasLocation={hasLocation}
+          onChange={onChange}
+        />
       </div>
 
       {(issues.length > 0 || draft.occurrences > 1) && (
@@ -166,7 +233,7 @@ const Row = memo(function Row({
       )}
     </li>
   )
-})
+}, sameRow)
 
 /**
  * Import d'un emploi du temps : dépôt du fichier, puis ÉCRAN DE RELECTURE.
@@ -191,8 +258,24 @@ export default function ScheduleImport({ existing, onClose, onImported }: Props)
 
   const reviewed = useMemo(() => reviewSlots(drafts, existing), [drafts, existing])
   const ready = useMemo(() => reviewed.filter((r) => r.draft.selected && !r.blocking), [reviewed])
+  /** Cochées mais impossibles à enregistrer en l'état : le compteur ne les cache pas */
+  const toFix = useMemo(() => reviewed.filter((r) => r.draft.selected && r.blocking).length, [reviewed])
   const flagged = useMemo(() => reviewed.filter((r) => r.issues.length > 0).length, [reviewed])
   const hasLocation = useMemo(() => drafts.some((d) => d.location), [drafts])
+
+  /**
+   * Clés déjà décochées au titre du doublon. Une ligne n'y passe qu'une fois :
+   * ensuite, sa case n'appartient plus qu'à la personne qui relit.
+   */
+  const knownDuplicates = useRef<Set<string>>(new Set())
+
+  // Un doublon est décoché d'office, exactement comme une ligne douteuse — sinon
+  // ré-importer le même fichier proposait de tout ajouter une deuxième fois,
+  // toutes cases cochées. Le contrôle a lieu ici et pas dans `toDrafts` : le
+  // doublon ne se voit qu'en connaissant l'emploi du temps déjà enregistré.
+  useEffect(() => {
+    setDrafts((prev) => unselectRevealedDuplicates(prev, existing, knownDuplicates.current))
+  }, [drafts, existing])
 
   const handleFile = useCallback(async (file: File | null) => {
     if (!file) return
@@ -204,7 +287,11 @@ export default function ScheduleImport({ existing, onClose, onImported }: Props)
       const { importSchedule } = await import('@/lib/scheduleImport')
       const result = await importSchedule(file)
       setOutcome(result)
-      setDrafts(result.drafts)
+      // Nouveau fichier, nouvelles clés : la mémoire des doublons repart à zéro.
+      // Le premier passage se fait ici, avant l'affichage, pour qu'aucun doublon
+      // n'apparaisse coché — même le temps d'une image.
+      knownDuplicates.current = new Set()
+      setDrafts(unselectRevealedDuplicates(result.drafts, existing, knownDuplicates.current))
       setStep('review')
     } catch (err) {
       setError(readError(err))
@@ -213,7 +300,7 @@ export default function ScheduleImport({ existing, onClose, onImported }: Props)
       setStep('pick')
     }
     if (inputRef.current) inputRef.current.value = ''
-  }, [])
+  }, [existing])
 
   const onDrop = (e: DragEvent<HTMLLabelElement>) => {
     e.preventDefault()
@@ -227,10 +314,11 @@ export default function ScheduleImport({ existing, onClose, onImported }: Props)
 
   const selectAll = (mode: 'all' | 'none' | 'safe') => {
     const safe = new Set(reviewed.filter((r) => r.issues.length === 0).map((r) => r.draft.key))
-    setDrafts((prev) => prev.map((d) => ({
-      ...d,
-      selected: mode === 'all' ? true : mode === 'none' ? false : safe.has(d.key),
-    })))
+    setDrafts((prev) => prev.map((d) => {
+      const selected = mode === 'all' ? true : mode === 'none' ? false : safe.has(d.key)
+      // Une ligne déjà dans le bon état garde son objet : elle ne se re-rendra pas.
+      return d.selected === selected ? d : { ...d, selected }
+    }))
   }
 
   const save = async () => {
@@ -258,10 +346,9 @@ export default function ScheduleImport({ existing, onClose, onImported }: Props)
     // Échec en cours de route : on décoche ce qui est déjà parti, pour qu'un
     // second essai n'ajoute pas deux fois les mêmes créneaux.
     const done = new Set(ready.slice(0, inserted).map((r) => r.draft.key))
-    const plural = inserted > 1 ? 'x' : ''
     setDrafts((prev) => prev.map((d) => (done.has(d.key) ? { ...d, selected: false } : d)))
     setError({
-      message: `${inserted} créneau${plural} sur ${rows.length} ${inserted > 1 ? 'ont' : 'a'} été ajouté${plural} avant l’échec.`,
+      message: partialFailureMessage(inserted, rows.length),
       hint: 'Les lignes déjà enregistrées ont été décochées : tu peux relancer sans rien doubler.',
     })
   }
@@ -385,9 +472,13 @@ export default function ScheduleImport({ existing, onClose, onImported }: Props)
 
           <div className="sticky bottom-0 -mx-1 px-1 pt-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] bg-gradient-to-t from-[#0A0908] via-[#0A0908]/95 to-transparent">
             <div className="flex items-center gap-2">
+              {/* « Prêtes », et non « cochées » : une ligne bloquante reste cochée mais
+                  ne part pas. Le compte du bouton est le même que celui-ci, et ce qui
+                  manque à l'appel est annoncé plutôt que passé sous silence. */}
               <p className="flex-1 text-[12px] text-[#9B9287]" aria-live="polite">
-                <span className="num text-[#F0EAE0]">{ready.length}</span> ligne{ready.length > 1 ? 's' : ''} cochée{ready.length > 1 ? 's' : ''} sur{' '}
+                <span className="num text-[#F0EAE0]">{ready.length}</span> ligne{ready.length > 1 ? 's' : ''} prête{ready.length > 1 ? 's' : ''} sur{' '}
                 <span className="num">{reviewed.length}</span>
+                {toFix > 0 && <> — <span className="num text-[#F0A5AD]">{toFix}</span> à corriger</>}
               </p>
               <button type="button" onClick={onClose} className={BTN_GHOST}>Annuler</button>
               <button type="button" onClick={save} disabled={saving || ready.length === 0} className={BTN_PRIMARY}>
