@@ -4,6 +4,7 @@ import {
   parseTime, parseTimeRange, parseWeekdayCell, findWeekday, weekdayHeader, weekdayFromDate,
   parseMatrix, slotsFromLines, toDrafts, reviewSlots, toInsertRows, trimMatrix, normalize,
   unselectRevealedDuplicates, partialFailureMessage,
+  parseDate, dateSpan, spanLabel, collapseToTypicalWeek, isDuplicateDraft, knownSlotKeys,
 } from '@/lib/scheduleImport/parse'
 import { colorForTitle } from '@/lib/schedule'
 
@@ -137,7 +138,10 @@ describe('disposition « une ligne par créneau »', () => {
     expect(slots[1]).toMatchObject({ weekday: 2, start: '10:00', end: '11:00', title: 'Danse' })
   })
 
-  it('replie une année entière sur une semaine type', () => {
+  it('garde chaque date d’une année, au lieu de tout replier sur une semaine', () => {
+    // Comportement voulu depuis la 2.3 : trois lundis de septembre sont trois
+    // cours, pas un seul compté trois fois. Replier reste possible, mais c'est
+    // un choix explicite (`collapseToTypicalWeek`), plus un effet de bord.
     const csv = [
       'Date;Horaire;Matière',
       '14/09/2026;8h30-10h00;Maths',
@@ -145,8 +149,13 @@ describe('disposition « une ligne par créneau »', () => {
       '28/09/2026;8h30-10h00;Maths',
     ].join('\n')
     const drafts = toDrafts(fromCsv(csv).slots)
-    expect(drafts).toHaveLength(1)
-    expect(drafts[0]).toMatchObject({ weekday: 1, start: '08:30', end: '10:00', title: 'Maths', occurrences: 3 })
+    expect(drafts).toHaveLength(3)
+    expect(drafts.map((d) => d.date)).toEqual(['2026-09-14', '2026-09-21', '2026-09-28'])
+    expect(drafts[0]).toMatchObject({ weekday: 1, start: '08:30', end: '10:00', title: 'Maths' })
+
+    const semaine = collapseToTypicalWeek(drafts)
+    expect(semaine).toHaveLength(1)
+    expect(semaine[0]).toMatchObject({ weekday: 1, date: null, title: 'Maths', occurrences: 3 })
   })
 })
 
@@ -236,7 +245,7 @@ describe('lignes de texte (secours pour les PDF)', () => {
 
 describe('relecture : ce qui cloche est signalé', () => {
   const draft = (over: Partial<ReturnType<typeof toDrafts>[number]>) => ({
-    key: 'k', weekday: 1, start: '08:00', end: '09:00', title: 'Maths',
+    key: 'k', weekday: 1, date: null as string | null, start: '08:00', end: '09:00', title: 'Maths',
     location: null, occurrences: 1, uncertain: false, selected: true, ...over,
   })
 
@@ -320,7 +329,7 @@ describe('relecture : ce qui cloche est signalé', () => {
 
 describe('relecture : un doublon arrive décoché', () => {
   const draft = (over: Partial<ReturnType<typeof toDrafts>[number]>) => ({
-    key: 'k', weekday: 1, start: '08:00', end: '09:00', title: 'Maths',
+    key: 'k', weekday: 1, date: null as string | null, start: '08:00', end: '09:00', title: 'Maths',
     location: null, occurrences: 1, uncertain: false, selected: true, ...over,
   })
   const enBase = [{ weekday: 1, start_time: '08:00:00', end_time: '09:00:00', title: 'Maths' }]
@@ -358,7 +367,7 @@ describe('relecture : un doublon arrive décoché', () => {
 
 describe('chevauchements : indexés par jour', () => {
   const draft = (over: Partial<ReturnType<typeof toDrafts>[number]>) => ({
-    key: 'k', weekday: 1, start: '08:00', end: '09:00', title: 'Maths',
+    key: 'k', weekday: 1, date: null as string | null, start: '08:00', end: '09:00', title: 'Maths',
     location: null, occurrences: 1, uncertain: false, selected: true, ...over,
   })
 
@@ -398,5 +407,156 @@ describe('phrase d’un enregistrement interrompu', () => {
 
   it('n’écrit jamais « ajoutéx »', () => {
     for (const n of [0, 1, 2, 7, 200]) expect(partialFailureMessage(n, 250)).not.toContain('ajoutéx')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dates : importer une année, pas seulement une semaine type
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('lecture des dates', () => {
+  it('comprend les formats courants et rend une date ISO', () => {
+    expect(parseDate('08/09/2026')).toBe('2026-09-08')
+    expect(parseDate('2026-09-08')).toBe('2026-09-08')
+    expect(parseDate('8.9.2026')).toBe('2026-09-08')
+    expect(parseDate('08/09/26')).toBe('2026-09-08')
+  })
+
+  it('lit un numéro de série Excel sans décaler d’un jour', () => {
+    // 46273 = 8 septembre 2026 dans le calendrier Excel.
+    expect(parseDate('46273')).toBe('2026-09-08')
+  })
+
+  it('refuse ce qui n’est pas une date', () => {
+    expect(parseDate('Anatomie')).toBeNull()
+    expect(parseDate('')).toBeNull()
+    expect(parseDate('12:30')).toBeNull()
+    expect(parseDate('42')).toBeNull()
+  })
+
+  it('en déduit le bon jour de semaine', () => {
+    // 8 septembre 2026 est un mardi.
+    expect(weekdayFromDate('08/09/2026')).toBe(2)
+  })
+})
+
+describe('import d’une année entière', () => {
+  const csv = [
+    'Date;Debut;Fin;Intitule',
+    '08/09/2026;08:00;10:00;Anatomie',
+    '15/09/2026;08:00;10:00;Anatomie',
+    '22/09/2026;08:00;10:00;Anatomie',
+    '09/09/2026;14:00;17:00;TP soins',
+  ].join('\n')
+
+  it('garde une ligne par date au lieu de tout replier sur une semaine', () => {
+    const drafts = toDrafts(fromCsv(csv).slots)
+    expect(drafts).toHaveLength(4)
+    expect(drafts.map((d) => d.date)).toEqual([
+      '2026-09-08', '2026-09-09', '2026-09-15', '2026-09-22',
+    ])
+    // Chaque date compte pour elle-même : plus de fusion silencieuse.
+    expect(drafts.every((d) => d.occurrences === 1)).toBe(true)
+  })
+
+  it('range chaque créneau au bon jour de semaine', () => {
+    const drafts = toDrafts(fromCsv(csv).slots)
+    const mardis = drafts.filter((d) => d.date !== '2026-09-09')
+    expect(mardis.every((d) => d.weekday === 2)).toBe(true)   // les 8, 15, 22 sont des mardis
+    expect(drafts.find((d) => d.date === '2026-09-09')?.weekday).toBe(3) // mercredi
+  })
+
+  it('dit la période couverte', () => {
+    const span = dateSpan(toDrafts(fromCsv(csv).slots))
+    expect(span).toEqual({ first: '2026-09-08', last: '2026-09-22', count: 4 })
+    expect(spanLabel(span!)).toBe('du 8 septembre au 22 septembre 2026')
+  })
+
+  it('sait replier l’année en une semaine type quand on le demande', () => {
+    const semaine = collapseToTypicalWeek(toDrafts(fromCsv(csv).slots))
+    expect(semaine).toHaveLength(2)                       // Anatomie + TP soins
+    expect(semaine.every((d) => d.date === null)).toBe(true)
+    expect(semaine.find((d) => d.title === 'Anatomie')?.occurrences).toBe(3)
+    expect(semaine.find((d) => d.title === 'TP soins')?.occurrences).toBe(1)
+  })
+
+  it('envoie la date en base', () => {
+    const drafts = toDrafts(fromCsv(csv).slots)
+    const rows = toInsertRows(reviewSlots(drafts), 'moi', () => '#D4A574')
+    expect(rows).toHaveLength(4)
+    expect(rows[0]?.slot_date).toBe('2026-09-08')
+    expect(rows[0]?.weekday).toBe(2)
+  })
+
+  it('un créneau daté n’est pas le doublon d’une habitude hebdomadaire', () => {
+    const [date] = toDrafts([{ weekday: 2, date: '2026-09-08', start: '08:00', end: '10:00', title: 'Anatomie' }])
+    const hebdo = [{ weekday: 2, slot_date: null, start_time: '08:00:00', end_time: '10:00:00', title: 'Anatomie' }]
+    expect(isDuplicateDraft(date!, knownSlotKeys(hebdo))).toBe(false)
+    // La même date, en revanche, est bien un doublon.
+    const memeDate = [{ weekday: 2, slot_date: '2026-09-08', start_time: '08:00:00', end_time: '10:00:00', title: 'Anatomie' }]
+    expect(isDuplicateDraft(date!, knownSlotKeys(memeDate))).toBe(true)
+  })
+})
+
+describe('chevauchements et dates', () => {
+  it('le même cours deux mardis de suite ne se chevauche pas', () => {
+    // Le défaut d'avant : une année importée sortait intégralement en défaut,
+    // et « Ne garder que les lignes sûres » décochait tout.
+    const rows = reviewSlots(toDrafts([
+      { weekday: 2, date: '2026-09-08', start: '08:00', end: '10:00', title: 'Anatomie' },
+      { weekday: 2, date: '2026-09-15', start: '08:00', end: '10:00', title: 'Anatomie' },
+      { weekday: 2, date: '2026-09-22', start: '08:00', end: '10:00', title: 'Anatomie' },
+    ]))
+    expect(rows.some((r) => r.issues.includes('overlap'))).toBe(false)
+  })
+
+  it('deux cours qui se marchent dessus le MÊME jour sont bien signalés', () => {
+    const rows = reviewSlots(toDrafts([
+      { weekday: 2, date: '2026-09-08', start: '08:00', end: '10:00', title: 'Anatomie' },
+      { weekday: 2, date: '2026-09-08', start: '09:00', end: '11:00', title: 'Physiologie' },
+    ]))
+    expect(rows.every((r) => r.issues.includes('overlap'))).toBe(true)
+  })
+
+  it('une habitude hebdomadaire qui tombe sur un cours daté est signalée', () => {
+    const rows = reviewSlots(toDrafts([
+      { weekday: 2, date: null, start: '08:30', end: '09:30', title: 'Sport' },
+      { weekday: 2, date: '2026-09-08', start: '08:00', end: '10:00', title: 'Anatomie' },
+    ]))
+    expect(rows.every((r) => r.issues.includes('overlap'))).toBe(true)
+  })
+
+  it('une habitude hebdomadaire un autre jour ne gêne personne', () => {
+    const rows = reviewSlots(toDrafts([
+      { weekday: 3, date: null, start: '08:30', end: '09:30', title: 'Sport' },
+      { weekday: 2, date: '2026-09-08', start: '08:00', end: '10:00', title: 'Anatomie' },
+    ]))
+    expect(rows.some((r) => r.issues.includes('overlap'))).toBe(false)
+  })
+
+  it('reste rapide sur une année entière', () => {
+    // 36 semaines × 5 jours × 4 cours = 720 séances.
+    const brutes = []
+    for (let semaine = 0; semaine < 36; semaine++) {
+      for (let jour = 1; jour <= 5; jour++) {
+        for (let creneau = 0; creneau < 4; creneau++) {
+          const d = new Date(2026, 8, 7 + semaine * 7 + (jour - 1), 12)
+          const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+          brutes.push({
+            weekday: jour, date: iso,
+            start: `${String(8 + creneau * 2).padStart(2, '0')}:00`,
+            end: `${String(9 + creneau * 2).padStart(2, '0')}:00`,
+            title: `Cours ${creneau}`,
+          })
+        }
+      }
+    }
+    const drafts = toDrafts(brutes)
+    expect(drafts).toHaveLength(720)
+    const t0 = performance.now()
+    const rows = reviewSlots(drafts)
+    const duree = performance.now() - t0
+    expect(rows.some((r) => r.issues.includes('overlap'))).toBe(false)
+    expect(duree).toBeLessThan(400)
   })
 })

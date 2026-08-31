@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import type { Profile, ScheduleSlot } from '@/types/database'
 
@@ -65,9 +65,12 @@ import { useAuthStore } from '@/stores/authStore'
 const moi = { id: 'moi', display_name: 'Martin', timezone: 'Europe/Warsaw' } as unknown as Profile
 const elle = { id: 'elle', display_name: 'Clarisse', timezone: 'Europe/Paris' } as unknown as Profile
 
-function creneau(id: string, weekday: number, start: string, end: string, title: string, userId = 'moi'): ScheduleSlot {
+function creneau(
+  id: string, weekday: number, start: string, end: string, title: string,
+  userId = 'moi', date: string | null = null,
+): ScheduleSlot {
   return {
-    id, user_id: userId, weekday, start_time: start, end_time: end,
+    id, user_id: userId, weekday, slot_date: date, start_time: start, end_time: end,
     title, location: null, color: '#D4A574', created_at: '',
   }
 }
@@ -253,5 +256,158 @@ describe('Emploi du temps — mode sélection et suppression multiple', () => {
     expect(screen.queryByRole('checkbox', { name: /^Sélectionner Cours 0,/ })).not.toBeInTheDocument()
     expect(premier('checkbox', /^Sélectionner Cours 55,/)).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByRole('button', { name: 'Supprimer 10 créneaux' })).toBeEnabled()
+  })
+})
+
+/**
+ * La navigation par semaine.
+ *
+ * L'emploi du temps n'est plus une semaine unique qui se répète : depuis qu'un
+ * créneau peut porter une date, il faut pouvoir se déplacer de semaine en
+ * semaine, et un cours daté ne doit apparaître que la sienne.
+ */
+describe('Emploi du temps — semaines et dates', () => {
+  beforeEach(() => {
+    suppressions.length = 0
+    etat.echecSur = 0
+    // On ne fige que l'horloge : `findBy*` de Testing Library interroge le DOM
+    // avec de vraies minuteries, les remplacer ferait expirer chaque attente.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    // Mercredi 2 septembre 2026 : la semaine affichée par défaut va du 31 août
+    // au 6 septembre.
+    vi.setSystemTime(new Date('2026-09-02T09:00:00Z'))
+    etat.rows = [
+      creneau('hebdo', 2, '18:00:00', '19:00:00', 'Sport'),
+      creneau('cetteSemaine', 2, '08:00:00', '10:00:00', 'Anatomie', 'moi', '2026-09-01'),
+      creneau('semaineSuivante', 2, '08:00:00', '10:00:00', 'Physiologie', 'moi', '2026-09-08'),
+    ] as unknown as Record<string, unknown>[]
+    useAuthStore.setState({ profile: moi, partnerProfile: elle })
+  })
+
+  afterEach(() => { vi.useRealTimers() })
+
+  it('n’affiche que les créneaux de la semaine en cours', async () => {
+    afficher()
+    await screen.findAllByText('Anatomie')
+    expect(screen.getAllByText('Sport').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Physiologie')).not.toBeInTheDocument()
+  })
+
+  it('la semaine suivante montre son cours, et plus celui d’avant', async () => {
+    afficher()
+    await screen.findAllByText('Anatomie')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Semaine suivante' }))
+
+    await screen.findAllByText('Physiologie')
+    expect(screen.queryByText('Anatomie')).not.toBeInTheDocument()
+    // L'habitude hebdomadaire, elle, est toujours là.
+    expect(screen.getAllByText('Sport').length).toBeGreaterThan(0)
+  })
+
+  it('propose de revenir à cette semaine, et seulement quand on l’a quittée', async () => {
+    afficher()
+    await screen.findAllByText('Anatomie')
+    expect(screen.queryByRole('button', { name: 'Revenir à cette semaine' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Semaine suivante' }))
+    const retour = await screen.findByRole('button', { name: 'Revenir à cette semaine' })
+
+    fireEvent.click(retour)
+    await screen.findAllByText('Anatomie')
+    expect(screen.queryByRole('button', { name: 'Revenir à cette semaine' })).not.toBeInTheDocument()
+  })
+
+  it('dit la semaine qu’on regarde', async () => {
+    afficher()
+    await screen.findAllByText('Anatomie')
+    expect(screen.getByText('31 août – 6 sept')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Semaine précédente' }))
+    expect(await screen.findByText('24 – 30 août')).toBeInTheDocument()
+  })
+
+})
+
+describe('Emploi du temps — une semaine vide n’est pas un emploi du temps vide', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-09-02T09:00:00Z'))
+    // Rien que des cours datés : la semaine suivante est donc réellement vide.
+    etat.rows = [
+      creneau('cours', 2, '08:00:00', '10:00:00', 'Anatomie', 'moi', '2026-09-01'),
+    ] as unknown as Record<string, unknown>[]
+    useAuthStore.setState({ profile: moi, partnerProfile: elle })
+  })
+  afterEach(() => { vi.useRealTimers() })
+
+  it('dit « rien cette semaine » plutôt que « ta semaine est encore vide »', async () => {
+    afficher()
+    await screen.findAllByText('Anatomie')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Semaine suivante' }))
+
+    expect(await screen.findByText('Rien cette semaine')).toBeInTheDocument()
+    expect(screen.queryByText('Ta semaine est encore vide')).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * Deux pièges trouvés en relecture adversariale, verrouillés ici.
+ */
+describe('Emploi du temps — ce qu’on ne voit pas ne se supprime pas', () => {
+  beforeEach(() => {
+    suppressions.length = 0
+    etat.echecSur = 0
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-09-02T09:00:00Z'))
+    etat.rows = [
+      creneau('cetteSemaine', 2, '08:00:00', '10:00:00', 'Anatomie', 'moi', '2026-09-01'),
+      creneau('semaineSuivante', 2, '08:00:00', '10:00:00', 'Physiologie', 'moi', '2026-09-08'),
+    ] as unknown as Record<string, unknown>[]
+    useAuthStore.setState({ profile: moi, partnerProfile: elle })
+  })
+  afterEach(() => { vi.useRealTimers() })
+
+  it('changer de semaine oublie la sélection au lieu de l’emporter avec soi', async () => {
+    afficher()
+    await entrerEnSelection()
+    fireEvent.click(premier('checkbox', /^Sélectionner Anatomie/))
+    await screen.findByRole('button', { name: 'Supprimer 1 créneau' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Semaine suivante' }))
+
+    // Le créneau coché a disparu de l'écran : il ne doit plus rien peser.
+    expect(await screen.findByText('Aucun créneau sélectionné')).toBeInTheDocument()
+    const bouton = screen.getByRole('button', { name: /^Supprimer/ })
+    expect(bouton).toHaveTextContent('Supprimer 0 créneau')
+    expect(bouton).toBeDisabled()
+    fireEvent.click(bouton)
+    expect(suppressions).toHaveLength(0)
+  })
+})
+
+describe('Emploi du temps — la semaine suit le fuseau du profil', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    // 13 septembre 2026, 22 h UTC : il est déjà lundi 14 à Auckland.
+    vi.setSystemTime(new Date('2026-09-13T22:00:00Z'))
+    etat.rows = [
+      creneau('lundi14', 1, '10:00:00', '11:00:00', 'Cours du 14', 'moi', '2026-09-14'),
+      creneau('lundi7', 1, '10:00:00', '11:00:00', 'Cours du 7', 'moi', '2026-09-07'),
+    ] as unknown as Record<string, unknown>[]
+    useAuthStore.setState({
+      profile: { ...moi, timezone: 'Pacific/Auckland' } as unknown as Profile,
+      partnerProfile: elle,
+    })
+  })
+  afterEach(() => { vi.useRealTimers() })
+
+  it('affiche la semaine d’aujourd’hui là-bas, pas celle de l’appareil', async () => {
+    afficher()
+    // À Auckland on est lundi 14 : la semaine affichée est celle du 14 au 20.
+    expect(await screen.findByText('14 – 20 sept')).toBeInTheDocument()
+    expect(screen.getAllByText('Cours du 14').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Cours du 7')).not.toBeInTheDocument()
   })
 })

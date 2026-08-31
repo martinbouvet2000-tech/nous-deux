@@ -2,6 +2,27 @@
 
 Les dates sont celles de la mise en ligne. Chaque version est un seul commit sur `master`, suivi d'un déploiement GitHub Pages.
 
+## 2.3.0 — 31 août 2026
+
+**L'emploi du temps connaît enfin les dates : on peut y mettre une année entière.**
+
+Jusqu'ici un créneau n'avait qu'un jour de la semaine : l'emploi du temps était une semaine unique qui se répétait à l'infini. Impossible d'y mettre une année scolaire, avec ses vacances, ses semaines de stage, ses cours qui changent d'une semaine à l'autre. Un fichier d'une année était même replié en silence sur une « semaine type ».
+
+- un créneau peut désormais porter une **date précise** (`slot_date`), ou rester **hebdomadaire** comme avant — les deux cohabitent : le sport du mardi soir reste une habitude pendant que l'année de cours, elle, est datée jour par jour
+- **navigation par semaine** dans la grille, avec les quantièmes dans les en-têtes et un retour direct à la semaine en cours
+- au formulaire, le choix **« Chaque semaine » / « Une date précise »**
+- l'**import garde les dates du fichier** : une année reste une année. Replier en semaine type reste possible, mais c'est un choix, plus un effet de bord
+- la semaine affichée suit le **fuseau du profil**, pas celui de l'appareil
+
+Quatre défauts trouvés en relecture adversariale avant la mise en ligne, tous confirmés par exécution puis corrigés :
+
+- le contrôle de chevauchement ignorait la date : sur une année de 720 séances, **720 lignes sur 720** étaient signalées en conflit, et « Ne garder que les lignes sûres » décochait l'import entier
+- on pouvait cocher un créneau, changer de semaine, et le **supprimer sans jamais le revoir** — la sélection est maintenant vidée au changement de semaine
+- la semaine affichée venait du fuseau du navigateur : depuis un autre continent, l'app masquait les cours du jour et en montrait d'autres
+- corriger un intitulé puis rebasculer en semaine type affichait toujours l'ancien texte
+
+L'écran de relecture ne monte plus que 150 lignes à la fois — sept cents lignes à cinq champs chacune figeaient l'appareil.
+
 ## 2.2.0 — 31 août 2026
 
 **L'app installée se met enfin à jour toute seule.**

@@ -65,12 +65,17 @@ export interface SlotDraft {
   key: string
   /** 1 = lundi … 7 = dimanche, `null` si le jour n'a pas été compris */
   weekday: number | null
+  /**
+   * Date précise 'AAAA-MM-JJ' lue dans le fichier, `null` si le fichier n'en
+   * donne pas — ou si on a choisi d'en faire une semaine type.
+   */
+  date: string | null
   /** 'HH:MM', chaîne vide si l'heure n'a pas été comprise */
   start: string
   end: string
   title: string
   location: string | null
-  /** Nombre de fois où ce créneau apparaît dans le fichier (une année → une semaine type) */
+  /** Nombre de fois où ce créneau apparaît dans le fichier (sans dates : une année → une semaine type) */
   occurrences: number
   /** Le parseur n'était pas sûr de lui sur cette ligne */
   uncertain: boolean
@@ -80,6 +85,8 @@ export interface SlotDraft {
 /** Créneau déjà présent en base, pour repérer les doublons */
 export interface ExistingSlot {
   weekday: number
+  /** 'AAAA-MM-JJ' ou `null` pour un créneau hebdomadaire */
+  slot_date?: string | null
   /** 'HH:MM' ou 'HH:MM:SS' */
   start_time: string
   end_time: string
@@ -96,6 +103,8 @@ export interface ReviewedSlot {
 /** Créneau brut sorti d'une disposition, avant dédoublonnage et contrôle */
 export interface RawSlot {
   weekday: number | null
+  /** 'AAAA-MM-JJ' quand le fichier donne une vraie date */
+  date?: string | null
   start: string | null
   end: string | null
   title: string
@@ -271,19 +280,38 @@ const YMD_RE = /^(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})$/
 /** Numéro de série Excel : jours depuis le 30/12/1899 */
 const SERIAL_RE = /^(\d{4,6})(?:[.,]\d+)?$/
 
-/** Date d'une cellule → jour de semaine (1 = lundi … 7 = dimanche) */
-export function weekdayFromDate(raw: string): number | null {
+/** Une Date valide → 'AAAA-MM-JJ' (heure locale, jamais UTC : le soir, UTC change de jour) */
+function toIso(d: Date): string | null {
+  if (Number.isNaN(d.getTime())) return null
+  // Même fenêtre que la contrainte `schedule_slot_date_raisonnable` en base :
+  // une date en dehors est une erreur de lecture, pas une intention, et la
+  // laisser passer ne ferait que déplacer le refus au moment d'enregistrer.
+  const annee = d.getFullYear()
+  if (annee < 2000 || annee > 2100) return null
+  if (annee === 2100 && (d.getMonth() > 0 || d.getDate() > 1)) return null
+  const mois = String(d.getMonth() + 1).padStart(2, '0')
+  const jour = String(d.getDate()).padStart(2, '0')
+  return `${annee}-${mois}-${jour}`
+}
+
+/**
+ * Date d'une cellule → 'AAAA-MM-JJ'.
+ *
+ * C'est ce qui permet d'importer une année entière plutôt qu'une semaine type :
+ * la date lue dans le fichier est conservée telle quelle, au lieu d'être
+ * réduite au jour de la semaine puis jetée.
+ */
+export function parseDate(raw: string): string | null {
   const n = normalize(raw).replace(/\s/g, '')
   if (!n) return null
-  const toWeekday = (d: Date) => (Number.isNaN(d.getTime()) ? null : ((d.getDay() + 6) % 7) + 1)
 
   const ymd = YMD_RE.exec(n)
-  if (ymd) return toWeekday(new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3])))
+  if (ymd) return toIso(new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3])))
 
   const dmy = DMY_RE.exec(n)
   if (dmy) {
     const year = Number(dmy[3])
-    return toWeekday(new Date(year < 100 ? 2000 + year : year, Number(dmy[2]) - 1, Number(dmy[1])))
+    return toIso(new Date(year < 100 ? 2000 + year : year, Number(dmy[2]) - 1, Number(dmy[1])))
   }
 
   const serial = SERIAL_RE.exec(n)
@@ -291,9 +319,18 @@ export function weekdayFromDate(raw: string): number | null {
     const days = Number(serial[1])
     // 20000 ≈ 1954, 60000 ≈ 2064 : hors de cette fenêtre, ce n'est pas une date.
     if (days < 20000 || days > 60000) return null
-    return toWeekday(new Date(Date.UTC(1899, 11, 30 + days)))
+    const utc = new Date(Date.UTC(1899, 11, 30 + days))
+    return toIso(new Date(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate()))
   }
   return null
+}
+
+/** Date d'une cellule → jour de semaine (1 = lundi … 7 = dimanche) */
+export function weekdayFromDate(raw: string): number | null {
+  const iso = parseDate(raw)
+  if (!iso) return null
+  const [a, m, j] = iso.split('-').map(Number)
+  return ((new Date(a as number, (m as number) - 1, j as number).getDay() + 6) % 7) + 1
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -415,10 +452,14 @@ function slotsFromRows(matrix: string[][], plan: RowPlan | null, inferred: Map<n
     }
     if (!end && cEnd !== undefined) end = parseTime(cell(cEnd))
 
-    let weekday: number | null = null
-    if (cWeekday !== undefined) weekday = parseWeekdayCell(cell(cWeekday))
-    if (weekday === null && cDate !== undefined) weekday = weekdayFromDate(cell(cDate))
-    if (weekday === null && cWeekday !== undefined) weekday = weekdayFromDate(cell(cWeekday))
+    // La date d'abord : c'est elle qui porte le plus d'information. Le jour de
+    // semaine s'en déduit, jamais l'inverse.
+    let date: string | null = null
+    if (cDate !== undefined) date = parseDate(cell(cDate))
+    if (date === null && cWeekday !== undefined) date = parseDate(cell(cWeekday))
+
+    let weekday: number | null = date ? weekdayFromDate(date) : null
+    if (weekday === null && cWeekday !== undefined) weekday = parseWeekdayCell(cell(cWeekday))
     if (weekday === null && cDate !== undefined) weekday = parseWeekdayCell(cell(cDate))
 
     // Ligne vide (séparateur, total, pied de page) : on l'ignore sans bruit.
@@ -427,6 +468,7 @@ function slotsFromRows(matrix: string[][], plan: RowPlan | null, inferred: Map<n
 
     slots.push({
       weekday,
+      date,
       start,
       end,
       title: rawTitle,
@@ -660,12 +702,16 @@ export function toDrafts(raws: RawSlot[]): SlotDraft[] {
   for (const raw of raws) {
     const title = cleanTitle(raw.title)
     const truncated = title.slice(0, TITLE_MAX)
-    const key = `${raw.weekday ?? 0}|${raw.start ?? ''}|${raw.end ?? ''}|${normalize(truncated)}`
+    // La date fait partie de la clé : deux cours identiques à deux dates
+    // différentes sont deux créneaux, pas un seul compté deux fois. C'est ce
+    // qui distingue une année importée d'une semaine type.
+    const key = `${raw.date ?? ''}|${raw.weekday ?? 0}|${raw.start ?? ''}|${raw.end ?? ''}|${normalize(truncated)}`
     const seen = byKey.get(key)
     if (seen) { seen.occurrences++; continue }
     byKey.set(key, {
       key: `s${byKey.size}`,
       weekday: raw.weekday,
+      date: raw.date ?? null,
       start: raw.start ?? '',
       end: raw.end ?? '',
       title: truncated,
@@ -676,7 +722,10 @@ export function toDrafts(raws: RawSlot[]): SlotDraft[] {
     })
   }
   const drafts = [...byKey.values()]
-  drafts.sort((a, b) => (a.weekday ?? 9) - (b.weekday ?? 9) || a.start.localeCompare(b.start))
+  drafts.sort((a, b) =>
+    (a.date ?? '').localeCompare(b.date ?? '')
+    || (a.weekday ?? 9) - (b.weekday ?? 9)
+    || a.start.localeCompare(b.start))
   // Les lignes douteuses ne sont pas cochées d'office : rien ne part en base sans un regard.
   for (const d of drafts) {
     if (d.weekday === null || !d.start || !d.end || d.uncertain) d.selected = false
@@ -686,22 +735,28 @@ export function toDrafts(raws: RawSlot[]): SlotDraft[] {
 
 const HHMM_RE = /^\d{2}:\d{2}$/
 
-/** Empreinte d'un créneau : ce qui fait qu'il est « le même » qu'un autre */
-function fingerprint(weekday: number, start: string, end: string, title: string): string {
-  return `${weekday}|${start}|${end}|${normalize(title)}`
+/**
+ * Empreinte d'un créneau : ce qui fait qu'il est « le même » qu'un autre.
+ * La date en fait partie — le même cours le 8 et le 15 septembre, ce sont deux
+ * créneaux ; et un cours daté n'est jamais le doublon d'une habitude
+ * hebdomadaire, même à la même heure le même jour de semaine.
+ */
+function fingerprint(weekday: number, date: string | null, start: string, end: string, title: string): string {
+  return `${date ?? ''}|${weekday}|${start}|${end}|${normalize(title)}`
 }
 
 /** Empreintes des créneaux déjà enregistrés — la comparaison devient immédiate */
 export function knownSlotKeys(existing: ExistingSlot[]): Set<string> {
   return new Set(
-    existing.map((s) => fingerprint(s.weekday, s.start_time.slice(0, 5), s.end_time.slice(0, 5), s.title)),
+    existing.map((s) =>
+      fingerprint(s.weekday, s.slot_date ?? null, s.start_time.slice(0, 5), s.end_time.slice(0, 5), s.title)),
   )
 }
 
 /** Cette ligne est-elle déjà dans l'emploi du temps ? */
 export function isDuplicateDraft(draft: SlotDraft, known: ReadonlySet<string>): boolean {
   if (draft.weekday === null || known.size === 0) return false
-  return known.has(fingerprint(draft.weekday, draft.start, draft.end, draft.title))
+  return known.has(fingerprint(draft.weekday, draft.date, draft.start, draft.end, draft.title))
 }
 
 /**
@@ -768,14 +823,45 @@ export function reviewSlots(drafts: SlotDraft[], existing: ExistingSlot[] = []):
   // jours différents ne peuvent pas se chevaucher, et sur un même jour il suffit
   // de comparer chaque ligne à celles encore ouvertes. Comparer toutes les
   // paires coûtait ~31 000 comparaisons sur une année de cours — à chaque frappe.
-  const parJour = new Map<number, Plage[]>()
+  //
+  // La DATE compte autant que le jour : le même cours deux mardis de suite ne
+  // se chevauche pas. Sans ça, une année importée sortait intégralement en
+  // défaut — 720 lignes signalées sur 720 — et « Ne garder que les lignes
+  // sûres » décochait tout l'import.
+  //
+  // Un créneau hebdomadaire, lui, revient chaque semaine : il est confronté à
+  // toutes les dates qui tombent le même jour de semaine, en plus des autres
+  // hebdomadaires.
+  const parJour = new Map<string, Plage[]>()
+  const ajouter = (cle: string, plage: Plage) => {
+    const liste = parJour.get(cle)
+    if (liste) liste.push(plage)
+    else parJour.set(cle, [plage])
+  }
+  /** Les dates rencontrées pour chaque jour de semaine : où placer les hebdomadaires */
+  const datesParJour = new Map<number, Set<string>>()
+  const retenus: Plage[] = []
   for (const row of reviewed) {
     if (!row.draft.selected || row.blocking) continue
-    const jour = row.draft.weekday as number
     const plage: Plage = { row, debut: timeToMinutes(row.draft.start), fin: timeToMinutes(row.draft.end) }
-    const liste = parJour.get(jour)
-    if (liste) liste.push(plage)
-    else parJour.set(jour, [plage])
+    retenus.push(plage)
+    const jour = row.draft.weekday as number
+    if (row.draft.date) {
+      const vues = datesParJour.get(jour)
+      if (vues) vues.add(row.draft.date)
+      else datesParJour.set(jour, new Set([row.draft.date]))
+    }
+  }
+  for (const plage of retenus) {
+    const jour = plage.row.draft.weekday as number
+    if (plage.row.draft.date) {
+      ajouter(`${plage.row.draft.date}`, plage)
+      continue
+    }
+    // Hebdomadaire : dans le seau des hebdomadaires de ce jour, et dans chacune
+    // des dates de ce même jour de semaine.
+    ajouter(`h${jour}`, plage)
+    for (const date of datesParJour.get(jour) ?? []) ajouter(date, plage)
   }
   for (const liste of parJour.values()) {
     if (liste.length < 2) continue
@@ -818,12 +904,68 @@ export function partialFailureMessage(inserted: number, total: number): string {
 }
 
 /** Lignes prêtes pour `schedule_slots` — uniquement ce qui est coché et valide */
+/**
+ * Combien de lignes portent une vraie date, et sur quelle période.
+ * Sert la phrase d'accueil de la relecture : « 312 créneaux, du 1er septembre
+ * au 26 juin » dit tout de suite si le fichier couvre une année ou une semaine.
+ */
+export function dateSpan(drafts: SlotDraft[]): { first: string; last: string; count: number } | null {
+  const dates = drafts.map((d) => d.date).filter((d): d is string => !!d).sort()
+  if (dates.length === 0) return null
+  return { first: dates[0] as string, last: dates[dates.length - 1] as string, count: dates.length }
+}
+
+/**
+ * Replie un import daté en une semaine type : les dates sont oubliées, les
+ * créneaux identiques fusionnent, et `occurrences` dit combien de fois chacun
+ * revenait dans le fichier.
+ *
+ * C'est le choix à faire quand on importe une année mais qu'on veut juste
+ * « la tête d'une semaine normale » — un emploi du temps qui se répète, sans
+ * les vacances ni les semaines particulières. L'inverse (garder les dates) est
+ * la valeur par défaut dès que le fichier en contient.
+ */
+export function collapseToTypicalWeek(drafts: SlotDraft[]): SlotDraft[] {
+  const byKey = new Map<string, SlotDraft>()
+  for (const d of drafts) {
+    const key = `${d.weekday ?? 0}|${d.start}|${d.end}|${normalize(d.title)}`
+    const seen = byKey.get(key)
+    if (seen) {
+      seen.occurrences += d.occurrences
+      // Une seule ligne cochée suffit à garder le créneau dans la semaine type.
+      seen.selected = seen.selected || d.selected
+      continue
+    }
+    byKey.set(key, { ...d, key: `t${byKey.size}`, date: null })
+  }
+  const res = [...byKey.values()]
+  res.sort((a, b) => (a.weekday ?? 9) - (b.weekday ?? 9) || a.start.localeCompare(b.start))
+  return res
+}
+
+/** « du 1 septembre au 26 juin » — la période couverte, en toutes lettres */
+export function spanLabel(span: { first: string; last: string }): string {
+  const lire = (iso: string) => {
+    const [a, m, j] = iso.split('-').map(Number)
+    return new Date(a as number, (m as number) - 1, j as number, 12)
+  }
+  const fmt = (d: Date, avecAnnee: boolean) =>
+    d.toLocaleDateString('fr-FR', avecAnnee
+      ? { day: 'numeric', month: 'long', year: 'numeric' }
+      : { day: 'numeric', month: 'long' })
+  const debut = lire(span.first)
+  const fin = lire(span.last)
+  const memeAnnee = debut.getFullYear() === fin.getFullYear()
+  return `du ${fmt(debut, !memeAnnee)} au ${fmt(fin, true)}`
+}
+
 export function toInsertRows(reviewed: ReviewedSlot[], userId: string, colorOf: (title: string) => string) {
   return reviewed
     .filter((r) => r.draft.selected && !r.blocking)
     .map((r) => ({
       user_id: userId,
       weekday: r.draft.weekday as number,
+      slot_date: r.draft.date,
       start_time: `${r.draft.start}:00`,
       end_time: `${r.draft.end}:00`,
       title: r.draft.title.trim().slice(0, TITLE_MAX),

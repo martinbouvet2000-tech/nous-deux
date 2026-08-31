@@ -1,5 +1,5 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { CalendarClock, Check, ListChecks, MapPin, Repeat, Trash2, Upload, X } from 'lucide-react'
+import { CalendarClock, Check, ChevronLeft, ChevronRight, ListChecks, MapPin, Repeat, Trash2, Upload, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import { useLiveData } from '@/hooks/useLiveData'
@@ -18,6 +18,8 @@ import {
   SLOT_COLORS, SLOT_COLOR_NAMES, WEEKDAY_SHORT, WEEKDAY_ABBR, WEEKDAYS,
   timeToMinutes, shortTime, localClockIn, weekdayLabel,
   deletableIds, indexByWeekday, partialDeleteMessage, slotCount,
+  mondayOf, addDays, fromIsoDate, weekLabel,
+  slotsForWeek, dateOfWeekday, slotWhen,
 } from '@/lib/schedule'
 
 /** Chargé seulement quand on ouvre l'import : lecteurs de fichiers hors du paquet initial */
@@ -61,7 +63,9 @@ interface SlotCardProps {
  * temps importé en compte facilement autant.
  */
 const SlotCard = memo(function SlotCard({ slot, compact, mode, selected, onOpen, onToggle }: SlotCardProps) {
-  const label = `${slot.title}, ${weekdayLabel(slot.weekday)} de ${shortTime(slot.start_time)} à ${shortTime(slot.end_time)}${slot.location ? `, ${slot.location}` : ''}`
+  // « le mardi 8 septembre » pour un créneau daté, « chaque mardi » pour une
+  // habitude : lu à voix haute, les deux ne veulent pas dire la même chose.
+  const label = `${slot.title}, ${slotWhen(slot)} de ${shortTime(slot.start_time)} à ${shortTime(slot.end_time)}${slot.location ? `, ${slot.location}` : ''}`
   const selecting = mode === 'select'
   const cls = `relative overflow-hidden rounded-xl ${selecting ? 'pl-8' : 'pl-3'} pr-2 py-1.5 text-left w-full h-full ${
     mode === 'read' ? '' : 'hover:brightness-110 transition-all duration-200'
@@ -132,6 +136,27 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
   const [slots, setSlots] = useState<ScheduleSlot[]>([])
   const [loaded, setLoaded] = useState(false)
   const [now, setNow] = useState(() => new Date())
+  /**
+   * L'emploi du temps n'est plus une semaine unique qui se répète : les
+   * créneaux datés n'existent que leur semaine, il faut donc pouvoir se
+   * déplacer. On garde un ÉCART en semaines plutôt qu'une date figée : la
+   * semaine 0 reste toujours celle d'aujourd'hui, même après minuit, et elle
+   * suit le fuseau du PROFIL — pas celui de l'appareil. Sans ça, se connecter
+   * depuis un autre continent affichait la semaine d'à côté et masquait les
+   * cours du jour.
+   */
+  const [weekOffset, setWeekOffset] = useState(0)
+  /**
+   * Lundi de la semaine affichée. L'ancre est « aujourd'hui chez moi », au sens
+   * du fuseau du profil : c'est ma semaine que je parcours, y compris quand je
+   * regarde l'emploi du temps de l'autre.
+   */
+  const weekStart = useMemo(
+    () => addDays(mondayOf(fromIsoDate(localClockIn(profile?.timezone ?? 'UTC', now).date)), weekOffset * 7),
+    [profile?.timezone, now, weekOffset],
+  )
+  /** La semaine 0 est toujours celle d'aujourd'hui : pas besoin de recalculer. */
+  const thisWeek = weekOffset === 0
   const [mobileDay, setMobileDay] = useState(() => localClockIn(profile?.timezone ?? 'UTC').weekday)
   const [importing, setImporting] = useState(false)
 
@@ -146,6 +171,9 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
   const [editing, setEditing] = useState<ScheduleSlot | null>(null)
   const [title, setTitle] = useState('')
   const [days, setDays] = useState<number[]>([])
+  /** « chaque semaine » ou « une date précise » */
+  const [dateMode, setDateMode] = useState<'weekly' | 'date'>('weekly')
+  const [slotDate, setSlotDate] = useState('')
   const [start, setStart] = useState('09:00')
   const [end, setEnd] = useState('10:00')
   const [location, setLocation] = useState('')
@@ -187,8 +215,12 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
     setEditing(null)
     setTitle(''); setDays(weekday ? [weekday] : []); setStart('09:00'); setEnd('10:00')
     setLocation(''); setColor(SLOT_COLORS[0]); setFormError('')
+    setDateMode('weekly')
+    // La date proposée est celle de la colonne cliquée, dans la semaine
+    // affichée : passer en « une date précise » ne demande alors plus rien.
+    setSlotDate(dateOfWeekday(weekStart, weekday ?? 1))
     setOpen(true)
-  }, [])
+  }, [weekStart])
 
   useEffect(() => {
     if (addSignal > 0) openCreate()
@@ -200,8 +232,10 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
     setEditing(s)
     setTitle(s.title); setDays([s.weekday]); setStart(shortTime(s.start_time)); setEnd(shortTime(s.end_time))
     setLocation(s.location ?? ''); setColor(s.color); setFormError('')
+    setDateMode(s.slot_date ? 'date' : 'weekly')
+    setSlotDate(s.slot_date ?? dateOfWeekday(weekStart, s.weekday))
     setOpen(true)
-  }, [])
+  }, [weekStart])
 
   const toggleDay = (d: number) => setDays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()))
 
@@ -209,7 +243,9 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
     e.preventDefault()
     if (!profile) return
     if (!title.trim()) return setFormError('Donne un titre à ce créneau.')
-    if (days.length === 0) return setFormError('Choisis au moins un jour.')
+    const surUneDate = dateMode === 'date'
+    if (surUneDate && !slotDate) return setFormError('Choisis une date.')
+    if (!surUneDate && days.length === 0) return setFormError('Choisis au moins un jour.')
     if (!start || !end) return setFormError('Renseigne un début et une fin.')
     if (timeToMinutes(end) <= timeToMinutes(start)) return setFormError("L'heure de fin doit être après le début.")
     setFormError('')
@@ -222,25 +258,29 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
       location: location.trim() || null,
       color,
     }
+    // Une date précise ne concerne qu'un jour : le jour de semaine s'en déduit
+    // (la base le recalcule de toute façon), et la liste de jours n'a plus cours.
+    const jours = surUneDate ? [fromIsoDate(slotDate).getDay() === 0 ? 7 : fromIsoDate(slotDate).getDay()] : days
+    const dateCol = surUneDate ? slotDate : null
     let ok: boolean
     if (editing) {
       // Le créneau édité garde son jour s'il est toujours coché, sinon prend le premier coché ;
       // les autres jours cochés deviennent de nouveaux créneaux.
-      const keep = days.includes(editing.weekday) ? editing.weekday : days[0]
-      const extra = days.filter((d) => d !== keep)
-      const upd = await run(supabase.from('schedule_slots').update({ ...base, weekday: keep }).eq('id', editing.id), { errorMessage: 'Modification impossible.' })
+      const keep = jours.includes(editing.weekday) ? editing.weekday : jours[0]
+      const extra = jours.filter((d) => d !== keep)
+      const upd = await run(supabase.from('schedule_slots').update({ ...base, weekday: keep, slot_date: dateCol }).eq('id', editing.id), { errorMessage: 'Modification impossible.' })
       ok = upd.ok
       if (ok && extra.length) {
-        const ins = await run(supabase.from('schedule_slots').insert(extra.map((weekday) => ({ ...base, weekday }))), { errorMessage: 'Ajout impossible.' })
+        const ins = await run(supabase.from('schedule_slots').insert(extra.map((weekday) => ({ ...base, weekday, slot_date: dateCol }))), { errorMessage: 'Ajout impossible.' })
         ok = ins.ok
       }
     } else {
-      const ins = await run(supabase.from('schedule_slots').insert(days.map((weekday) => ({ ...base, weekday }))), { errorMessage: "Le créneau n'a pas pu être ajouté." })
+      const ins = await run(supabase.from('schedule_slots').insert(jours.map((weekday) => ({ ...base, weekday, slot_date: dateCol }))), { errorMessage: "Le créneau n'a pas pu être ajouté." })
       ok = ins.ok
     }
     setSaving(false)
     if (ok) {
-      toast.success(editing ? 'Créneau modifié' : days.length > 1 ? 'Créneaux ajoutés' : 'Créneau ajouté')
+      toast.success(editing ? 'Créneau modifié' : jours.length > 1 ? 'Créneaux ajoutés' : 'Créneau ajouté')
       setOpen(false)
       fetchSlots()
     }
@@ -248,7 +288,7 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
 
   const remove = async () => {
     if (!editing) return
-    const yes = await confirm({ title: 'Supprimer ce créneau ?', message: `« ${editing.title} » du ${weekdayLabel(editing.weekday)} sera retiré.`, confirmLabel: 'Supprimer', danger: true })
+    const yes = await confirm({ title: 'Supprimer ce créneau ?', message: `« ${editing.title} » ${slotWhen(editing)} sera retiré.`, confirmLabel: 'Supprimer', danger: true })
     if (!yes) return
     const { ok } = await run(supabase.from('schedule_slots').delete().eq('id', editing.id), { errorMessage: 'Suppression impossible.' })
     if (ok) { setOpen(false); fetchSlots() }
@@ -262,7 +302,13 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
 
   const viewedProfile = who === 'me' ? profile : partnerProfile
   const viewedId = viewedProfile?.id
-  const shown = useMemo(() => slots.filter((s) => s.user_id === viewedId), [slots, viewedId])
+  const shown = useMemo(
+    () => slotsForWeek(slots.filter((s) => s.user_id === viewedId), weekStart),
+    [slots, viewedId, weekStart],
+  )
+  /** La personne regardée a-t-elle des créneaux, ne serait-ce qu'une autre semaine ? */
+  const hasAnySlot = useMemo(() => slots.some((s) => s.user_id === viewedId), [slots, viewedId])
+  /** Les sept dates de la semaine affichée, pour les en-têtes et le formulaire */
   const isMine = who === 'me'
 
   // ─── Mode sélection ───
@@ -272,7 +318,14 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
    * puis un créneau disparu (suppression sur l'autre téléphone, temps réel) ne
    * doivent pas gonfler le nombre annoncé.
    */
-  const selectedIds = useMemo(() => deletableIds(mine, selected, profile?.id), [mine, selected, profile?.id])
+  const selectedIds = useMemo(
+    // Sur `shown`, pas sur `mine` : changer de semaine fait disparaître des
+    // créneaux de l'écran, et rien ne doit pouvoir partir sans être visible —
+    // ni décochable. La sélection est vidée au changement de semaine (effet
+    // ci-dessous) ; ce filtre est la ceinture par-dessus les bretelles.
+    () => deletableIds(shown, selected, profile?.id),
+    [shown, selected, profile?.id],
+  )
   const selectedCount = selectedIds.length
 
   const exitSelection = useCallback(() => {
@@ -294,6 +347,12 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
   useEffect(() => {
     if (!isMine || (selecting && loaded && mine.length === 0)) exitSelection()
   }, [isMine, selecting, loaded, mine.length, exitSelection])
+
+  // Changer de semaine remet la sélection à zéro : cocher ici puis supprimer
+  // là-bas, sans jamais revoir ce qui part, serait le pire des pièges.
+  useEffect(() => {
+    setSelected((prev) => (prev.size === 0 ? prev : EMPTY_SELECTION))
+  }, [weekOffset])
 
   /**
    * Supprime la sélection, par paquets, après confirmation — et seulement après.
@@ -463,9 +522,45 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
           )}
         </div>
         <p className="inline-flex items-center gap-1.5 text-[12px] text-[#9B9287]">
-          <Repeat size={12} aria-hidden="true" /> Ces créneaux se répètent chaque semaine.
+          <Repeat size={12} aria-hidden="true" /> Les créneaux sans date se répètent chaque semaine.
           {!isMine && tzDiffers && <> Heures de {timezoneCity(viewedTz)}.</>}
         </p>
+      </div>
+
+      {/* ─── Navigation de semaine ───
+          Un emploi du temps daté n'est plus une semaine unique : il faut pouvoir
+          aller voir la semaine prochaine, ou celle de la rentrée. */}
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setWeekOffset((n) => n - 1)}
+          aria-label="Semaine précédente"
+          className={`${BTN_GHOST} tap-44 px-3`}
+        >
+          <ChevronLeft size={16} aria-hidden="true" />
+        </button>
+
+        <div className="min-w-0 text-center">
+          <p className="font-display text-[16px] text-[#F0EAE0] truncate">{weekLabel(weekStart)}</p>
+          {!thisWeek && (
+            <button
+              type="button"
+              onClick={() => setWeekOffset(0)}
+              className="text-[12px] text-[#D4A574] hover:underline tap-44"
+            >
+              Revenir à cette semaine
+            </button>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setWeekOffset((n) => n + 1)}
+          aria-label="Semaine suivante"
+          className={`${BTN_GHOST} tap-44 px-3`}
+        >
+          <ChevronRight size={16} aria-hidden="true" />
+        </button>
       </div>
 
       {selecting && (
@@ -480,10 +575,18 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
       {loaded && shown.length === 0 ? (
         <EmptyState
           icon={CalendarClock}
-          title={isMine ? 'Ta semaine est encore vide' : `${partnerProfile?.display_name ?? 'Ton partenaire'} n'a rien ajouté pour l'instant`}
-          text={isMine
-            ? `Ajoute tes cours, ton travail, ton sport : ${partnerProfile?.display_name ?? 'ton partenaire'} saura toujours où tu en es de ta journée.`
-            : 'Dès que des créneaux seront ajoutés, tu les verras ici.'}
+          title={
+            // Une semaine vide au milieu d'une année remplie, ce sont des
+            // vacances — pas un emploi du temps à créer.
+            hasAnySlot
+              ? 'Rien cette semaine'
+              : isMine ? 'Ta semaine est encore vide' : `${partnerProfile?.display_name ?? 'Ton partenaire'} n'a rien ajouté pour l'instant`
+          }
+          text={hasAnySlot
+            ? `Aucun créneau du ${weekLabel(weekStart)}. Les autres semaines sont juste à côté.`
+            : isMine
+              ? `Ajoute tes cours, ton travail, ton sport : ${partnerProfile?.display_name ?? 'ton partenaire'} saura toujours où tu en es de ta journée.`
+              : 'Dès que des créneaux seront ajoutés, tu les verras ici.'}
           action={isMine ? (
             <div className="flex flex-wrap justify-center gap-2">
               <button onClick={() => openCreate()} className={BTN_PRIMARY}>Ajouter un créneau</button>
@@ -502,11 +605,14 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
               <div aria-hidden="true" />
               {WEEKDAY_ABBR.map((d, i) => {
                 const weekday = i + 1
-                const isToday = clock.weekday === weekday
+                const isToday = thisWeek && clock.weekday === weekday
                 if (!selecting) {
                   return (
                     <div key={d} className={`text-center text-[11px] tracking-[0.14em] uppercase py-1 mb-2 rounded-full ${isToday ? 'text-[#D4A574] bg-[#D4A574]/10' : 'text-[#9B9287]'}`}>
-                      {d}
+                      {d}{' '}
+                      {/* Le quantième : sans lui, impossible de savoir quelle
+                          semaine on regarde une fois qu'on s'est déplacé. */}
+                      <span className="num opacity-70">{addDays(weekStart, i).getDate()}</span>
                     </div>
                   )
                 }
@@ -575,7 +681,7 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
                         </div>
                       )
                     })}
-                    {clock.weekday === d && nowVisible && (
+                    {thisWeek && clock.weekday === d && nowVisible && (
                       <div className="absolute left-0 right-0 z-10 pointer-events-none" style={{ top: yFor(clock.minutes) }} aria-label="Maintenant">
                         <span className="absolute -left-1 -top-[3px] size-[7px] rounded-full bg-[#D4A574]" aria-hidden="true" />
                         <span className="block h-px bg-[#D4A574]" aria-hidden="true" />
@@ -602,7 +708,7 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
               {WEEKDAY_SHORT.map((l, i) => {
                 const d = i + 1
                 const active = mobileDay === d
-                const isToday = clock.weekday === d
+                const isToday = thisWeek && clock.weekday === d
                 const has = daySlots(d).length > 0
                 return (
                   <button
@@ -618,6 +724,7 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
                     }`}
                   >
                     <span>{l}</span>
+                    <span className="num text-[10px] leading-none opacity-70">{addDays(weekStart, i).getDate()}</span>
                     <span className={`size-1 rounded-full ${has ? (active ? 'bg-[#110F0E]/60' : 'bg-[#C2788E]') : 'bg-transparent'}`} aria-hidden="true" />
                   </button>
                 )
@@ -625,7 +732,10 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
             </div>
             <div className={CARD}>
               <div className={CARD_EDGE} aria-hidden="true" />
-              <h2 className="font-display text-[18px] text-[#F0EAE0] mb-3">{weekdayLabel(mobileDay, true)}</h2>
+              <h2 className="font-display text-[18px] text-[#F0EAE0] mb-3">
+                {capitalizeFirst(fromIsoDate(dateOfWeekday(weekStart, mobileDay))
+                  .toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }))}
+              </h2>
               {daySlots(mobileDay).length === 0 ? (
                 <p className="text-[13px] text-[#9B9287]">Rien ce jour-là.</p>
               ) : (
@@ -685,7 +795,7 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
             >
               {selectedCount === 0
                 ? 'Aucun créneau sélectionné'
-                : `${slotCount(selectedCount)} sélectionné${selectedCount > 1 ? 's' : ''} sur ${mine.length}`}
+                : `${slotCount(selectedCount)} sélectionné${selectedCount > 1 ? 's' : ''} sur ${shown.length}`}
             </p>
             {selectedCount > 0 && (
               <button type="button" onClick={() => setSelected(EMPTY_SELECTION)} className={`${BTN_GHOST} px-3.5`}>
@@ -707,36 +817,82 @@ export default function ScheduleView({ addSignal = 0 }: Props) {
       )}
 
       {open && (
-        <Modal title={editing ? 'Modifier le créneau' : 'Nouveau créneau'} description="Se répète chaque semaine, aux jours cochés." onClose={() => setOpen(false)}>
+        <Modal title={editing ? 'Modifier le créneau' : 'Nouveau créneau'} description={dateMode === 'date'
+          ? 'Ce jour-là seulement.'
+          : 'Se répète chaque semaine, aux jours cochés.'} onClose={() => setOpen(false)}>
           <form onSubmit={save} className="space-y-4 max-md:space-y-5" noValidate>
             <div>
               <label htmlFor="slot-title" className={LABEL}>Titre</label>
               <input id="slot-title" type="text" placeholder="Ex : Cours de maths, Boulot, Sport…" value={title} onChange={(e) => setTitle(e.target.value)} className={INPUT} maxLength={60} required />
             </div>
+            {/* Chaque semaine, ou une seule fois : le choix commande la suite du
+                formulaire — sept jours cochables d'un côté, une date de l'autre. */}
             <div>
-              <span className={LABEL} id="slot-days-label">Jours</span>
-              {/* Gouttière réduite : sept boutons dans la largeur d'une modale, 41 x 44 px chacun. */}
-              <div className="flex gap-1" role="group" aria-labelledby="slot-days-label">
-                {WEEKDAY_SHORT.map((l, i) => {
-                  const d = i + 1
-                  const on = days.includes(d)
-                  return (
-                    <button
-                      key={d}
-                      type="button"
-                      aria-pressed={on}
-                      aria-label={weekdayLabel(i + 1, true)}
-                      onClick={() => toggleDay(d)}
-                      className={`flex-1 min-h-11 rounded-full text-[13px] font-medium transition-all duration-200 ${
-                        on ? 'bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E]' : 'bg-white/[0.04] text-[#9B9287] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07)] hover:text-[#F0EAE0]'
-                      }`}
-                    >
-                      {l}
-                    </button>
-                  )
-                })}
+              <span className={LABEL} id="slot-repeat-label">Quand</span>
+              <div className="flex gap-1" role="group" aria-labelledby="slot-repeat-label">
+                {([['weekly', 'Chaque semaine'], ['date', 'Une date précise']] as const).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    aria-pressed={dateMode === mode}
+                    onClick={() => setDateMode(mode)}
+                    className={`flex-1 min-h-11 rounded-full text-[13px] font-medium transition-all duration-200 ${
+                      dateMode === mode
+                        ? 'bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E]'
+                        : 'bg-white/[0.04] text-[#9B9287] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07)] hover:text-[#F0EAE0]'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
+
+            {dateMode === 'date' ? (
+              <div>
+                <label htmlFor="slot-date" className={LABEL}>Date</label>
+                <input
+                  id="slot-date"
+                  type="date"
+                  value={slotDate}
+                  onChange={(e) => setSlotDate(e.target.value)}
+                  className={INPUT}
+                  required
+                />
+                {slotDate && (
+                  <p className="mt-1.5 text-[12px] text-[#9B9287]">
+                    {capitalizeFirst(fromIsoDate(slotDate)
+                      .toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}
+                    {' '}— ce jour-là seulement.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div>
+                <span className={LABEL} id="slot-days-label">Jours</span>
+                {/* Gouttière réduite : sept boutons dans la largeur d'une modale, 41 x 44 px chacun. */}
+                <div className="flex gap-1" role="group" aria-labelledby="slot-days-label">
+                  {WEEKDAY_SHORT.map((l, i) => {
+                    const d = i + 1
+                    const on = days.includes(d)
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        aria-pressed={on}
+                        aria-label={weekdayLabel(i + 1, true)}
+                        onClick={() => toggleDay(d)}
+                        className={`flex-1 min-h-11 rounded-full text-[13px] font-medium transition-all duration-200 ${
+                          on ? 'bg-gradient-to-br from-[#D4A574] to-[#C2788E] text-[#110F0E]' : 'bg-white/[0.04] text-[#9B9287] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07)] hover:text-[#F0EAE0]'
+                        }`}
+                      >
+                        {l}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label htmlFor="slot-start" className={LABEL}>Début</label>
