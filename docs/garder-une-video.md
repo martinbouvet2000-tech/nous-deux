@@ -31,9 +31,9 @@ supabase secrets set COBALT_API_KEY="..."
 ```
 
 L'instance publique historique demande aujourd'hui une authentification :
-le plus simple et le plus fiable est d'**héberger la sienne** (l'image Docker
-officielle de Cobalt tient sur un petit VPS). Sans `COBALT_API_URL`, l'app le
-dit clairement au lieu d'échouer en silence.
+le plus simple et le plus fiable est d'**héberger la sienne**. La marche à
+suivre, de bout en bout, est dans [heberger-cobalt.md](heberger-cobalt.md).
+Sans `COBALT_API_URL`, l'app le dit clairement au lieu d'échouer en silence.
 
 ## Déploiement de la fonction
 
