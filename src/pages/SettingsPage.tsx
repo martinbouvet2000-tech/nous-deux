@@ -394,7 +394,7 @@ export default function SettingsPage() {
 
       </div>
       </div>
-      <p className="text-center text-[11px] tracking-[0.18em] uppercase text-[#9B9287] pt-8 pb-4">Awy · v{__APP_VERSION__}</p>
+      <p className="text-center text-[11px] tracking-[0.18em] uppercase text-[#9B9287] pt-8 pb-4">Awy · v{__APP_VERSION__} · {__BUILD_ID__}</p>
     </div>
   )
 }
