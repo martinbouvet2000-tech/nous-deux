@@ -22,7 +22,7 @@ name: Livraison Awy 2.2.0
 on:
   push:
     paths:
-      - '.github/workflows/livraison-awy-2-2-0.yml'
+      - '.github/workflows/livraison-awy-2-2-0_2.yml'
   workflow_dispatch:
 
 permissions:
@@ -343,7 +343,7 @@ jobs:
         run: |
           # Supprimer un workflow est autorise ; en creer ou en modifier un ne
           # l'est pas. C'est pour ca que cette livraison ne touche plus ci.yml.
-          rm -f .github/workflows/livraison-awy-2-2-0.yml
+          rm -f .github/workflows/livraison-awy-2-2-0.yml .github/workflows/livraison-awy-2-2-0_2.yml
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
