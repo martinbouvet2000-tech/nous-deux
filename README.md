@@ -12,7 +12,7 @@ L'app s'installe depuis le navigateur (« Sur l'écran d'accueil » sur iPhone, 
 |---|---|
 | **Accueil** | Les deux heures locales côte à côte, compte à rebours des retrouvailles, « Envie d'appel » (un tap qui prévient l'autre), série de jours consécutifs, humeur du jour, question du jour |
 | **Carte** | Position des deux, en temps réel, avec précision affichée et distance à vol d'oiseau. Partage désactivable des deux côtés, trace effacée au bout de 48 h |
-| **Agenda** | Événements partagés en double fuseau + emploi du temps hebdomadaire de chacun, avec import depuis un fichier PDF, Excel ou CSV et suppression groupée |
+| **Agenda** | Événements partagés en double fuseau + emploi du temps de chacun, semaine par semaine. Un créneau se répète chaque semaine ou tombe à une date précise — une année scolaire entière tient dedans. Import depuis un fichier PDF, Excel ou CSV, suppression groupée |
 | **Souvenirs** | Petits mots, gratitudes, vlogs vidéo, capsules temporelles à ouvrir à une date choisie |
 | **À deux** | Activités et projets communs |
 | **Réglages** | Profil, fuseau, partage de position, notifications push, position en arrière-plan, export des données, suppression du compte |
@@ -70,6 +70,7 @@ Toutes les migrations présentes sont **déjà appliquées en production**. Les 
 - `20260828144500_purge_stockage_suppression_compte.sql` — la suppression de compte efface aussi les fichiers, sans toucher aux données du partenaire qui reste
 - `20260828190000_notifications_push.sql` — abonnements, déclencheurs, `envoyer_push()`
 - `20260828210000_jetons_position.sql` — jetons révocables pour la position en arrière-plan
+- `20260831120000_creneaux_dates.sql` — `slot_date` sur les créneaux (NULL = hebdomadaire), avec un déclencheur qui tient `weekday` en accord avec la date, quelle que soit la voie d'écriture
 
 ## Position en arrière-plan
 
