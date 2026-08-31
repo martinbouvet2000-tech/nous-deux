@@ -2,6 +2,41 @@
 
 Les dates sont celles de la mise en ligne. Chaque version est un seul commit sur `master`, suivi d'un déploiement GitHub Pages.
 
+## 2.4.0 — 31 août 2026
+
+**Ce que l'audit a trouvé, corrigé.**
+
+Un audit complet du projet — code, base, fonctions serveur, dépendances, chaîne de
+livraison — a rendu quinze constats. Cette version corrige tout ce qui pouvait l'être
+sans intervention manuelle, et outille le reste.
+
+- **la promesse des 48 h est enfin tenue.** L'app affiche « Parcours conservé 48 h, puis
+  effacé » à deux endroits. C'était faux : la purge était un déclencheur `after insert`
+  par ligne, limité aux points de l'auteur de l'insertion. Les vieux points de quelqu'un
+  n'étaient donc effacés que si cette même personne enregistrait un nouveau point — jamais
+  si elle coupait le partage, c'est-à-dire précisément quand on veut que la trace
+  disparaisse. Neuf points de plus de 48 h traînaient en base, le plus ancien vieux de deux
+  jours. La purge devient globale, passe en `for each statement`, et un `pg_cron` horaire
+  prend le relais quand plus personne n'enregistre rien.
+- **`react-router` passe en 7.18.3**, qui referme six failles connues dont une CSRF et une
+  XSS. C'était la seule dépendance vulnérable réellement embarquée dans le navigateur.
+- **la fonction `telecharger-video` ne suit plus les redirections à l'aveugle.**
+  `redirect: 'follow'` ne contrôlait que l'adresse de départ : un hébergeur pouvait
+  rediriger vers une adresse interne sans que rien ne le revérifie. Chaque saut est
+  désormais résolu, repassé par le filtre d'adresses publiques, et la chaîne est bornée à
+  cinq. Son code entre dans le dépôt : il ne tournait en production que depuis une branche.
+- **`scripts/sauvegarde.mjs`** copie tout — lignes et fichiers — dans un dossier daté.
+  Le plan gratuit de Supabase ne fournit aucune sauvegarde : jusqu'ici, les vlogs et les
+  petits mots n'existaient qu'à un seul endroit au monde.
+- **l'historique des migrations reproduit à nouveau la base.** Vingt-deux migrations
+  étaient appliquées en production pour dix-sept fichiers au dépôt, tous horodatés
+  différemment de la version enregistrée. Les fichiers sont réalignés, et les cinq
+  migrations historiques sans source retrouvent une entrée au registre.
+- `jour_du_creneau()` fixe son `search_path` — c'était la seule fonction du schéma à ne
+  pas le faire, introduite la veille dans la migration des dates.
+- cinq tests de plus, qui échouent si la purge redevient dépendante de l'auteur, si le
+  filet horaire disparaît, ou si une fonction perd son `search_path`.
+
 ## 2.3.0 — 31 août 2026
 
 **L'emploi du temps connaît enfin les dates : on peut y mettre une année entière.**

@@ -1,0 +1,15 @@
+-- HISTORIQUE — migration appliquée en production le 7 juillet 2026, dont le
+-- fichier n'avait jamais été versionné. Elle durcissait les politiques RLS
+-- (exiger une session authentifiée) et fixait le `search_path` des fonctions.
+--
+-- Son contenu d'origine est perdu. Ce qu'elle mettait en place a toutefois été
+-- entièrement réécrit par les migrations qui suivent — `security_hardening_and_fixes`
+-- (18 août), les cinq `privacy_fix_*` (26 août) et `perf_index_et_rls` (28 août) —
+-- qui redéfinissent chaque politique et chaque fonction de zéro. Rejouer
+-- l'historique sans elle aboutit donc au même état.
+--
+-- Le fichier existe pour que le registre des migrations du dépôt corresponde,
+-- version pour version, à celui de la base.
+--
+-- Rien à exécuter.
+select 1 where false;

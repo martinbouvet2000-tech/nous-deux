@@ -1,0 +1,13 @@
+-- HISTORIQUE — migration appliquée en production le 12 juin 2026, dont le fichier
+-- n'avait jamais été versionné. Elle créait les tables de l'ancien « album »
+-- (polaroids, souvenirs), remplacées depuis par les vlogs puis entièrement
+-- retirées par `20260828184203_retrait_schema_mort`.
+--
+-- Son contenu d'origine est perdu, mais rejouer l'historique sans elle donne
+-- exactement le même état final : ce qu'elle créait a été supprimé depuis. Le
+-- fichier existe donc pour que le registre des migrations du dépôt corresponde,
+-- version pour version, à celui de la base — sans quoi une reconstruction à neuf
+-- tenterait de tout rejouer.
+--
+-- Rien à exécuter.
+select 1 where false;

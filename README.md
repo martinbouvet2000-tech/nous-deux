@@ -64,17 +64,68 @@ Le schéma vit dans Supabase ; chaque changement est versionné dans `supabase/m
 
 Toutes les migrations présentes sont **déjà appliquées en production**. Les plus structurantes :
 
-- `20260818120000_security_hardening.sql` — verrou sur la liaison des partenaires, création du profil à l'inscription, question du jour par couple, `unlink_partner()`, `delete_my_account()`
-- `20260826152942` → `20260826153500` — cloisonnement du Storage, portée partenaire des souvenirs, inscriptions plafonnées à deux comptes, capsules scellées jusqu'à leur date, droits d'exécution des fonctions `SECURITY DEFINER`
-- `20260828143000_perf_index_et_rls.sql` — 83 politiques réécrites en `(select auth.uid())` (évaluées une fois au lieu d'une fois par ligne) et index sur les colonnes de jointure
-- `20260828144500_purge_stockage_suppression_compte.sql` — la suppression de compte efface aussi les fichiers, sans toucher aux données du partenaire qui reste
-- `20260828190000_notifications_push.sql` — abonnements, déclencheurs, `envoyer_push()`
-- `20260828210000_jetons_position.sql` — jetons révocables pour la position en arrière-plan
-- `20260831120000_creneaux_dates.sql` — `slot_date` sur les créneaux (NULL = hebdomadaire), avec un déclencheur qui tient `weekday` en accord avec la date, quelle que soit la voie d'écriture
+Le nom de chaque fichier porte la **version telle qu'elle est enregistrée en base** : le
+registre du dépôt et celui de Supabase se correspondent un pour un, sans quoi une
+reconstruction à neuf rejouerait tout. Cinq fichiers de juin et juillet ne contiennent
+qu'un commentaire : leur SQL d'origine n'a jamais été versionné et ce qu'ils créaient a
+depuis été retiré ou réécrit. Ils existent pour tenir le compte, pas pour être rejoués.
+
+
+- `20260818193651_security_hardening_and_fixes.sql` — verrou sur la liaison des partenaires, création du profil à l'inscription, question du jour par couple, `unlink_partner()`, `delete_my_account()`
+- `20260826152942` → `20260826153745` — cloisonnement du Storage, portée partenaire des souvenirs, inscriptions plafonnées à deux comptes, capsules scellées jusqu'à leur date, droits d'exécution des fonctions `SECURITY DEFINER`
+- `20260828122244_perf_index_et_rls.sql` — 83 politiques réécrites en `(select auth.uid())` (évaluées une fois au lieu d'une fois par ligne) et index sur les colonnes de jointure
+- `20260828121740_purge_stockage_suppression_compte.sql` — la suppression de compte efface aussi les fichiers, sans toucher aux données du partenaire qui reste
+- `20260828224926_notifications_push.sql` — abonnements, déclencheurs, `envoyer_push()`
+- `20260829001126_jetons_position.sql` — jetons révocables pour la position en arrière-plan
+- `20260831093640_creneaux_dates.sql` — `slot_date` sur les créneaux (NULL = hebdomadaire), avec un déclencheur qui tient `weekday` en accord avec la date, quelle que soit la voie d'écriture
+
+## Sauvegardes
+
+Le projet est sur le **plan gratuit** de Supabase : ni sauvegarde quotidienne, ni
+restauration à un instant donné, ni sauvegarde téléchargeable — ces trois choses
+commencent au plan Pro. Tant que rien n'est copié ailleurs, les vlogs, les petits mots,
+les gratitudes et l'emploi du temps n'existent qu'à un seul endroit au monde, et
+`delete_my_account()` est à deux clics dans les réglages.
+
+```bash
+SUPABASE_SERVICE_ROLE_KEY="..." node scripts/sauvegarde.mjs
+```
+
+Le script écrit `sauvegardes/awy-AAAA-MM-JJ/` : `donnees.json` (toutes les lignes de
+toutes les tables), `medias/` (les fichiers du bucket `vlogs`, sous leur vrai nom) et
+`inventaire.json` (le reçu, pour vérifier que rien ne manque). Le dossier est ignoré par
+git — il contient tout, il ne doit jamais partir dans le dépôt.
+
+La clé `service_role` se trouve dans **Project Settings → API**. Elle contourne les RLS,
+ce qui est nécessaire pour tout copier — y compris ce qui appartient à l'autre. Elle se
+passe en variable d'environnement, le temps d'une commande, et ne s'écrit nulle part.
+
+Une fois par mois suffit au rythme actuel (une vingtaine de vlogs mensuels). **Copier le
+dossier produit ailleurs que sur la machine qui l'a produit** : une sauvegarde qui vit à
+côté de l'original n'en est pas une.
+
+> Second effet du plan gratuit : Supabase met en pause les projets qui reçoivent trop peu
+> d'activité sur 7 jours. Awy en reçoit tous les jours, mais une semaine sans ouvrir
+> l'app et le site tombe jusqu'à réactivation manuelle depuis le tableau de bord.
 
 ## Position en arrière-plan
 
 Aucune application web ne peut relever la position quand elle est fermée — c'est une limite du navigateur, pas un manque. Awy contourne ça avec un raccourci créé sur le téléphone, qui envoie la position à intervalle régulier sans rien ouvrir. Le mode d'emploi est dans `docs/position-en-arriere-plan.md`, et repris dans Réglages.
+
+## Fonctions Edge
+
+Trois fonctions tournent sur Supabase, toutes versionnées dans `supabase/functions/` :
+
+- `send-push` — signe et envoie les notifications Web Push. Clés VAPID lues dans le Vault.
+- `ingest-location` — reçoit une position depuis le raccourci du téléphone, authentifiée
+  par un jeton révocable.
+- `telecharger-video` — récupère un fichier derrière un lien. La résolution exige une
+  session Awy ; le flux, lui, s'ouvre avec une signature HMAC de cinq minutes, parce que
+  le gestionnaire de téléchargement d'un téléphone n'envoie aucun en-tête.
+
+Les trois ont `verify_jwt: false` et **portent leur propre contrôle d'accès** — c'est
+délibéré, pas un oubli : deux d'entre elles sont appelées par des clients qui ne peuvent
+pas présenter de jeton Supabase.
 
 ## Déploiement
 
