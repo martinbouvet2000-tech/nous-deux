@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { Satellite, Copy, Check, Trash2, ShieldOff, Plus } from 'lucide-react'
+import { Satellite, Copy, Check, Trash2, ShieldOff, Plus, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { run, humanizeError } from '@/lib/db'
 import { toast } from '@/lib/toast'
@@ -115,9 +115,76 @@ export default function BackgroundLocationTokens() {
       <p className="text-xs leading-relaxed text-[#9B9287] relative">
         Awy ne peut pas suivre ta position quand l’app est fermée — aucune application web ne le peut. Un
         raccourci créé sur ton téléphone, lui, le peut&#8239;: il envoie ta position à intervalle régulier, sans
-        rien ouvrir. Ça demande une petite configuration une fois pour toutes, expliquée dans
-        <span className="text-[#F0EAE0]/80"> docs/position-en-arriere-plan.md</span>.
+        rien ouvrir. Ça demande une petite configuration, une fois pour toutes — elle tient dans le dépliant
+        ci-dessous.
       </p>
+
+      {/* ─── Le mode d’emploi, dans l’app ───
+          Renvoyer à un fichier du dépôt ne menait nulle part depuis un téléphone,
+          alors que c’est précisément l’étape où l’on reste bloqué. L’essentiel est
+          donc ici, déplié à la demande — le détail complet reste dans le dépôt. */}
+      <details className="group relative rounded-2xl bg-white/[0.03] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07)]">
+        <summary className="tap-44 flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-[13px] text-[#F0EAE0] [&::-webkit-details-marker]:hidden">
+          <ChevronRight
+            size={14}
+            className="shrink-0 text-[#D4A574] transition-transform duration-200 group-open:rotate-90"
+            aria-hidden="true"
+          />
+          Régler le raccourci, étape par étape
+        </summary>
+
+        <div className="space-y-3 px-4 pb-4 text-xs leading-relaxed text-[#9B9287]">
+          <p>
+            <span className="text-[#F0EAE0]/85">1. Le jeton.</span> Crée-le juste en dessous et note-le tout de
+            suite&#8239;: il n’est montré qu’une fois. Les boutons «&#8239;Copier l’URL&#8239;» et
+            «&#8239;Copier le corps JSON&#8239;» te donnent les deux autres morceaux, jeton déjà dedans.
+          </p>
+
+          <div>
+            <p className="text-[#F0EAE0]/85">2. La requête à recopier dans le raccourci</p>
+            <p className="mt-1">Méthode <span className="text-[#F0EAE0]/85">POST</span>, corps au format JSON, vers&#8239;:</p>
+            <p className="mt-1 select-all break-all rounded-lg bg-black/25 px-2.5 py-2 font-mono text-[11px] text-[#F0EAE0]">
+              {URL_INGESTION || 'https://…/functions/v1/ingest-location'}
+            </p>
+            <p className="mt-1.5 select-all break-all rounded-lg bg-black/25 px-2.5 py-2 font-mono text-[11px] text-[#F0EAE0]">
+              {'{"token":"TON_JETON","lat":52.2297,"lng":21.0122,"accuracy":12}'}
+            </p>
+            <p className="mt-1.5">
+              <span className="font-mono text-[#F0EAE0]/85">lat</span>,{' '}
+              <span className="font-mono text-[#F0EAE0]/85">lng</span> et{' '}
+              <span className="font-mono text-[#F0EAE0]/85">accuracy</span> ne se tapent pas&#8239;: ce sont les valeurs que le téléphone
+              vient de mesurer. Sur iPhone, ajoute d’abord l’action «&#8239;Obtenir la position actuelle&#8239;»,
+              puis «&#8239;Obtenir le contenu de l’URL&#8239;», et choisis Latitude, Longitude et Précision
+              horizontale dans la barre au-dessus du clavier. Sur Android, HTTP&#8239;Shortcuts ou Tasker font la
+              même chose avec leurs propres variables.
+            </p>
+          </div>
+
+          <p>
+            <span className="text-[#F0EAE0]/85">3. L’autorisation.</span> Réglages du téléphone → localisation
+            de l’app Raccourcis (ou de ton app Android)&#8239;: choisis
+            <span className="text-[#F0EAE0]/85"> Toujours</span>. Sans ça, le raccourci ne marche que si tu es
+            devant l’écran.
+          </p>
+
+          <p>
+            <span className="text-[#F0EAE0]/85">4. L’automatisation — tout le principe est là.</span> Le raccourci
+            ne s’exécute pas tout seul&#8239;: c’est une automatisation qui l’appelle. Sur iPhone, onglet
+            Automatisation → «&#8239;J’arrive&#8239;» / «&#8239;Je quitte&#8239;» pour les lieux qui comptent, et
+            «&#8239;Heure de la journée&#8239;» pour quelques rendez-vous quotidiens. Le réglage à ne pas
+            manquer&#8239;: désactive
+            <span className="text-[#F0EAE0]/85"> Demander avant d’exécuter</span>, sinon rien ne partira sans toi.
+            Une position par heure suffit largement — Awy n’en garde de toute façon pas plus d’une par minute.
+          </p>
+
+          <p className="text-[#9B9287]/80">
+            Un envoi réussi se lit ici même&#8239;: la ligne du raccourci passe de «&#8239;jamais
+            utilisé&#8239;» à «&#8239;dernier envoi il y a moins d’une minute&#8239;». Le mode d’emploi complet,
+            avec les deux chemins Android et les pièges connus, est dans le dépôt&#8239;:
+            <span className="text-[#F0EAE0]/70"> docs/position-en-arriere-plan.md</span>.
+          </p>
+        </div>
+      </details>
 
       {/* ─── Le jeton fraîchement créé : montré une seule fois ─── */}
       {nouveau && (

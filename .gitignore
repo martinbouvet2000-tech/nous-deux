@@ -33,3 +33,7 @@ dist-ssr
 # Icônes PWA générées au build (npm run icons)
 public/icon-*.png
 public/apple-touch-icon.png
+
+# Sauvegardes locales produites par scripts/sauvegarde.mjs — elles contiennent
+# toutes les données du couple : elles ne doivent jamais partir dans le dépôt.
+sauvegardes/

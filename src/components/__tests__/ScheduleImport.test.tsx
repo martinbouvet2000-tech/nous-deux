@@ -9,16 +9,21 @@ import type { Profile } from '@/types/database'
  * les lignes cochées partent, et un PDF est annoncé pour ce qu'il est.
  */
 
-const { inserted, mockFrom } = vi.hoisted(() => {
+const { inserted, mockFrom, etat } = vi.hoisted(() => {
   const inserted: Record<string, unknown>[][] = []
+  /** Bascule d’un échec d’insertion, pour éprouver le message d’échec partiel */
+  const etat = { echecInsertion: false }
   const mockFrom = vi.fn(() => {
     const builder: Record<string, unknown> = {}
     for (const method of ['select', 'order', 'eq', 'delete', 'single']) builder[method] = vi.fn(() => builder)
     builder.insert = vi.fn((rows: Record<string, unknown>[]) => { inserted.push(rows); return builder })
-    builder.then = (resolve: (r: unknown) => unknown) => Promise.resolve({ data: null, error: null }).then(resolve)
+    builder.then = (resolve: (r: unknown) => unknown) =>
+      Promise.resolve(
+        etat.echecInsertion ? { data: null, error: { message: 'insertion refusée' } } : { data: null, error: null },
+      ).then(resolve)
     return builder
   })
-  return { inserted, mockFrom }
+  return { inserted, mockFrom, etat }
 })
 
 vi.mock('@/lib/supabase', () => ({ supabase: { from: mockFrom } }))
@@ -62,6 +67,7 @@ describe('Import d’un emploi du temps — l’écran de relecture', () => {
 
   beforeEach(() => {
     inserted.length = 0
+    etat.echecInsertion = false
     onClose.mockClear()
     onImported.mockClear()
     useAuthStore.setState({ profile: profil, partnerProfile: null })
@@ -140,7 +146,7 @@ describe('Import d’un emploi du temps — l’écran de relecture', () => {
     expect(inserted).toHaveLength(0)
   })
 
-  it('signale un créneau déjà présent dans l’emploi du temps', async () => {
+  it('signale un créneau déjà présent dans l’emploi du temps, et l’arrive décoché', async () => {
     render(
       <ScheduleImport
         existing={[{ weekday: 1, start_time: '08:30:00', end_time: '10:00:00', title: 'Maths' } as never]}
@@ -150,5 +156,64 @@ describe('Import d’un emploi du temps — l’écran de relecture', () => {
     )
     deposer(CSV, 'edt.csv')
     expect(await screen.findByText('Déjà dans ton emploi du temps')).toBeInTheDocument()
+
+    // Le ré-import du même fichier ne doit JAMAIS proposer de tout dupliquer :
+    // un doublon est décoché d’office, comme une ligne douteuse.
+    expect(screen.getByRole('checkbox', { name: 'Garder Maths' })).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByRole('checkbox', { name: 'Garder Anglais' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('button', { name: 'Ajouter 1 créneau' })).toBeEnabled()
+  })
+
+  it('ne re-décoche jamais un doublon coché exprès, même après une correction ailleurs', async () => {
+    render(
+      <ScheduleImport
+        existing={[{ weekday: 1, start_time: '08:30:00', end_time: '10:00:00', title: 'Maths' } as never]}
+        onClose={onClose}
+        onImported={onImported}
+      />,
+    )
+    deposer(CSV, 'edt.csv')
+    const doublon = await screen.findByRole('checkbox', { name: 'Garder Maths' })
+    expect(doublon).toHaveAttribute('aria-checked', 'false')
+
+    // On coche sciemment le doublon : on veut vraiment ce créneau deux fois.
+    fireEvent.click(doublon)
+    expect(doublon).toHaveAttribute('aria-checked', 'true')
+
+    // Puis on corrige un intitulé sur une AUTRE ligne : la relecture est rejouée,
+    // et ce choix explicite doit survivre.
+    fireEvent.change(screen.getByDisplayValue('Anglais'), { target: { value: 'Anglais renforcé' } })
+    await screen.findByDisplayValue('Anglais renforcé')
+    expect(screen.getByRole('checkbox', { name: 'Garder Maths' })).toHaveAttribute('aria-checked', 'true')
+    expect(await screen.findByRole('button', { name: 'Ajouter 2 créneaux' })).toBeEnabled()
+  })
+
+  it('compte les lignes prêtes, pas les cases cochées, et annonce ce qui reste à corriger', async () => {
+    afficher()
+    // Trois lignes cochées, dont une dont la fin précède le début : elle ne peut
+    // pas partir. Le compteur le dit au lieu de la faire disparaître du total.
+    deposer(
+      ['Jour;Début;Fin;Intitulé', 'Lundi;8h30;10h00;Maths', 'Mardi;14h00;15h30;Anglais', 'Jeudi;11h00;10h00;Sport'].join('\n'),
+      'edt.csv',
+    )
+    await screen.findByDisplayValue('Maths')
+
+    expect(screen.getByRole('checkbox', { name: 'Garder Sport' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByText(/lignes prêtes sur/)).toHaveTextContent('2 lignes prêtes sur 3 — 1 à corriger')
+    expect(screen.getByRole('button', { name: 'Ajouter 2 créneaux' })).toBeEnabled()
+  })
+
+  it('accorde sa phrase quand l’enregistrement échoue en cours de route', async () => {
+    // La base refuse l’insertion : le message doit s’accorder proprement —
+    // « ajoutés », jamais « ajoutéx ».
+    etat.echecInsertion = true
+    afficher()
+    deposer(CSV, 'edt.csv')
+    await screen.findByDisplayValue('Maths')
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter 2 créneaux' }))
+
+    const message = await screen.findByText(/avant l’échec/)
+    expect(message).toHaveTextContent('0 créneau sur 2 a été ajouté avant l’échec.')
+    expect(message.textContent).not.toContain('ajoutéx')
   })
 })

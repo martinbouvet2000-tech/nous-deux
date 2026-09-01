@@ -46,11 +46,11 @@ const SOURCE_LABEL: Record<SourceKind, string> = {
 }
 
 /** Feuille la plus fournie d'un classeur : la notice d'accueil n'est pas l'emploi du temps */
-function bestSheet(sheets: Sheet[]): { sheet: Sheet; slots: RawSlot[]; layout: Layout } | null {
-  let best: { sheet: Sheet; slots: RawSlot[]; layout: Layout } | null = null
+function bestSheet(sheets: Sheet[]): { sheet: Sheet; slots: RawSlot[]; layout: Layout; transposed: boolean } | null {
+  let best: { sheet: Sheet; slots: RawSlot[]; layout: Layout; transposed: boolean } | null = null
   for (const sheet of sheets) {
-    const { slots, layout } = parseMatrix(sheet.matrix)
-    if (!best || slots.length > best.slots.length) best = { sheet, slots, layout }
+    const { slots, layout, transposed } = parseMatrix(sheet.matrix)
+    if (!best || slots.length > best.slots.length) best = { sheet, slots, layout, transposed: transposed === true }
   }
   return best && best.slots.length > 0 ? best : null
 }
@@ -59,25 +59,33 @@ function bestSheet(sheets: Sheet[]): { sheet: Sheet; slots: RawSlot[]; layout: L
  * PDF : on tente d'abord de reconstituer une grille à partir des positions,
  * puis, si ça ne donne rien, on relit chaque ligne comme une phrase.
  */
-async function fromPdf(bytes: Uint8Array): Promise<{ slots: RawSlot[]; layout: Layout; reliability: number }> {
+async function fromPdf(bytes: Uint8Array): Promise<{ slots: RawSlot[]; layout: Layout; transposed: boolean; reliability: number }> {
   // Chargé à la demande : le lecteur de PDF ne pèse rien tant qu'on n'ouvre pas de PDF.
   const { extractPdfText, pdfLines, pdfMatrix } = await import('@/lib/scheduleImport/pdf')
   const { pages, reliability } = await extractPdfText(bytes)
 
   const gridded: RawSlot[] = []
   const lined: RawSlot[] = []
+  let transposed = false
   for (const items of pages) {
-    const { slots } = parseMatrix(pdfMatrix(items))
+    const { slots, transposed: flipped } = parseMatrix(pdfMatrix(items))
     gridded.push(...slots)
+    if (flipped) transposed = true
     lined.push(...slotsFromLines(pdfLines(items)))
   }
   // Tout ce qui vient d'un PDF part « incertain » : c'est le contrat de ce module.
   const chosen = gridded.length >= lined.length ? gridded : lined
   const layout: Layout = chosen.length === 0 ? 'none' : gridded.length >= lined.length ? 'grid' : 'lines'
-  return { slots: chosen.map((s) => ({ ...s, uncertain: true })), layout, reliability }
+  return { slots: chosen.map((s) => ({ ...s, uncertain: true })), layout, transposed, reliability }
 }
 
-function noticeFor(source: SourceKind, layout: Layout, drafts: SlotDraft[], reliability: number): { confidence: Confidence; notice: string } {
+function noticeFor(
+  source: SourceKind,
+  layout: Layout,
+  drafts: SlotDraft[],
+  reliability: number,
+  transposed: boolean,
+): { confidence: Confidence; notice: string } {
   const complete = drafts.filter((d) => d.weekday !== null && d.start && d.end && d.title.trim()).length
   const ratio = drafts.length === 0 ? 0 : complete / drafts.length
 
@@ -97,9 +105,15 @@ function noticeFor(source: SourceKind, layout: Layout, drafts: SlotDraft[], reli
   }
 
   if (layout === 'grid') {
+    // On annonce le sens réellement reconnu : une grille se lit aussi bien avec
+    // les jours en lignes, et dire le contraire fait douter de tout le reste.
+    const sens = transposed
+      ? 'les jours en lignes, les heures en colonnes'
+      : 'les jours en colonnes, les heures en lignes'
+    const cheval = transposed ? 'plusieurs colonnes' : 'plusieurs lignes'
     return {
       confidence: ratio > 0.9 ? 'high' : 'medium',
-      notice: `Grille reconnue (les jours en colonnes, les heures en lignes), lue depuis ton fichier ${SOURCE_LABEL[source]}. Vérifie surtout les cours à cheval sur plusieurs lignes.`,
+      notice: `Grille reconnue (${sens}), lue depuis ton fichier ${SOURCE_LABEL[source]}. Vérifie surtout les cours à cheval sur ${cheval}.`,
     }
   }
   return {
@@ -146,12 +160,14 @@ export async function importSchedule(file: File): Promise<ImportOutcome> {
   let layout: Layout = 'none'
   let sheetName: string | null = null
   let reliability = 1
+  let transposed = false
 
   if (kind === 'pdf') {
     source = 'pdf'
     const result = await fromPdf(bytes)
     slots = result.slots
     layout = result.layout
+    transposed = result.transposed
     reliability = result.reliability
   } else if (kind === 'zip') {
     source = 'xlsx'
@@ -160,6 +176,7 @@ export async function importSchedule(file: File): Promise<ImportOutcome> {
     if (best) {
       slots = best.slots
       layout = best.layout
+      transposed = best.transposed
       sheetName = sheets.length > 1 ? best.sheet.name : null
     }
   } else if (kind === 'xml' || kind === 'html') {
@@ -170,6 +187,7 @@ export async function importSchedule(file: File): Promise<ImportOutcome> {
     if (best) {
       slots = best.slots
       layout = best.layout
+      transposed = best.transposed
       sheetName = sheets.length > 1 ? best.sheet.name : null
     }
   } else {
@@ -178,6 +196,7 @@ export async function importSchedule(file: File): Promise<ImportOutcome> {
     const result = parseMatrix(matrix)
     slots = result.slots
     layout = result.layout
+    transposed = result.transposed === true
   }
 
   const drafts = toDrafts(slots)
@@ -190,5 +209,12 @@ export async function importSchedule(file: File): Promise<ImportOutcome> {
     )
   }
 
-  return { drafts, layout, source, sheetName, fileName: file.name, ...noticeFor(source, layout, drafts, reliability) }
+  return {
+    drafts,
+    layout,
+    source,
+    sheetName,
+    fileName: file.name,
+    ...noticeFor(source, layout, drafts, reliability, transposed),
+  }
 }

@@ -7,7 +7,7 @@ import { readFileSync } from 'fs'
 
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8')) as { version: string }
 
-// Sous-chemin GitHub Pages (https://<user>.github.io/nous-deux-app/) : VITE_BASE=/nous-deux-app/
+// Sous-chemin GitHub Pages (https://<user>.github.io/nous-deux/) : VITE_BASE=/nous-deux/
 // En local ou sur Vercel/Netlify : laisser vide → "/"
 const base = process.env.VITE_BASE || '/'
 
@@ -15,12 +15,25 @@ export default defineConfig({
   base,
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+    // Estampille de build : deux appareils affichent la même chaîne quand ils
+    // font tourner exactement la même version. C'est le seul moyen simple de
+    // vérifier, à distance, que deux téléphones sont synchronisés.
+    __BUILD_ID__: JSON.stringify(new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC'),
   },
   plugins: [
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // « prompt » plutôt que « autoUpdate » : le service worker attend au lieu
+      // de s'imposer à une page qui fait encore tourner l'ancien code. C'est
+      // src/lib/majAuto.ts qui décide du moment de la bascule — jamais au
+      // milieu d'une saisie.
+      registerType: 'prompt',
+      // Le registerSW.js généré ne fait qu'un `register()` sur `load`. Une app
+      // installée et reprise depuis le sélecteur ne recharge jamais son
+      // document : elle ne redemanderait donc jamais le nouveau sw.js. On
+      // enregistre nous-mêmes, dans src/lib/majAuto.ts.
+      injectRegister: false,
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Awy',
@@ -50,6 +63,10 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [],
         cleanupOutdatedCaches: true,
+        // En mode « prompt », le nouveau service worker attend notre feu vert.
+        // `clientsClaim` sert seulement à ce que la toute première version
+        // prenne la main sur la page déjà ouverte.
+        clientsClaim: true,
       },
     }),
   ],

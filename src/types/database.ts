@@ -229,8 +229,14 @@ export interface LocationPoint {
 export interface ScheduleSlot {
   id: string
   user_id: string
-  /** 1 = lundi … 7 = dimanche */
+  /** 1 = lundi … 7 = dimanche. Déduit de `slot_date` quand celle-ci est remplie. */
   weekday: number
+  /**
+   * Date précise, 'AAAA-MM-JJ'. `null` = créneau hebdomadaire, qui revient
+   * chaque semaine. C'est ce qui permet d'avoir une année scolaire entière,
+   * avec ses vacances et ses semaines qui ne se ressemblent pas.
+   */
+  slot_date: string | null
   /** 'HH:MM:SS' */
   start_time: string
   end_time: string

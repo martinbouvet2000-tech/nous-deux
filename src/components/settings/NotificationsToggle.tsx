@@ -9,7 +9,6 @@ import {
   etatActionnable,
   etatActuel,
   MESSAGE_ETAT,
-  rafraichirAbonnement,
   type EtatPush,
 } from '@/lib/push'
 
@@ -28,16 +27,13 @@ export default function NotificationsToggle() {
   const [etat, setEtat] = useState<EtatPush | null>(null)
   const [busy, setBusy] = useState(false)
 
-  // Lecture de l'état au montage, puis remise à jour silencieuse de la ligne :
-  // un navigateur peut faire tourner son abonnement sans prévenir l'app.
+  // Lecture de l'état au montage — et rien d'autre. Le rafraîchissement de la
+  // ligne `push_subscriptions` appartient au démarrage de l'app (`App.tsx`) :
+  // le faire aussi ici réécrivait la même ligne à chaque venue sur Réglages.
   useEffect(() => {
     let annule = false
     etatActuel()
-      .then((e) => {
-        if (annule) return
-        setEtat(e)
-        if (e === 'active' && user?.id) void rafraichirAbonnement(user.id)
-      })
+      .then((e) => { if (!annule) setEtat(e) })
       .catch(() => { if (!annule) setEtat('non-supporte') })
     return () => { annule = true }
   }, [user?.id])

@@ -22,6 +22,12 @@
  * le réseau interne du serveur (SSRF), ni un fichier arbitraire. La clé de
  * scellage est dérivée de la clé de service : rien de neuf à configurer.
  *
+ * LES REDIRECTIONS SONT SUIVIES À LA MAIN. C'était l'angle mort de la première
+ * version : `redirect: 'follow'` ne contrôlait que l'adresse de départ, si bien
+ * qu'un hébergeur pouvait rediriger vers une adresse interne — 169.254.169.254
+ * et ses semblables — sans que personne ne revérifie. Chaque saut est désormais
+ * résolu puis repassé par `urlPublique`, et la chaîne est bornée.
+ *
  * SESSION SUR LA RÉSOLUTION, SIGNATURE SUR LE FLUX. La résolution exige une
  * session Awy valable, vérifiée ici même (`verify_jwt` reste à false pour cette
  * fonction : le flux, lui, doit rester ouvrable par le gestionnaire de
@@ -37,6 +43,9 @@ const TAILLE_MAX_CORPS = 4096
 
 /** Durée de vie d'un lien de flux signé. Le temps d'appuyer sur « Enregistrer ». */
 const VALIDITE_SIGNATURE_S = 300
+
+/** Au-delà, c'est une boucle ou un piège : on arrête de suivre. */
+const SAUTS_MAX = 5
 
 /** Instance Cobalt qui sait extraire le fichier réel d'une page. À configurer. */
 const COBALT_API_URL = (Deno.env.get('COBALT_API_URL') ?? '').replace(/\/+$/, '')
@@ -132,8 +141,10 @@ const MEDIA_DIRECT = /\.(mp4|m4v|mov|webm|mkv|avi|m4a|mp3|aac|opus|ogg|wav|gif|j
 function nomSur(propose: string, secours: string): string {
   const nom = propose
     .replace(/[\r\n"\\/]+/g, ' ')
-    // eslint-disable-next-line no-control-regex -- c'est justement le but : les chasser
-    .replace(/[\u0000-\u001f\u007f]/g, '')
+    // Les caractères de contrôle sont retirés exprès : c'est ce qui empêche un nom
+    // de fichier de fabriquer un en-tête HTTP à lui tout seul.
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\x00-\x1f]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 120)
@@ -334,8 +345,62 @@ const TYPES_MIME: Record<string, string> = {
 
 /** `filename*` en UTF-8 : sans lui, « Été à Rome.mp4 » arrive en charabia. */
 function dispositionPieceJointe(nom: string): string {
-  const ascii = nom.replace(/[^\u0020-\u007e]/g, '_')
+  const ascii = nom.replace(/[^ -~]/g, '_')
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(nom)}`
+}
+
+/** Une réponse HTTP de redirection, et rien d'autre. */
+const REDIRECTIONS = new Set([301, 302, 303, 307, 308])
+
+/**
+ * Récupère l'amont en suivant les redirections nous-mêmes.
+ *
+ * `redirect: 'follow'` ne vérifiait que l'adresse de départ : un hébergeur
+ * pouvait renvoyer un `Location:` vers le réseau interne et le runtime l'aurait
+ * suivi sans rien demander à personne. Ici chaque saut est résolu par rapport à
+ * l'adresse courante, repassé par `urlPublique`, et la chaîne s'arrête après
+ * SAUTS_MAX. Un 303 — ou un 301/302 sur autre chose qu'un GET/HEAD — repasse en
+ * GET, comme le fait n'importe quel navigateur.
+ */
+async function recupererAmont(depart: URL, methode: 'GET' | 'HEAD', enTetes: Headers): Promise<Response | null> {
+  let courante = depart
+  let verbe = methode
+
+  for (let saut = 0; saut <= SAUTS_MAX; saut++) {
+    let reponse: Response
+    try {
+      reponse = await fetch(courante.href, { method: verbe, headers: enTetes, redirect: 'manual' })
+    } catch {
+      return null
+    }
+
+    if (!REDIRECTIONS.has(reponse.status)) return reponse
+
+    // On ne garde pas le corps de la redirection : seul le `Location` compte.
+    await reponse.body?.cancel()
+
+    const destination = reponse.headers.get('location')
+    if (!destination) return null
+
+    let suivante: URL
+    try {
+      suivante = new URL(destination, courante) // relatif ou absolu, les deux existent.
+    } catch {
+      return null
+    }
+
+    // LE contrôle qui manquait : la cible d'une redirection est une adresse
+    // comme une autre, elle repasse par le même filtre que l'adresse d'origine.
+    const sure = urlPublique(suivante.href)
+    if (!sure) return null
+
+    if (reponse.status === 303 || (verbe !== 'HEAD' && (reponse.status === 301 || reponse.status === 302))) {
+      verbe = 'GET'
+    }
+    courante = sure
+  }
+
+  return null // trop de sauts : boucle, ou quelqu'un qui insiste.
 }
 
 async function flux(req: Request, params: URLSearchParams): Promise<Response> {
@@ -355,14 +420,13 @@ async function flux(req: Request, params: URLSearchParams): Promise<Response> {
   const range = req.headers.get('range')
   if (range) enTetes.set('Range', range)
 
-  let amont: Response
-  try {
-    amont = await fetch(u.href, { headers: enTetes, redirect: 'follow' })
-  } catch {
+  const amont = await recupererAmont(u, req.method === 'HEAD' ? 'HEAD' : 'GET', enTetes)
+  if (!amont) return new Response(null, { status: 502, headers: CORS })
+
+  if (!amont.ok && amont.status !== 206) {
+    await amont.body?.cancel()
     return new Response(null, { status: 502, headers: CORS })
   }
-
-  if (!amont.ok && amont.status !== 206) return new Response(null, { status: 502, headers: CORS })
 
   const ext = (nom.split('.').pop() ?? '').toLowerCase()
   const sortie = new Headers(CORS)
@@ -376,7 +440,12 @@ async function flux(req: Request, params: URLSearchParams): Promise<Response> {
     if (v) sortie.set(nomEnTete, v)
   }
 
-  return new Response(req.method === 'HEAD' ? null : amont.body, { status: amont.status, headers: sortie })
+  if (req.method === 'HEAD') {
+    await amont.body?.cancel()
+    return new Response(null, { status: amont.status, headers: sortie })
+  }
+
+  return new Response(amont.body, { status: amont.status, headers: sortie })
 }
 
 /* ──────────────────────────────── Entrée ────────────────────────────────── */
