@@ -1,10 +1,10 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Home, Calendar, Camera, Sparkles, Settings, Heart, MapPin, Download } from 'lucide-react'
+import { Home, Calendar, Camera, Sparkles, Settings, Heart, MapPin } from 'lucide-react'
 import AmbientMood from '@/components/AmbientMood'
 import { useLocationSharing } from '@/hooks/useLocationSharing'
 
 /**
- * 7 destinations, atteignables au pouce. Le dernier onglet mène aux Réglages :
+ * 6 destinations, atteignables au pouce. Le sixième onglet mène aux Réglages :
  * il porte le même nom que le titre de la page, sur mobile comme sur bureau.
  */
 const NAV_ITEMS = [
@@ -13,7 +13,6 @@ const NAV_ITEMS = [
   { to: '/calendar', icon: Calendar, label: 'Agenda' },
   { to: '/map', icon: MapPin, label: 'Carte' },
   { to: '/activities', icon: Sparkles, label: 'À deux' },
-  { to: '/video', icon: Download, label: 'Vidéo' },
 ]
 
 export default function AppLayout() {
@@ -83,7 +82,7 @@ export default function AppLayout() {
               end={to === '/'}
               aria-label={label}
               className={({ isActive }) =>
-                `flex flex-col items-center justify-center gap-1 min-w-11 min-h-11 py-1 rounded-xl transition-all duration-200 ease-out ${
+                `flex flex-col items-center justify-center gap-1 min-w-[52px] min-h-11 py-1 rounded-xl transition-all duration-200 ease-out ${
                   isActive ? 'text-[#D4A574]' : 'text-[#9B9287] active:text-[#F0EAE0]'
                 }`
               }

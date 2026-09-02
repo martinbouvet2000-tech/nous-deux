@@ -21,7 +21,6 @@ const CalendarPage = lazy(() => import('@/pages/CalendarPage'))
 const MapPage = lazy(() => import('@/pages/MapPage'))
 const Memories = lazy(() => import('@/pages/Memories'))
 const Activities = lazy(() => import('@/pages/Activities'))
-const VideoPage = lazy(() => import('@/pages/VideoPage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 
 const BASENAME = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') || '/'
@@ -222,7 +221,6 @@ export default function App() {
                 <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/memories" element={<Memories />} />
                 <Route path="/activities" element={<Activities />} />
-                <Route path="/video" element={<VideoPage />} />
                 <Route path="/todos" element={<Navigate to="/activities?tab=projects" replace />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Route>
