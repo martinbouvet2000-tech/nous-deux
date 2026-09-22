@@ -1,4 +1,16 @@
+<img src="assets/cover.svg" width="100%" alt="Awy — a private two-person app for a couple living in different time zones" />
+
 # Awy
+
+A private app for two people in a long-distance relationship: shared clocks and a countdown, a live map with a 48-hour location trail, a two-timezone calendar with PDF/Excel/CSV schedule import, notes and vlogs and time capsules, and push notifications that say who reached out without revealing what they wrote.
+
+Built for exactly two accounts. Every table is isolated by Postgres row-level security, so the app's safety does not depend on the client: 24 Supabase migrations set up the schema and its policies, plus two Deno Edge Functions for push notifications and background location. 32 test files (374 cases) cover the client logic, and CI runs type-check, lint, tests and build on every push.
+
+Installable PWA, works offline for reading. **Live: [martinbouvet2000-tech.github.io/nous-deux](https://martinbouvet2000-tech.github.io/nous-deux/)** · **Source: [github.com/martinbouvet2000-tech/nous-deux](https://github.com/martinbouvet2000-tech/nous-deux)**
+
+The rest of this README is in French.
+
+---
 
 Application privée pour un couple à distance. Deux comptes, un espace commun, rien d'autre : chaque donnée est cloisonnée par des politiques RLS au niveau de la base, personne d'autre ne peut rien lire.
 
